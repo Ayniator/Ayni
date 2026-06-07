@@ -27,5 +27,37 @@ Sub-cent fees and easy forking, but the anonymous-credential layer
 (membership, voting, lineage proofs) is built largely from scratch —
 no Semaphore/MACI/Privado equivalent ships on Solana today.
 
+## Anchor workspace (`ayni` program)
+
+```
+Anchor.toml                  workspace + program id config
+Cargo.toml                   Rust workspace
+programs/ayni/
+  Cargo.toml · Xargo.toml
+  src/
+    lib.rs                   #[program] entrypoint
+    state.rs                 Circle, Membership, LevelGrant, ServantRole
+    errors.rs                AyniError
+    instructions/
+      initialize_circle.rs   fork a Circle under World Service
+      issue_membership.rs    soulbound yearly membership (by ZK commitment)
+      renew_membership.rs    extend a term on donation
+      appoint_servant.rs     treasurer / secretary / rhythm keeper
+      grant_level.rs         shamanic level along an anonymous lineage (ZK)
+tests/ayni.ts                init Circle + issue membership
+migrations/deploy.ts
+```
+
+Build (requires the Solana + Anchor toolchain, not installed in this repo):
+
+```
+yarn install        # or npm install
+anchor build
+anchor test
+```
+
 ## Status
-Scaffolding pending: Anchor workspace, membership program, ZK lineage circuits.
+Scaffold complete (compiles against Anchor 0.30.1 once the toolchain is present).
+Stubs to fill in next: Token-2022 soulbound mint CPI, donation transfer into the
+Squads treasury on renew, and the Groth16 lineage-proof verification in
+`grant_level` (currently a non-empty-proof placeholder).
