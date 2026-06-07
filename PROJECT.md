@@ -48,7 +48,8 @@ belonging, not equity or profit.**
 | Principles before personalities; anonymity (T12) | No speculative, tradeable coin; pseudonymous wallets |
 | Each group autonomous (T4) | Every Circle is its own governance unit; forks freely |
 | Fully self-supporting; decline outside money (T7) | Treasury funded by member donations only; donation *is* the membership renewal |
-| Trusted servants, not officers (T2) | 3 rotating service roles, granted for a term and revocable |
+| Trusted servants, not officers (T2) | A **7-seat Council** per Circle — 3 named servants + 4 elders — rotating by **4-of-7** group conscience |
+| Resilience; no single point of failure | A lost key never strands a Circle: the Council can, by **4-of-7**, rotate a seat or **definitively migrate every artifact** from a lost wallet to a new one |
 | Unity under one service structure (T1, T9) | World Service Circle coordinates but does not rule the Circles |
 
 ---
@@ -59,14 +60,19 @@ belonging, not equity or profit.**
   shared material/documentation, and holds governing authority over
   Circle creation. Does **not** override local group conscience.
 - **Circle** — an autonomous local group. Has its own members,
-  treasury, votes, and three servants. Forked from the template.
+  treasury, votes, and a 7-seat Council. Forked from the template.
 - **Member** — holds a yearly, non-transferable membership token.
   Rights: donate, propose, vote, accrue progress attestations.
-- **Servants** (3 per Circle, rotating service positions):
+- **Council** — **7 seats** per Circle (and at the World Service
+  Circle), the body of trusted servants that acts by **4-of-7** vote to
+  rotate seats and recover lost keys. Three seats are named functional
+  servants; the other four are elders:
   - **Treasurer** — co-signer on the Circle treasury; stewards donations.
   - **Secretary** — records, documentation, proposal hygiene.
   - **Rhythm Keeper** — keeps the cadence of meetings/ceremonies and
     the group's tempo.
+  - **Elders** (×4) — hold no day-to-day duty; their role is quorum and
+    resilience, so recovery never depends on the three busy servants alone.
 
 ---
 
@@ -87,6 +93,10 @@ belonging, not equity or profit.**
    from the template ("Summon a Circle").
 7. **Prove without revealing** — prove membership, voting eligibility, or
    level held in zero-knowledge; reveal identity only by choice.
+8. **Recover a lost key** — the 7-seat Council, by **4-of-7**, rotates a
+   Council seat or **definitively migrates all of a wallet's artifacts**
+   (seats, membership, levels) from a lost key to a new one — at the
+   World Service level and, independently, within each local Circle.
 
 ---
 
@@ -124,7 +134,46 @@ this matters as much as the circuits themselves.
 
 ---
 
-## 6. Architecture — two tracks
+## 6. Resilience & key recovery
+
+Keys get lost; people get locked out. A fellowship must survive that
+without a central admin and without stranding a member's standing or a
+Circle's treasury. The rule:
+
+> **No single key is a single point of failure. A 4-of-7 Council can
+> definitively migrate every artifact from one wallet to another.**
+
+**The 7-seat Council.** Each Circle — and the World Service Circle —
+is governed by a Council of **7 seats** with a **threshold of 4**. Seven,
+not three, so that a quorum survives several simultaneous losses and no
+faction of three can act alone. The three named servants occupy three
+seats; four elders fill the rest purely for quorum and resilience.
+
+**Two recovery actions, each 4-of-7:**
+
+1. **Rotate a seat** — replace the wallet in a Council seat (a servant
+   lost their key, or a term ended). Four of the other seats approve.
+2. **Migrate a wallet** — `walletA → walletB`, *definitively, with all
+   artifacts*: every Council seat held by `walletA`, the member's
+   membership, and their shamanic levels are rebound to `walletB`. Four
+   seats approve the migration; then each artifact is rebound under that
+   single authorization.
+
+**Scope by level.** The World Service Council recovers World-Service-level
+keys and seats; each local Circle's Council recovers its own — *"also
+4-of-7 at their level."* A Circle never needs World Service to recover a
+local key, preserving autonomy (T4).
+
+**Limits.** Recovery is **social**, so it is only as honest as the
+Council: 4 colluding seats can seize a wallet's artifacts. Mitigations:
+elders drawn from distinct trust domains, time-locks on execution, and
+(optionally) the member's own co-signature when they still hold *a* key.
+Treasury and governance-token recovery for funds held in Squads/Realms
+use those tools' own m-of-n recovery, which the Council mirrors.
+
+---
+
+## 7. Architecture — two tracks
 
 The membership-expiry logic and the role/federation tree are the only
 custom pieces; everything else is composed from audited protocols.
@@ -170,11 +219,11 @@ outweighs it.
 
 ---
 
-## 7. Federation model
+## 8. Federation model
 
 ```
-World Service Circle (root: template + shared docs + governing authority)
- ├── Circle: <name>   → members · treasury · 3 servants · votes
+World Service Circle (root: template + shared docs + 7-seat Council)
+ ├── Circle: <name>   → members · treasury · 7-seat Council (4/7) · votes
  ├── Circle: <name>   → ... same structure, autonomous ...
  └── Circle: <new fork via "Summon a Circle">
 ```
@@ -184,7 +233,7 @@ own affairs by group conscience. New Circles inherit the full template.
 
 ---
 
-## 8. Non-goals
+## 9. Non-goals
 
 - **Not** a tradeable or speculative token. No liquidity, no price, no market.
 - **Not** profit-distributing. Treasury serves the fellowship's purpose only.
@@ -192,9 +241,11 @@ own affairs by group conscience. New Circles inherit the full template.
 
 ---
 
-## 9. Open decisions
+## 10. Open decisions
 
 - [ ] Chain: **leaning EVM (Base/Gnosis)** for the ZK stack — confirm vs Solana.
+- [ ] Council size for small Circles: enforce 7/4 everywhere, or allow a smaller m/n until a Circle grows (with 7/4 the default and target)?
+- [ ] Recovery safeguards: time-lock between approval and execution? require the member's co-signature when they still hold a key?
 - [ ] Anonymity baseline: anonymous-by-default (Semaphore membership set) vs visible soulbound token with optional ZK.
 - [ ] Lineage proofs: off-the-shelf trusted-issuer VCs (Privado ID) vs full issuer-anonymous delegatable credentials (custom).
 - [ ] Relayer / account-abstraction strategy to prevent metadata deanonymization.
