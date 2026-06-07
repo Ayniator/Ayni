@@ -56,8 +56,35 @@ anchor build
 anchor test
 ```
 
+## ZK shamanic lineage (implemented)
+
+Anonymous, ZK-verified level grants. Full design in
+[docs/zk-lineage.md](./docs/zk-lineage.md).
+
+```
+circuits/lineage_grant.circom    Groth16 circuit: Merkle inclusion + level rule + nullifier
+circuits/README.md               compile + trusted-setup ceremony + vk export
+programs/ayni/src/
+  merkle.rs                      on-chain incremental Poseidon Merkle tree (Bn254X5 syscall)
+  verifying_key.rs               embedded Groth16 vk (PLACEHOLDER — regenerate via ceremony)
+  instructions/initialize_lineage.rs   seat the World Service genesis credential
+  instructions/grant_level.rs    verify proof → spend nullifier → append credential → set level
+app/lineage/poseidonTree.ts      off-chain tree mirror (auth paths)
+app/lineage/prove.ts             assemble witness + format proof for the program
+scripts/vk_to_rust.js            verification_key.json → verifying_key.rs
+```
+
+How it works: each level is a Poseidon credential leaf in an append-only tree
+whose root is on-chain. A grant proves, in zero-knowledge, that *some* hidden
+credential of sufficient level — chaining back to the World Service root —
+authorized it, emitting a nullifier to prevent replay. The granter's identity is
+never revealed; a relayer pays so their wallet isn't linked either.
+
 ## Status
-Scaffold complete (compiles against Anchor 0.30.1 once the toolchain is present).
-Stubs to fill in next: Token-2022 soulbound mint CPI, donation transfer into the
-Squads treasury on renew, and the Groth16 lineage-proof verification in
-`grant_level` (currently a non-empty-proof placeholder).
+- ZK lineage: **code complete, unbuilt.** Needs the Solana+Anchor+circom
+  toolchain (absent here) to `anchor build` and a **trusted-setup ceremony** to
+  replace the placeholder `verifying_key.rs`. The snarkjs→Solana proof byte
+  encodings in `prove.ts`/`vk_to_rust.js` must be validated against the
+  installed `groth16-solana` version.
+- Still stubbed: Token-2022 soulbound mint CPI (`issue_membership`) and the
+  donation transfer into the Squads treasury (`renew_membership`).

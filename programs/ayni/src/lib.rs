@@ -10,7 +10,9 @@ use anchor_lang::prelude::*;
 
 pub mod errors;
 pub mod instructions;
+pub mod merkle;
 pub mod state;
+pub mod verifying_key;
 
 use instructions::*;
 use state::ServantRole;
@@ -49,13 +51,34 @@ pub mod ayni {
         instructions::appoint_servant(ctx, role, servant)
     }
 
+    /// Bootstrap a Circle's lineage tree with the World Service genesis credential.
+    pub fn initialize_lineage(
+        ctx: Context<InitializeLineage>,
+        depth: u8,
+        genesis_commitment: [u8; 32],
+        genesis_level: u8,
+    ) -> Result<()> {
+        instructions::initialize_lineage(ctx, depth, genesis_commitment, genesis_level)
+    }
+
     /// Grant a shamanic level along an anonymous, ZK-verified lineage.
     pub fn grant_level(
         ctx: Context<GrantLevel>,
-        level: u8,
-        issuer_commitment: [u8; 32],
-        lineage_proof: Vec<u8>,
+        granted_level: u8,
+        grantee_commitment: [u8; 32],
+        nullifier: [u8; 32],
+        proof_a: [u8; 64],
+        proof_b: [u8; 128],
+        proof_c: [u8; 64],
     ) -> Result<()> {
-        instructions::grant_level(ctx, level, issuer_commitment, lineage_proof)
+        instructions::grant_level(
+            ctx,
+            granted_level,
+            grantee_commitment,
+            nullifier,
+            proof_a,
+            proof_b,
+            proof_c,
+        )
     }
 }

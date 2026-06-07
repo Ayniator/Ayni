@@ -78,3 +78,36 @@ pub enum ServantRole {
     Secretary,
     RhythmKeeper,
 }
+
+/// The append-only Poseidon Merkle tree of lineage credentials for a Circle.
+/// `root` is what ZK `grant_level` proofs are checked against. Incremental
+/// insertion state (`filled_subtrees`, `next_index`) follows the Tornado
+/// MerkleTreeWithHistory pattern. See docs/zk-lineage.md.
+#[account]
+pub struct Lineage {
+    pub circle: Pubkey,
+    pub depth: u8,
+    pub next_index: u64,
+    pub root: [u8; 32],
+    pub filled_subtrees: [[u8; 32]; crate::merkle::MAX_DEPTH],
+    pub bump: u8,
+}
+
+impl Lineage {
+    pub const SPACE: usize = 8        // discriminator
+        + 32                           // circle
+        + 1                            // depth
+        + 8                            // next_index
+        + 32                           // root
+        + 32 * crate::merkle::MAX_DEPTH // filled_subtrees
+        + 1; // bump
+}
+
+/// A spent ZK nullifier. Existence == "this grant has already been made";
+/// Anchor `init` fails if the PDA already exists, giving replay protection.
+#[account]
+pub struct Nullifier {}
+
+impl Nullifier {
+    pub const SPACE: usize = 8;
+}

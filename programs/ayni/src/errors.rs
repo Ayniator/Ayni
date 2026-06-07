@@ -12,4 +12,10 @@ pub enum AyniError {
     InvalidLineageProof,
     #[msg("New level must be greater than the current level")]
     NonIncreasingLevel,
+    #[msg("Poseidon hashing failed")]
+    PoseidonError,
+    #[msg("Lineage Merkle tree is full")]
+    LineageFull,
+    #[msg("Requested depth exceeds MAX_DEPTH")]
+    DepthTooLarge,
 }
