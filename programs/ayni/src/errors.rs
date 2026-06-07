@@ -18,4 +18,18 @@ pub enum AyniError {
     LineageFull,
     #[msg("Requested depth exceeds MAX_DEPTH")]
     DepthTooLarge,
+    #[msg("Signer does not hold a Council seat")]
+    NotCouncilSeat,
+    #[msg("This Council seat has already approved")]
+    AlreadyApproved,
+    #[msg("Proposal has already been executed")]
+    AlreadyExecuted,
+    #[msg("Proposal has not reached the 4-of-7 threshold")]
+    ThresholdNotMet,
+    #[msg("Proposal action does not match this operation")]
+    WrongProposalAction,
+    #[msg("Artifact is not owned by the wallet being migrated")]
+    WalletMismatch,
+    #[msg("Council seat index out of range")]
+    InvalidSeatIndex,
 }

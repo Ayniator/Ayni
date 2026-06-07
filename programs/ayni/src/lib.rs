@@ -2,20 +2,22 @@
 //!
 //! This program holds the parts of the AHA model that Realms (governance) and
 //! Squads (treasury) do not provide: the soulbound yearly membership lifecycle,
-//! the three trusted-servant roles, and anonymous shamanic-level lineage.
+//! the 7-seat Council with 4-of-7 key recovery, and anonymous shamanic-level
+//! lineage.
 //!
 //! See ../../PROJECT.md (the chain-agnostic AHA model) and ../../IMPLEMENTATION.md.
 
 use anchor_lang::prelude::*;
 
+pub mod council;
 pub mod errors;
 pub mod instructions;
 pub mod merkle;
 pub mod state;
 pub mod verifying_key;
 
+use council::ProposalAction;
 use instructions::*;
-use state::ServantRole;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -33,8 +35,13 @@ pub mod ayni {
     }
 
     /// Issue a soulbound yearly membership, identified by a ZK commitment.
-    pub fn issue_membership(ctx: Context<IssueMembership>, commitment: [u8; 32]) -> Result<()> {
-        instructions::issue_membership(ctx, commitment)
+    /// `owner` is an optional controlling wallet (default() = fully anonymous).
+    pub fn issue_membership(
+        ctx: Context<IssueMembership>,
+        commitment: [u8; 32],
+        owner: Pubkey,
+    ) -> Result<()> {
+        instructions::issue_membership(ctx, commitment, owner)
     }
 
     /// Renew (extend) a membership for another term on donation.
@@ -42,13 +49,32 @@ pub mod ayni {
         instructions::renew_membership(ctx)
     }
 
-    /// Appoint one of the three trusted servants (treasurer/secretary/rhythm keeper).
-    pub fn appoint_servant(
-        ctx: Context<AppointServant>,
-        role: ServantRole,
-        servant: Pubkey,
-    ) -> Result<()> {
-        instructions::appoint_servant(ctx, role, servant)
+    // --- Resilience: 7-seat Council, 4-of-7 recovery (see docs/resilience.md) ---
+
+    /// Seat a Council member (bootstrap / governance path). Seats 0..2 are the
+    /// named servants (treasurer/secretary/rhythm keeper); 3..6 are elders.
+    pub fn appoint_seat(ctx: Context<AppointSeat>, seat_index: u8, holder: Pubkey) -> Result<()> {
+        instructions::appoint_seat(ctx, seat_index, holder)
+    }
+
+    /// A Council seat opens a proposal (RotateSeat or MigrateWallet).
+    pub fn propose(ctx: Context<Propose>, nonce: u64, action: ProposalAction) -> Result<()> {
+        instructions::propose(ctx, nonce, action)
+    }
+
+    /// A Council seat approves a pending proposal.
+    pub fn approve(ctx: Context<Approve>) -> Result<()> {
+        instructions::approve(ctx)
+    }
+
+    /// Execute a proposal once it reaches the 4-of-7 threshold.
+    pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
+        instructions::execute_proposal(ctx)
+    }
+
+    /// Rebind a membership's owner under an executed MigrateWallet proposal.
+    pub fn recover_membership(ctx: Context<RecoverMembership>) -> Result<()> {
+        instructions::recover_membership(ctx)
     }
 
     /// Bootstrap a Circle's lineage tree with the World Service genesis credential.

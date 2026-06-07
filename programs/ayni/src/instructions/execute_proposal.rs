@@ -1,0 +1,52 @@
+use anchor_lang::prelude::*;
+
+use crate::council::{ProposalAction, Proposal, COUNCIL_SEATS};
+use crate::errors::AyniError;
+use crate::state::Circle;
+
+/// Execute a proposal that has reached the 4-of-7 threshold. Permissionless:
+/// once enough seats have approved, anyone may trigger the already-authorized
+/// action. `RotateSeat` and the Council-seat part of `MigrateWallet` complete
+/// here; membership/level artifacts are rebound afterwards via
+/// `recover_membership`, gated by this executed proposal.
+pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
+    let circle = &mut ctx.accounts.circle;
+    let proposal = &mut ctx.accounts.proposal;
+
+    require!(!proposal.executed, AyniError::AlreadyExecuted);
+    require!(
+        proposal.approval_count() >= circle.council.threshold,
+        AyniError::ThresholdNotMet
+    );
+
+    match &proposal.action {
+        ProposalAction::RotateSeat { seat_index, new_holder } => {
+            let i = *seat_index as usize;
+            require!(i < COUNCIL_SEATS, AyniError::InvalidSeatIndex);
+            circle.council.seats[i] = *new_holder;
+        }
+        ProposalAction::MigrateWallet { old_wallet, new_wallet } => {
+            // Rebind every Council seat held by old_wallet (bounded loop of 7).
+            for s in circle.council.seats.iter_mut() {
+                if s == old_wallet {
+                    *s = *new_wallet;
+                }
+            }
+        }
+    }
+
+    proposal.executed = true;
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct ExecuteProposal<'info> {
+    #[account(mut)]
+    pub circle: Account<'info, Circle>,
+
+    #[account(mut, has_one = circle)]
+    pub proposal: Account<'info, Proposal>,
+
+    /// Anyone may trigger execution once the threshold is met.
+    pub executor: Signer<'info>,
+}

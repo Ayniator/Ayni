@@ -2,7 +2,11 @@ use anchor_lang::prelude::*;
 
 use crate::state::{Circle, Membership};
 
-pub fn issue_membership(ctx: Context<IssueMembership>, commitment: [u8; 32]) -> Result<()> {
+pub fn issue_membership(
+    ctx: Context<IssueMembership>,
+    commitment: [u8; 32],
+    owner: Pubkey,
+) -> Result<()> {
     let clock = Clock::get()?;
     let circle = &mut ctx.accounts.circle;
 
@@ -12,6 +16,9 @@ pub fn issue_membership(ctx: Context<IssueMembership>, commitment: [u8; 32]) -> 
     membership.issued_at = clock.unix_timestamp;
     membership.expires_at = clock.unix_timestamp + circle.membership_period;
     membership.level = 0;
+    // `owner` may be Pubkey::default() for a fully anonymous member; if set, it
+    // is the wallet a 4-of-7 migration can later rebind during key recovery.
+    membership.owner = owner;
     membership.bump = ctx.bumps.membership;
 
     circle.member_count = circle.member_count.saturating_add(1);

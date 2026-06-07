@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 
+use crate::council::Council;
 use crate::errors::AyniError;
 use crate::state::Circle;
 
@@ -13,9 +14,9 @@ pub fn initialize_circle(
     let circle = &mut ctx.accounts.circle;
     circle.world_service = ctx.accounts.world_service.key();
     circle.authority = ctx.accounts.authority.key();
-    circle.treasurer = Pubkey::default();
-    circle.secretary = Pubkey::default();
-    circle.rhythm_keeper = Pubkey::default();
+    // Council starts empty (all seats vacant) at the default 4-of-7 threshold;
+    // seats are filled via `appoint_seat`, then rotated by 4-of-7 vote.
+    circle.council = Council::empty();
     circle.membership_period = membership_period;
     circle.member_count = 0;
     circle.name = name;

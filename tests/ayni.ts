@@ -44,7 +44,7 @@ describe("ayni — AHA on Solana", () => {
     );
 
     await program.methods
-      .issueMembership([...commitment])
+      .issueMembership([...commitment], authority.publicKey) // owner (selective disclosure)
       .accounts({
         circle: circlePda,
         membership: membershipPda,

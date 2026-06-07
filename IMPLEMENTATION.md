@@ -36,15 +36,19 @@ programs/ayni/
   Cargo.toml · Xargo.toml
   src/
     lib.rs                   #[program] entrypoint
-    state.rs                 Circle, Membership, LevelGrant, ServantRole
+    state.rs                 Circle, Membership, LevelGrant, Lineage, Nullifier
+    council.rs               Council (7 seats), Proposal, ProposalAction
     errors.rs                AyniError
     instructions/
       initialize_circle.rs   fork a Circle under World Service
       issue_membership.rs    soulbound yearly membership (by ZK commitment)
       renew_membership.rs    extend a term on donation
-      appoint_servant.rs     treasurer / secretary / rhythm keeper
+      appoint_seat.rs        seat the 7-member Council (bootstrap)
+      propose / approve / execute_proposal   4-of-7 Council vote
+      recover_membership.rs  rebind membership owner under a migration
       grant_level.rs         shamanic level along an anonymous lineage (ZK)
 tests/ayni.ts                init Circle + issue membership
+tests/resilience.ts          7-seat Council: rotate seat + migrate wallet (4/7)
 migrations/deploy.ts
 ```
 
@@ -80,7 +84,24 @@ credential of sufficient level — chaining back to the World Service root —
 authorized it, emitting a nullifier to prevent replay. The granter's identity is
 never revealed; a relayer pays so their wallet isn't linked either.
 
+## Resilience: 7-seat Council & 4-of-7 key recovery (implemented)
+
+Full design in [docs/resilience.md](./docs/resilience.md). Each Circle (and the
+World Service Circle) carries a `Council` of **7 seats** (3 named servants + 4
+elders) with a **threshold of 4**. Two recovery actions, each 4-of-7:
+
+- **RotateSeat** — replace a seat's wallet (lost key / end of term).
+- **MigrateWallet** — definitive `walletA → walletB`: `execute_proposal` rebinds
+  all 7 Council seats (bounded, atomic); `recover_membership` rebinds each
+  membership `owner` (and the levels hanging off it) under the same authorized
+  proposal. Approvals are a 7-bit bitmask, so each seat votes once.
+
+`tests/resilience.ts` exercises the full flow (no ZK), including the assertion
+that 3-of-7 cannot execute but 4-of-7 can.
+
 ## Status
+- Resilience: **code complete, unbuilt** (runnable via `anchor test` once the
+  toolchain is present — no ceremony needed, it's pure on-chain logic).
 - ZK lineage: **code complete, unbuilt.** Needs the Solana+Anchor+circom
   toolchain (absent here) to `anchor build` and a **trusted-setup ceremony** to
   replace the placeholder `verifying_key.rs`. The snarkjs→Solana proof byte
