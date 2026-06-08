@@ -178,10 +178,19 @@ wallet's artifacts. Two safeguards are built in:
   deliberately favours **safety over liveness** — a contested migration
   stays blocked while the dispute is resolved off-chain (and the honest
   seats can rotate out colluders in the meantime).
+- **Member co-signature / self-recovery.** A member may bind a separate
+  **recovery key** — a guardian key they alone control, distinct from
+  their everyday wallet — and opt into **require-co-sign**. Then *no
+  Council majority, even all 7 colluding, can migrate that member's
+  standing without their signature*: they are collusion-proof, at the
+  cost that losing **both** keys makes the membership unrecoverable (the
+  member chooses this availability-vs-safety trade for themselves). A
+  member who still holds a key can also **self-migrate** their own
+  membership with no Council vote and no time-lock. The Council-only path
+  remains for members who may lose every key.
 
 Remaining mitigations are operational: elders drawn from distinct trust
-domains, and (optionally) the member's own co-signature when they still
-hold *a* key. Treasury and governance-token recovery for funds held in
+domains. Treasury and governance-token recovery for funds held in
 Squads/Realms use those tools' own m-of-n recovery, which the Council
 mirrors.
 
@@ -259,7 +268,8 @@ own affairs by group conscience. New Circles inherit the full template.
 
 - [ ] Chain: **leaning EVM (Base/Gnosis)** for the ZK stack — confirm vs Solana.
 - [ ] Council size for small Circles: enforce 7/4 everywhere, or allow a smaller m/n until a Circle grows (with 7/4 the default and target)?
-- [x] Recovery safeguards: **time-lock + any-seat contest on migration** (decided; implemented). Still open: require the member's co-signature when they still hold a key?
+- [x] Recovery safeguards: **time-lock + any-seat contest + member co-signature/self-recovery** (decided; implemented).
+- [ ] Harden seat rotation against the "purge before migration" attack: time-lock RotateSeat, or freeze rotations while a migration is pending?
 - [ ] Anonymity baseline: anonymous-by-default (Semaphore membership set) vs visible soulbound token with optional ZK.
 - [ ] Lineage proofs: off-the-shelf trusted-issuer VCs (Privado ID) vs full issuer-anonymous delegatable credentials (custom).
 - [ ] Relayer / account-abstraction strategy to prevent metadata deanonymization.
