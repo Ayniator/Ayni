@@ -74,6 +74,9 @@ trusted-setup ceremonies. "✅" means code-complete & wired, not build-verified.
 - ✅ Council seat uniqueness (no wallet in two seats) — S3.
 - ✅ Pin tree depth to the circuit depth — S4.
 - ⬜ Operational gates before mainnet: real VKs (fail-closed), `authority` = multisig, genesis key in MPC, rent-exempt treasury.
+- ⬜ **Deeper audit pass once the toolchain is up** (needs a compiled build):
+  - ⬜ Real **fuzz / property tests** of Council vote accounting (approvals bitmask, threshold, time-lock/contest, quorum + majority) and nullifier logic (no replay across the `nullifier` / `ack_nullifier` / `vote_nullifier` / `personhood` namespaces).
+  - ⬜ Run **`/security-review`** against the compiled build to catch anything static analysis surfaces.
 
 ### Build & cryptography (blocking real use)
 - ⬜ Stand up toolchain; `anchor build` + `anchor test` (resilience & cosign tests are no-ZK and runnable first).
