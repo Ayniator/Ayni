@@ -159,10 +159,22 @@ seats; four elders fill the rest purely for quorum and resilience.
    seats approve the migration; then each artifact is rebound under that
    single authorization.
 
-**Scope by level.** The World Service Council recovers World-Service-level
-keys and seats; each local Circle's Council recovers its own — *"also
-4-of-7 at their level."* A Circle never needs World Service to recover a
-local key, preserving autonomy (T4).
+**Scope by level.** Every Circle — foundational or local — has the *same*
+recovery toolkit (member self-recovery, member co-sign, Council 4-of-7
+with time-lock + contest). They differ only in **scope** and
+**recommended parameters**:
+
+- **Foundational — the World Service Circle.** Recovers World-Service
+  seats and the shared root of authority; it also custodies the **lineage
+  genesis key** (kept in an MPC / governance multisig, never one wallet).
+  Highest stakes ⇒ a **long contest window** (e.g. 14–30 days) and elders
+  drawn from distinct trust domains.
+- **Local — an offspring Circle.** Recovers its own seats and members,
+  **autonomously** — it never needs World Service to recover a local key
+  (Tradition 4). Lower stakes ⇒ a **shorter window** (e.g. 3–7 days) is
+  reasonable.
+
+Per-level recovery options are tabulated in `docs/resilience.md`.
 
 **Safeguards against collusion.** Recovery is **social**, so it is only
 as honest as the Council: 4 colluding seats could otherwise seize a
@@ -178,16 +190,17 @@ wallet's artifacts. Two safeguards are built in:
   deliberately favours **safety over liveness** — a contested migration
   stays blocked while the dispute is resolved off-chain (and the honest
   seats can rotate out colluders in the meantime).
-- **Member co-signature / self-recovery.** A member may bind a separate
-  **recovery key** — a guardian key they alone control, distinct from
-  their everyday wallet — and opt into **require-co-sign**. Then *no
-  Council majority, even all 7 colluding, can migrate that member's
-  standing without their signature*: they are collusion-proof, at the
-  cost that losing **both** keys makes the membership unrecoverable (the
-  member chooses this availability-vs-safety trade for themselves). A
-  member who still holds a key can also **self-migrate** their own
-  membership with no Council vote and no time-lock. The Council-only path
-  remains for members who may lose every key.
+- **Member co-signature / self-recovery.** A member may bind up to **two
+  guardian keys** — backup keys they alone control, distinct from their
+  everyday wallet — and opt into **require-co-sign**. Either guardian can
+  act (1-of-2), so losing one guardian still leaves recovery possible.
+  With the policy on, *no Council majority, even all 7 colluding, can
+  migrate that member's standing without one of their keys*: they are
+  collusion-proof, at the cost that losing **every** key makes the
+  membership unrecoverable (the member chooses this availability-vs-safety
+  trade). A member who still holds any key can also **self-migrate** their
+  own membership with no Council vote and no time-lock. The Council-only
+  path remains for members who may lose all keys.
 
 Remaining mitigations are operational: elders drawn from distinct trust
 domains. Treasury and governance-token recovery for funds held in
