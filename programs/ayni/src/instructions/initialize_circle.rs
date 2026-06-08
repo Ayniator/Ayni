@@ -22,6 +22,10 @@ pub fn initialize_circle(
     circle.council.recovery_timelock = recovery_timelock;
     circle.membership_period = membership_period;
     circle.member_count = 0;
+    // Sybil gate off by default; enable + set the unique-human root via
+    // `set_personhood` once a personhood source (e.g. a World ID group) is chosen.
+    circle.require_personhood = false;
+    circle.personhood_root = [0u8; 32];
     circle.name = name;
     circle.bump = ctx.bumps.circle;
     Ok(())

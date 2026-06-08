@@ -36,6 +36,15 @@ pub fn field_from_u64(v: u64) -> [u8; 32] {
     b
 }
 
+/// Reduce a Pubkey to a valid BN254 field element by clearing the top 3 bits
+/// (BN254 p > 2^253, so the result is always < p). Used as a per-Circle external
+/// nullifier for proof-of-personhood. The off-chain prover must mask identically.
+pub fn field_from_pubkey(pk: &Pubkey) -> [u8; 32] {
+    let mut b = pk.to_bytes();
+    b[0] &= 0x1f;
+    b
+}
+
 /// Empty-subtree hashes: `zeros[0] = field 0`, `zeros[i+1] = H(zeros[i], zeros[i])`.
 /// Returns `depth + 1` entries. The off-chain prover must use the same zeros.
 pub fn zeros(depth: usize) -> Result<[[u8; 32]; MAX_DEPTH + 1]> {

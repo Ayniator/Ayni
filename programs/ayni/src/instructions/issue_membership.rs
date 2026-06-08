@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
 
+use crate::errors::AyniError;
 use crate::merkle;
-use crate::state::{Circle, Membership, MemberTree};
+use crate::state::{Circle, Membership, MemberTree, PersonhoodCredential};
 
 pub fn issue_membership(
     ctx: Context<IssueMembership>,
@@ -12,6 +13,19 @@ pub fn issue_membership(
 ) -> Result<()> {
     let clock = Clock::get()?;
     let circle = &mut ctx.accounts.circle;
+
+    // Sybil gate: one human → one membership. Consume a (one-per-human)
+    // PersonhoodCredential proven via `prove_personhood`.
+    if circle.require_personhood {
+        let cred = ctx
+            .accounts
+            .personhood
+            .as_mut()
+            .ok_or(error!(AyniError::PersonhoodRequired))?;
+        require!(cred.circle == circle.key(), AyniError::PersonhoodRequired);
+        require!(!cred.used, AyniError::PersonhoodRequired);
+        cred.used = true;
+    }
 
     let membership = &mut ctx.accounts.membership;
     membership.circle = circle.key();
@@ -65,6 +79,11 @@ pub struct IssueMembership<'info> {
         bump = member_tree.bump
     )]
     pub member_tree: Account<'info, MemberTree>,
+
+    /// Required only when `circle.require_personhood`: a one-per-human
+    /// `PersonhoodCredential` (from `prove_personhood`), consumed here.
+    #[account(mut)]
+    pub personhood: Option<Account<'info, PersonhoodCredential>>,
 
     #[account(mut)]
     pub authority: Signer<'info>,

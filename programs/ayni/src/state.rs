@@ -19,6 +19,12 @@ pub struct Circle {
     /// Length of one membership term, in seconds (e.g. one year).
     pub membership_period: i64,
     pub member_count: u64,
+    /// Sybil gate: if true, `issue_membership` requires a `PersonhoodCredential`
+    /// (one human → one membership per Circle) proven against `personhood_root`.
+    pub require_personhood: bool,
+    /// Merkle root of a unique-human set (e.g. a World ID group, or a Circle's
+    /// vouching set) that personhood proofs are checked against.
+    pub personhood_root: [u8; 32],
     /// Human-readable Circle name (also a PDA seed, so <= MAX_NAME bytes).
     pub name: String,
     pub bump: u8,
@@ -32,6 +38,8 @@ impl Circle {
         + Council::SPACE               // 7 seats + threshold
         + 8                            // membership_period
         + 8                            // member_count
+        + 1                            // require_personhood
+        + 32                           // personhood_root
         + 4 + Self::MAX_NAME           // name (String: 4-byte len prefix + bytes)
         + 1; // bump
 }
@@ -217,4 +225,20 @@ pub struct MemberProposal {
 
 impl MemberProposal {
     pub const SPACE: usize = 8 + 32 + 8 + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 1 + 1;
+}
+
+/// Proof that a unique human is eligible for one membership in a Circle, minted
+/// by `prove_personhood` after an anonymous proof-of-personhood (World ID-style).
+/// Its PDA is seeded by the personhood nullifier, so one human yields exactly one
+/// credential per Circle; `issue_membership` consumes it (`used = true`) — one
+/// human, one membership. The human's identity is never revealed.
+#[account]
+pub struct PersonhoodCredential {
+    pub circle: Pubkey,
+    pub used: bool,
+    pub bump: u8,
+}
+
+impl PersonhoodCredential {
+    pub const SPACE: usize = 8 + 32 + 1 + 1;
 }

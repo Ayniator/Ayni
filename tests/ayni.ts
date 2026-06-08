@@ -59,6 +59,7 @@ describe("ayni — AHA on Solana", () => {
         circle: circlePda,
         membership: membershipPda,
         memberTree: memberTreePda,
+        personhood: null, // sybil gate off in this Circle
         authority: authority.publicKey,
       })
       .rpc();

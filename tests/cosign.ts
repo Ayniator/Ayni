@@ -72,7 +72,7 @@ describe("ayni — member co-signature & self-recovery", () => {
     // require_cosign = true, two guardians (1-of-2)
     await program.methods
       .issueMembership([...commitment], memberOwner, [guardian1.publicKey, guardian2.publicKey], true)
-      .accounts({ circle: circlePda, membership, memberTree: memberTreePda, authority: authority.publicKey })
+      .accounts({ circle: circlePda, membership, memberTree: memberTreePda, personhood: null, authority: authority.publicKey })
       .rpc();
 
     // Council reaches 4/7 to migrate memberOwner -> newWallet and executes.
@@ -130,7 +130,7 @@ describe("ayni — member co-signature & self-recovery", () => {
 
     await program.methods
       .issueMembership([...commitment], owner.publicKey, [anchor.web3.PublicKey.default, anchor.web3.PublicKey.default], false)
-      .accounts({ circle: circlePda, membership, memberTree: memberTreePda, authority: authority.publicKey })
+      .accounts({ circle: circlePda, membership, memberTree: memberTreePda, personhood: null, authority: authority.publicKey })
       .rpc();
 
     await program.methods

@@ -93,6 +93,28 @@ pub mod ayni {
         instructions::finalize_member_proposal(ctx)
     }
 
+    // --- Sybil resistance: anonymous proof-of-personhood (see docs/sybil.md) ---
+
+    /// Configure the Circle's sybil gate (on/off + the unique-human Merkle root).
+    pub fn set_personhood(
+        ctx: Context<SetPersonhood>,
+        require_personhood: bool,
+        personhood_root: [u8; 32],
+    ) -> Result<()> {
+        instructions::set_personhood(ctx, require_personhood, personhood_root)
+    }
+
+    /// Mint a one-per-human PersonhoodCredential from an anonymous proof.
+    pub fn prove_personhood(
+        ctx: Context<ProvePersonhood>,
+        nullifier: [u8; 32],
+        proof_a: [u8; 64],
+        proof_b: [u8; 128],
+        proof_c: [u8; 64],
+    ) -> Result<()> {
+        instructions::prove_personhood(ctx, nullifier, proof_a, proof_b, proof_c)
+    }
+
     // --- Resilience: 7-seat Council, 4-of-7 recovery (see docs/resilience.md) ---
 
     /// Seat a Council member (bootstrap / governance path). Seats 0..2 are the
