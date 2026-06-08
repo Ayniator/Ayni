@@ -26,6 +26,7 @@ pub fn initialize_circle(
     // `set_personhood` once a personhood source (e.g. a World ID group) is chosen.
     circle.require_personhood = false;
     circle.personhood_root = [0u8; 32];
+    circle.membership_mint = Pubkey::default();
     circle.name = name;
     circle.bump = ctx.bumps.circle;
     Ok(())

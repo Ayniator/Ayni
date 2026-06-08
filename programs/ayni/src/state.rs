@@ -25,6 +25,9 @@ pub struct Circle {
     /// Merkle root of a unique-human set (e.g. a World ID group, or a Circle's
     /// vouching set) that personhood proofs are checked against.
     pub personhood_root: [u8; 32],
+    /// Token-2022 NonTransferable (soulbound) membership mint, if configured.
+    /// `default()` = none. Mint authority must be this Circle PDA.
+    pub membership_mint: Pubkey,
     /// Human-readable Circle name (also a PDA seed, so <= MAX_NAME bytes).
     pub name: String,
     pub bump: u8,
@@ -40,6 +43,7 @@ impl Circle {
         + 8                            // member_count
         + 1                            // require_personhood
         + 32                           // personhood_root
+        + 32                           // membership_mint
         + 4 + Self::MAX_NAME           // name (String: 4-byte len prefix + bytes)
         + 1; // bump
 }

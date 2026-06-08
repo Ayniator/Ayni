@@ -59,6 +59,28 @@ pub mod ayni {
         instructions::renew_membership(ctx)
     }
 
+    // --- Treasury (self-supporting) & soulbound token (see docs/treasury.md) ---
+
+    /// Donate SOL to a Circle's treasury (anyone may contribute).
+    pub fn donate(ctx: Context<Donate>, amount: u64) -> Result<()> {
+        instructions::donate(ctx, amount)
+    }
+
+    /// Withdraw from the treasury (authority = the Circle's Squads/Realms m-of-n).
+    pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>, amount: u64) -> Result<()> {
+        instructions::withdraw_treasury(ctx, amount)
+    }
+
+    /// Register the Circle's Token-2022 NonTransferable (soulbound) membership mint.
+    pub fn set_membership_mint(ctx: Context<SetMembershipMint>, mint: Pubkey) -> Result<()> {
+        instructions::set_membership_mint(ctx, mint)
+    }
+
+    /// Mint one soulbound membership token to a member's Token-2022 account.
+    pub fn mint_membership_token(ctx: Context<MintMembershipToken>) -> Result<()> {
+        instructions::mint_membership_token(ctx)
+    }
+
     // --- Member voting: anonymous one-member-one-vote (see docs/member-voting.md) ---
 
     /// Create the Circle's member-set tree (votable population). Run once.
