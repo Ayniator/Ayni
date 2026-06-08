@@ -54,11 +54,26 @@ pub struct Membership {
     /// fully anonymous (no wallet bound). This is the field a 4-of-7 wallet
     /// migration rebinds during key recovery.
     pub owner: Pubkey,
+    /// Optional guardian/backup key the member controls separately from `owner`.
+    /// Lets a member self-migrate or co-sign even after losing the owner key,
+    /// and preserves anonymity (owner may stay `default()` while this is set).
+    pub recovery_key: Pubkey,
+    /// If true, a Council `MigrateWallet` cannot rebind this membership without a
+    /// signature from `owner` or `recovery_key` — collusion-proof, but the
+    /// membership is unrecoverable if both keys are lost.
+    pub require_cosign: bool,
     pub bump: u8,
 }
 
 impl Membership {
-    pub const SPACE: usize = 8 + 32 + 32 + 8 + 8 + 1 + 32 + 1;
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 8 + 1 + 32 + 32 + 1 + 1;
+
+    /// True if `who` is a key the member controls (owner or recovery key),
+    /// ignoring unset (`default()`) slots.
+    pub fn is_member_key(&self, who: &Pubkey) -> bool {
+        (self.owner != Pubkey::default() && who == &self.owner)
+            || (self.recovery_key != Pubkey::default() && who == &self.recovery_key)
+    }
 }
 
 /// Record of a single shamanic level grant along an anonymous lineage.

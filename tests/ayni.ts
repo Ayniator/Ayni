@@ -44,7 +44,8 @@ describe("ayni — AHA on Solana", () => {
     );
 
     await program.methods
-      .issueMembership([...commitment], authority.publicKey) // owner (selective disclosure)
+      // owner (disclosure), no guardian key, council-only recovery
+      .issueMembership([...commitment], authority.publicKey, anchor.web3.PublicKey.default, false)
       .accounts({
         circle: circlePda,
         membership: membershipPda,

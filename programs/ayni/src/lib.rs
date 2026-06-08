@@ -38,13 +38,17 @@ pub mod ayni {
     }
 
     /// Issue a soulbound yearly membership, identified by a ZK commitment.
-    /// `owner` is an optional controlling wallet (default() = fully anonymous).
+    /// `owner` is an optional controlling wallet (default() = fully anonymous);
+    /// `recovery_key` an optional guardian; `require_cosign` opts into
+    /// member-co-signed migration.
     pub fn issue_membership(
         ctx: Context<IssueMembership>,
         commitment: [u8; 32],
         owner: Pubkey,
+        recovery_key: Pubkey,
+        require_cosign: bool,
     ) -> Result<()> {
-        instructions::issue_membership(ctx, commitment, owner)
+        instructions::issue_membership(ctx, commitment, owner, recovery_key, require_cosign)
     }
 
     /// Renew (extend) a membership for another term on donation.
@@ -81,7 +85,24 @@ pub mod ayni {
         instructions::cancel_proposal(ctx)
     }
 
-    /// Rebind a membership's owner under an executed MigrateWallet proposal.
+    /// Member configures their own recovery: set/rotate the guardian key and the
+    /// require-co-sign policy (signed by owner or current recovery key).
+    pub fn set_recovery(
+        ctx: Context<SetRecovery>,
+        recovery_key: Pubkey,
+        require_cosign: bool,
+    ) -> Result<()> {
+        instructions::set_recovery(ctx, recovery_key, require_cosign)
+    }
+
+    /// Self-recovery: a member holding a key migrates their own membership owner
+    /// with no Council vote and no time-lock.
+    pub fn member_migrate(ctx: Context<MemberMigrate>, new_owner: Pubkey) -> Result<()> {
+        instructions::member_migrate(ctx, new_owner)
+    }
+
+    /// Rebind a membership's owner under an executed MigrateWallet proposal
+    /// (with the member's co-signature when the membership requires it).
     pub fn recover_membership(ctx: Context<RecoverMembership>) -> Result<()> {
         instructions::recover_membership(ctx)
     }

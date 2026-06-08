@@ -103,9 +103,18 @@ executes only after a per-Circle **time-lock** (`recovery_timelock`, set at
 seat** can `cancel_proposal` to block it. Safety over liveness for irreversible
 recovery. (RotateSeat has no time-lock.)
 
-`tests/resilience.ts` exercises the full flow (no ZK): 3-of-7 cannot execute but
-4-of-7 can; a migration is held by the time-lock then executes; and a single
-seat's contest permanently blocks one.
+**Member co-signature & self-recovery.** A membership carries an optional
+guardian `recovery_key` and a `require_cosign` policy (set at `issue_membership`
+or later via `set_recovery`). With `require_cosign`, `recover_membership` also
+needs the member's signature (`owner` or `recovery_key`) — so no Council majority
+can migrate an opted-in member. A member holding a key can `member_migrate` their
+own membership with no vote and no time-lock. `owner` may stay `default()` (fully
+anonymous) while a guardian key is set.
+
+Tests (no ZK): `tests/resilience.ts` — 3-of-7 fails / 4-of-7 executes, time-lock
+hold-then-execute, single-seat contest. `tests/cosign.ts` — council-only
+migration of a `require_cosign` membership is blocked then succeeds with the
+guardian; member self-migration.
 
 ## Status
 - Resilience: **code complete, unbuilt** (runnable via `anchor test` once the

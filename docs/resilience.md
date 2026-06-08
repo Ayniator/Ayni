@@ -38,7 +38,9 @@ Flow:
 | `approve()` | a Council seat | add this seat's approval (once); arms when threshold reached |
 | `cancel_proposal()` | **any** Council seat | contest: mark a pending proposal cancelled |
 | `execute_proposal()` | anyone | when `approvals ≥ threshold` **and** the time-lock has elapsed: apply the action |
-| `recover_membership()` | anyone | under an executed `MigrateWallet`, rebind a membership's `owner` |
+| `recover_membership()` | anyone (+ member if `require_cosign`) | under an executed `MigrateWallet`, rebind a membership's `owner` |
+| `set_recovery(key, require_cosign)` | the member (`owner`/`recovery_key`) | set/rotate the guardian key and the co-sign policy |
+| `member_migrate(new_owner)` | the member (`owner`/`recovery_key`) | self-migrate own membership — no vote, no time-lock |
 
 `appoint_seat` is the bootstrap/admin path; once seated, the Council rotates
 itself only through `RotateSeat` proposals.
@@ -59,6 +61,28 @@ recovery — the design favours **safety over liveness** for irreversible
 actions. A colluding majority can re-propose, but honest seats can re-cancel and
 rotate the colluders out while the migration stays blocked.
 
+## Member co-signature & self-recovery
+
+A `Membership` carries two optional fields: a guardian **`recovery_key`** (a
+backup key the member controls, separate from `owner`) and a **`require_cosign`**
+policy. They give the member control over their own recovery, independent of the
+Council:
+
+- **`require_cosign = true`:** `recover_membership` additionally requires a
+  signature from `owner` or `recovery_key`. *No Council majority — even all 7
+  colluding — can migrate this membership without the member.* The trade: lose
+  **both** keys and the membership is unrecoverable. The member chooses this
+  availability-vs-collusion-resistance balance for themselves.
+- **Self-recovery (`member_migrate`):** a member still holding either key
+  rebinds their own `owner` with no Council vote and no time-lock — because they
+  personally authorize it, no collusion is possible.
+- **Anonymity preserved:** `owner` may stay `default()` (no public wallet) while
+  a `recovery_key` is set, so even a fully anonymous member can self-migrate and
+  co-sign via the guardian key.
+
+The Council-only path (`require_cosign = false`, default) remains for members who
+may lose every key — that is what the time-lock and contest protect.
+
 ## "Migrate all artifacts"
 
 A definitive `walletA → walletB` recovery is completed in two bounded steps:
@@ -78,10 +102,20 @@ Council mirrors.
 
 ## Threat model
 
-- **Social trust:** 4 colluding seats can seize a wallet's artifacts. The
-  built-in time-lock + any-seat contest blunt this (a single honest seat halts a
-  migration); remaining mitigations are elders from distinct trust domains and
-  (optionally) the member's co-signature while they still hold *a* key.
+- **Social trust:** for `require_cosign = false` memberships, 4 colluding seats
+  could seize a wallet's artifacts. Defences, in order of strength: members who
+  opt into **`require_cosign`** are immune (the Council cannot migrate them at
+  all); the **time-lock + any-seat contest** blunt the council-only path (a
+  single honest seat halts a migration); and operationally, elders from distinct
+  trust domains.
+- **Purge-before-migration:** because `RotateSeat` is instant, a 4-seat majority
+  could rotate out the honest minority *before* proposing a migration, defeating
+  the contest. `require_cosign` sidesteps this for memberships; hardening seat
+  rotation (time-lock / freeze-during-migration) is an open decision (PROJECT.md
+  §10).
+- **Total key loss under `require_cosign`:** losing both `owner` and
+  `recovery_key` makes the membership unrecoverable — the accepted cost of being
+  collusion-proof.
 - **No revocation of the migration itself:** once executed, a `MigrateWallet`
   is authoritative; a wrongful migration is corrected only by another vote.
 - **Bootstrap:** `appoint_seat` trusts `authority` (the governance PDA). Seat

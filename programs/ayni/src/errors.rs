@@ -36,4 +36,6 @@ pub enum AyniError {
     TimelockNotElapsed,
     #[msg("Proposal has been cancelled")]
     ProposalCancelled,
+    #[msg("This membership requires the member's co-signature to migrate")]
+    MemberCosignRequired,
 }
