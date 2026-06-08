@@ -152,7 +152,7 @@ not three, so that a quorum survives several simultaneous losses and no
 faction of three can act alone. The three named servants occupy three
 seats; four elders fill the rest purely for quorum and resilience.
 
-**Two recovery actions, each 4-of-7:**
+**Three recovery actions, each 4-of-7:**
 
 1. **Rotate a seat** — replace the wallet in a Council seat (a servant
    lost their key, or a term ended). Four of the other seats approve.
@@ -161,6 +161,10 @@ seats; four elders fill the rest purely for quorum and resilience.
    membership, and their shamanic levels are rebound to `walletB`. Four
    seats approve the migration; then each artifact is rebound under that
    single authorization.
+3. **Rotate the Circle authority** — recover a lost or compromised admin
+   key (the address that gates issuance and configuration), or hand it to
+   a governance multisig. So no single key — not even the admin — is a
+   permanent point of failure. Time-locked and contestable, like a migration.
 
 **Scope by level.** Every Circle — foundational or local — has the *same*
 recovery toolkit (member self-recovery, member co-sign, Council 4-of-7
