@@ -64,7 +64,9 @@ pub fn grant_level(
 #[derive(Accounts)]
 #[instruction(granted_level: u8, grantee_commitment: [u8; 32], nullifier: [u8; 32])]
 pub struct GrantLevel<'info> {
-    pub circle: Account<'info, Circle>,
+    // Boxed (heap) to keep `try_accounts` within the 4KB BPF stack frame —
+    // Lineage/Circle are large (filled_subtrees, 7-seat Council).
+    pub circle: Box<Account<'info, Circle>>,
 
     #[account(
         mut,
@@ -72,7 +74,7 @@ pub struct GrantLevel<'info> {
         seeds = [b"lineage", circle.key().as_ref()],
         bump = lineage.bump,
     )]
-    pub lineage: Account<'info, Lineage>,
+    pub lineage: Box<Account<'info, Lineage>>,
 
     #[account(
         mut,
@@ -80,7 +82,7 @@ pub struct GrantLevel<'info> {
         seeds = [b"membership", circle.key().as_ref(), grantee_commitment.as_ref()],
         bump = membership.bump,
     )]
-    pub membership: Account<'info, Membership>,
+    pub membership: Box<Account<'info, Membership>>,
 
     /// Spent-nullifier marker. `init` fails if it already exists → replay-proof.
     #[account(

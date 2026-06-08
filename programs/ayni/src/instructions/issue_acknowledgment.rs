@@ -60,10 +60,11 @@ pub fn issue_acknowledgment(
 #[derive(Accounts)]
 #[instruction(ack_root: [u8; 32], member_commitment: [u8; 32], attest_level: u8, nullifier: [u8; 32])]
 pub struct IssueAcknowledgment<'info> {
-    pub circle: Account<'info, Circle>,
+    // Boxed (heap) to keep `try_accounts` within the 4KB BPF stack frame.
+    pub circle: Box<Account<'info, Circle>>,
 
     #[account(has_one = circle, seeds = [b"lineage", circle.key().as_ref()], bump = lineage.bump)]
-    pub lineage: Account<'info, Lineage>,
+    pub lineage: Box<Account<'info, Lineage>>,
 
     /// Binds the credential to an existing member of this circle.
     #[account(
@@ -71,7 +72,7 @@ pub struct IssueAcknowledgment<'info> {
         seeds = [b"membership", circle.key().as_ref(), member_commitment.as_ref()],
         bump = membership.bump,
     )]
-    pub membership: Account<'info, Membership>,
+    pub membership: Box<Account<'info, Membership>>,
 
     #[account(
         init,
@@ -80,7 +81,7 @@ pub struct IssueAcknowledgment<'info> {
         seeds = [b"ack", circle.key().as_ref(), ack_root.as_ref()],
         bump
     )]
-    pub acknowledgment: Account<'info, Acknowledgment>,
+    pub acknowledgment: Box<Account<'info, Acknowledgment>>,
 
     /// Spent-nullifier marker (distinct namespace from level-grant nullifiers).
     #[account(

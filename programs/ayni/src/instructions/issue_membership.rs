@@ -47,7 +47,7 @@ pub fn issue_membership(
 
     // Add the member to the votable set (the commitment is the leaf, == the
     // member-vote circuit's `Poseidon(secret)`).
-    let mt = &mut ctx.accounts.member_tree;
+    let mt: &mut MemberTree = &mut ctx.accounts.member_tree;
     merkle::insert_leaf(mt.depth, &mut mt.next_index, &mut mt.root, &mut mt.filled_subtrees, commitment)?;
 
     // TODO(ayni): mint a Token-2022 NonTransferable (soulbound) membership token

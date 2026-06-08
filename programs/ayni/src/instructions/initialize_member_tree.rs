@@ -9,10 +9,12 @@ use crate::state::{Circle, MemberTree};
 pub fn initialize_member_tree(ctx: Context<InitializeMemberTree>, depth: u8) -> Result<()> {
     // Must match the member_vote circuit's compiled depth, or vote proofs fail.
     require!(depth == merkle::CIRCUIT_DEPTH, AyniError::DepthTooLarge);
-    let t = &mut ctx.accounts.member_tree;
-    t.circle = ctx.accounts.circle.key();
+    let circle_key = ctx.accounts.circle.key();
+    let bump = ctx.bumps.member_tree;
+    let t: &mut MemberTree = &mut ctx.accounts.member_tree;
+    t.circle = circle_key;
     t.depth = depth;
-    t.bump = ctx.bumps.member_tree;
+    t.bump = bump;
     merkle::init_tree(depth, &mut t.next_index, &mut t.root, &mut t.filled_subtrees)
 }
 
