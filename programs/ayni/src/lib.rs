@@ -117,6 +117,32 @@ pub mod ayni {
         instructions::initialize_lineage(ctx, depth, genesis_commitment, genesis_level)
     }
 
+    /// Issue an acknowledgment credential (course/initiation certificate),
+    /// attested by an anonymous lineage teacher. Stores only the Poseidon root
+    /// of the four blinded fields; selective disclosure happens off-chain via
+    /// `circuits/ack_disclose.circom`. Reuses the lineage verifying key.
+    pub fn issue_acknowledgment(
+        ctx: Context<IssueAcknowledgment>,
+        ack_root: [u8; 32],
+        member_commitment: [u8; 32],
+        attest_level: u8,
+        nullifier: [u8; 32],
+        proof_a: [u8; 64],
+        proof_b: [u8; 128],
+        proof_c: [u8; 64],
+    ) -> Result<()> {
+        instructions::issue_acknowledgment(
+            ctx,
+            ack_root,
+            member_commitment,
+            attest_level,
+            nullifier,
+            proof_a,
+            proof_b,
+            proof_c,
+        )
+    }
+
     /// Grant a shamanic level along an anonymous, ZK-verified lineage.
     pub fn grant_level(
         ctx: Context<GrantLevel>,

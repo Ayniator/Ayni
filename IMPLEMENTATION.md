@@ -84,6 +84,27 @@ credential of sufficient level — chaining back to the World Service root —
 authorized it, emitting a nullifier to prevent replay. The granter's identity is
 never revealed; a relayer pays so their wallet isn't linked either.
 
+## Acknowledgment credentials (implemented)
+
+Course/initiation certificates — *portrait PPP, course CCC, teacher XXX, date
+DDD* — whose holder discloses each field independently. Full design in
+[docs/acknowledgments.md](./docs/acknowledgments.md).
+
+```
+circuits/ack_disclose.circom            selective-disclosure circuit (reveal/hide + date predicate)
+programs/ayni/src/state.rs              Acknowledgment account (stores only the root R)
+programs/ayni/src/instructions/issue_acknowledgment.rs
+                                        issuer-anonymous attestation — REUSES the lineage VK
+app/acknowledgment/prove.ts             build R + generate/verify disclosure proofs
+```
+
+Only `R = Poseidon(cP,cC,cX,cD)` (the four blinded field commitments) is stored.
+Issuance verifies a lineage teacher of level ≥ `attest_level` authorized `R`
+(reusing `verifying_key.rs`, binding `R` in the grantee slot) — so "taught by a
+real lineage holder" is on-chain while the teacher stays anonymous. The holder
+later proves any subset against `R`: reveal a field, hide it, or prove a
+predicate (e.g. `dateOk = ddd ≥ bound`) without revealing it.
+
 ## Resilience: 7-seat Council & 4-of-7 key recovery (implemented)
 
 Full design in [docs/resilience.md](./docs/resilience.md). Each Circle (and the

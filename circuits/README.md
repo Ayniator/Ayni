@@ -1,7 +1,15 @@
-# Ayni lineage circuit — build & trusted setup
+# Ayni circuits — build & trusted setup
 
-`lineage_grant.circom` → Groth16 proving/verifying keys → `verifying_key.rs`
-compiled into the `ayni` program. See `../docs/zk-lineage.md` for the design.
+Two circuits:
+
+- **`lineage_grant.circom`** → `verifying_key.rs` compiled into the `ayni`
+  program (on-chain verification of level grants). See `../docs/zk-lineage.md`.
+  This VK is **also reused** by `issue_acknowledgment` (issuer-anonymous
+  attestation), so acknowledgment issuance needs no separate ceremony.
+- **`ack_disclose.circom`** → its own verifying key, used to verify holder
+  selective-disclosure proofs (off-chain, or on-chain with a separate
+  `ack_disclose` VK). See `../docs/acknowledgments.md`. Run the same compile +
+  ceremony steps below, substituting `ack_disclose` for `lineage_grant`.
 
 ## Prerequisites
 

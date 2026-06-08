@@ -135,3 +135,28 @@ pub struct Nullifier {}
 impl Nullifier {
     pub const SPACE: usize = 8;
 }
+
+/// An acknowledgment credential — a course/initiation certificate attesting
+/// "portrait PPP followed course CCC, taught by XXX, on date DDD". Only the
+/// Poseidon root `root = Poseidon(cP, cC, cX, cD)` of the four blinded field
+/// commitments is stored, so nothing about the fields is public. The holder
+/// later opens any subset with a ZK proof (`circuits/ack_disclose.circom`).
+///
+/// `issuer_attested` is set true because issuance verified an *issuer-anonymous*
+/// lineage proof: a teacher of level >= `attest_level` in the lineage tree
+/// authorized this `root` — so "taught by a real lineage holder" is guaranteed
+/// without recording which teacher. See docs/acknowledgments.md.
+#[account]
+pub struct Acknowledgment {
+    pub circle: Pubkey,
+    pub member_commitment: [u8; 32],
+    pub root: [u8; 32],
+    pub attest_level: u8,
+    pub issued_at: i64,
+    pub issuer_attested: bool,
+    pub bump: u8,
+}
+
+impl Acknowledgment {
+    pub const SPACE: usize = 8 + 32 + 32 + 32 + 1 + 8 + 1 + 1;
+}
