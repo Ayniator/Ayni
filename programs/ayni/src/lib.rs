@@ -15,9 +15,11 @@ pub mod instructions;
 pub mod merkle;
 pub mod state;
 pub mod verifying_key;
+pub mod verifying_key_ack;
 
 use council::ProposalAction;
 use instructions::*;
+use instructions::verify_disclosure::DisclosureGate;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -137,6 +139,28 @@ pub mod ayni {
             member_commitment,
             attest_level,
             nullifier,
+            proof_a,
+            proof_b,
+            proof_c,
+        )
+    }
+
+    /// Verify an acknowledgment selective-disclosure proof against a gate's
+    /// predicate requirements and mint an AccessPass (predicate-gated access).
+    pub fn verify_disclosure(
+        ctx: Context<VerifyDisclosure>,
+        gate: [u8; 32],
+        public_inputs: [[u8; 32]; instructions::verify_disclosure::ACK_DISCLOSE_PUBLIC_INPUTS],
+        requirements: DisclosureGate,
+        proof_a: [u8; 64],
+        proof_b: [u8; 128],
+        proof_c: [u8; 64],
+    ) -> Result<()> {
+        instructions::verify_disclosure(
+            ctx,
+            gate,
+            public_inputs,
+            requirements,
             proof_a,
             proof_b,
             proof_c,

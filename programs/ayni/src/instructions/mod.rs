@@ -12,6 +12,7 @@ pub mod propose;
 pub mod recover_membership;
 pub mod renew_membership;
 pub mod set_recovery;
+pub mod verify_disclosure;
 
 pub use appoint_seat::*;
 pub use approve::*;
@@ -27,3 +28,4 @@ pub use propose::*;
 pub use recover_membership::*;
 pub use renew_membership::*;
 pub use set_recovery::*;
+pub use verify_disclosure::*;

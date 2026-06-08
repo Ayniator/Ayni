@@ -160,3 +160,18 @@ pub struct Acknowledgment {
 impl Acknowledgment {
     pub const SPACE: usize = 8 + 32 + 32 + 32 + 1 + 8 + 1 + 1;
 }
+
+/// A durable proof-of-eligibility minted by `verify_disclosure`: it records that
+/// some acknowledgment satisfied a gate's predicate requirements. A downstream
+/// program (a ceremony, a resource) checks the pass exists for its `gate`.
+#[account]
+pub struct AccessPass {
+    pub acknowledgment: Pubkey,
+    pub gate: [u8; 32],
+    pub granted_at: i64,
+    pub bump: u8,
+}
+
+impl AccessPass {
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 1;
+}

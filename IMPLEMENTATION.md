@@ -91,11 +91,14 @@ DDD* — whose holder discloses each field independently. Full design in
 [docs/acknowledgments.md](./docs/acknowledgments.md).
 
 ```
-circuits/ack_disclose.circom            selective-disclosure circuit (reveal/hide + date predicate)
-programs/ayni/src/state.rs              Acknowledgment account (stores only the root R)
+circuits/ack_disclose.circom            selective disclosure + predicates (date / catalog / teacher-set)
+programs/ayni/src/state.rs              Acknowledgment (stores only R) + AccessPass
 programs/ayni/src/instructions/issue_acknowledgment.rs
                                         issuer-anonymous attestation — REUSES the lineage VK
-app/acknowledgment/prove.ts             build R + generate/verify disclosure proofs
+programs/ayni/src/instructions/verify_disclosure.rs
+                                        on-chain predicate-gated access -> mints AccessPass
+programs/ayni/src/verifying_key_ack.rs  ack_disclose vk (PLACEHOLDER — own ceremony)
+app/acknowledgment/prove.ts             build R, public sets, generate/verify disclosure proofs
 ```
 
 Only `R = Poseidon(cP,cC,cX,cD)` (the four blinded field commitments) is stored.
@@ -103,7 +106,15 @@ Issuance verifies a lineage teacher of level ≥ `attest_level` authorized `R`
 (reusing `verifying_key.rs`, binding `R` in the grantee slot) — so "taught by a
 real lineage holder" is on-chain while the teacher stays anonymous. The holder
 later proves any subset against `R`: reveal a field, hide it, or prove a
-predicate (e.g. `dateOk = ddd ≥ bound`) without revealing it.
+predicate without revealing it —
+
+- **date:** `dateOk = (ddd ≥ bound)` (certificate freshness),
+- **course:** `courseAccredited` = `ccc ∈ catalog` (Merkle, root pinned),
+- **teacher:** `teacherRecognized` = `xxx ∈ recognized set` (Merkle, root pinned).
+
+`verify_disclosure` enforces a `DisclosureGate` (which predicates must hold + the
+pinned set roots) on-chain and mints an `AccessPass` PDA — predicate-gated access
+while course/teacher/date/face stay private.
 
 ## Resilience: 7-seat Council & 4-of-7 key recovery (implemented)
 

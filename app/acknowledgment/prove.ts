@@ -78,22 +78,100 @@ export interface Reveals {
   D: boolean;
 }
 
+export const SET_DEPTH = 16; // must match circuits/ack_disclose.circom
+
+export interface SetMembership {
+  root: bigint;
+  pathElements: bigint[];
+  pathIndices: number[];
+}
+
 /**
- * Produce a disclosure proof. `reveals` picks which fields are exposed;
- * `dateLowerBound` (0 disables) proves DDD >= bound WITHOUT revealing DDD.
- * Returns the snarkjs proof + publicSignals (order: dateOk, root, reveal flags,
- * values, dateLowerBound) for a verifier to check with `groth16.verify`.
+ * Build a public Poseidon Merkle set (accredited courses, recognized teachers).
+ * Leaves are `Poseidon(element)`. Returns the root and a `path(element)` that
+ * yields the witness for the disclosure circuit's membership predicate.
+ */
+export async function buildSet(elements: bigint[], depth = SET_DEPTH) {
+  const p = await poseidon();
+  const F = p.F;
+  const h1 = (a: bigint) => F.toObject(p([a]));
+  const h2 = (a: bigint, b: bigint) => F.toObject(p([a, b]));
+
+  const zeros: bigint[] = [0n];
+  for (let i = 0; i < depth; i++) zeros.push(h2(zeros[i], zeros[i]));
+
+  const leaves = elements.map(h1);
+  const layers: bigint[][] = [leaves.length ? leaves : [zeros[0]]];
+  for (let d = 0; d < depth; d++) {
+    const cur = layers[d];
+    const next: bigint[] = [];
+    for (let i = 0; i < cur.length; i += 2) {
+      const left = cur[i];
+      const right = i + 1 < cur.length ? cur[i + 1] : zeros[d];
+      next.push(h2(left, right));
+    }
+    layers.push(next.length ? next : [zeros[d + 1]]);
+  }
+  const root = layers[depth][0];
+
+  function path(element: bigint): SetMembership {
+    const leaf = h1(element);
+    let idx = leaves.findIndex((l) => l === leaf);
+    if (idx < 0) throw new Error("element is not a member of the set");
+    const pathElements: bigint[] = [];
+    const pathIndices: number[] = [];
+    for (let d = 0; d < depth; d++) {
+      const cur = layers[d];
+      const isRight = idx % 2;
+      const sib = isRight ? cur[idx - 1] : idx + 1 < cur.length ? cur[idx + 1] : zeros[d];
+      pathElements.push(sib);
+      pathIndices.push(isRight);
+      idx = Math.floor(idx / 2);
+    }
+    return { root, pathElements, pathIndices };
+  }
+
+  return { root, path };
+}
+
+const emptyMembership = (): SetMembership & { root: bigint } => ({
+  root: 0n,
+  pathElements: Array(SET_DEPTH).fill(0n),
+  pathIndices: Array(SET_DEPTH).fill(0),
+});
+
+export interface DisclosureOptions {
+  /** Prove `ddd >= dateLowerBound` without revealing the date (0 disables). */
+  dateLowerBound?: bigint;
+  /** Prove `ccc ∈ catalog` without revealing the course (from `buildSet(...).path(ccc)`). */
+  catalog?: SetMembership;
+  /** Prove `xxx ∈ teacher set` without revealing the teacher (from `buildSet(...).path(xxx)`). */
+  teacherSet?: SetMembership;
+}
+
+/**
+ * Produce a disclosure proof. `reveals` picks which fields are exposed; `opts`
+ * adds the optional predicate proofs (date freshness, course-in-catalog,
+ * teacher-in-set). Returns the snarkjs proof + publicSignals.
+ *
+ * publicSignals order (outputs first):
+ *   [dateOk, courseAccredited, teacherRecognized, root,
+ *    revealP, revealC, revealX, revealD, valueP, valueC, valueX, valueD,
+ *    dateLowerBound, catalogRoot, enableCatalog, teacherSetRoot, enableTeacherSet]
  */
 export async function proveDisclosure(
   ack: BuiltAck,
   reveals: Reveals,
-  dateLowerBound: bigint = 0n,
+  opts: DisclosureOptions = {},
   wasmPath = "build/ack_disclose_js/ack_disclose.wasm",
   zkeyPath = "build/ack_disclose_final.zkey"
 ) {
   const o = ack.opening;
   const flag = (b: boolean) => (b ? "1" : "0");
   const val = (b: boolean, v: bigint) => (b ? v.toString() : "0");
+
+  const cat = opts.catalog ?? emptyMembership();
+  const tea = opts.teacherSet ?? emptyMembership();
 
   const input = {
     root: ack.root.toString(),
@@ -105,7 +183,11 @@ export async function proveDisclosure(
     valueC: val(reveals.C, o.ccc),
     valueX: val(reveals.X, o.xxx),
     valueD: val(reveals.D, o.ddd),
-    dateLowerBound: dateLowerBound.toString(),
+    dateLowerBound: (opts.dateLowerBound ?? 0n).toString(),
+    catalogRoot: cat.root.toString(),
+    enableCatalog: flag(!!opts.catalog),
+    teacherSetRoot: tea.root.toString(),
+    enableTeacherSet: flag(!!opts.teacherSet),
     ppp: o.ppp.toString(),
     ccc: o.ccc.toString(),
     xxx: o.xxx.toString(),
@@ -114,10 +196,14 @@ export async function proveDisclosure(
     saltC: o.saltC.toString(),
     saltX: o.saltX.toString(),
     saltD: o.saltD.toString(),
+    catalogPathElements: cat.pathElements.map(String),
+    catalogPathIndices: cat.pathIndices.map(String),
+    teacherPathElements: tea.pathElements.map(String),
+    teacherPathIndices: tea.pathIndices.map(String),
   };
 
   const { proof, publicSignals } = await groth16.fullProve(input, wasmPath, zkeyPath);
-  return { proof, publicSignals }; // publicSignals[0] = dateOk
+  return { proof, publicSignals };
 }
 
 /** A verifier checks the disclosure proof (off-chain) against the ack disclosure vkey. */

@@ -50,8 +50,8 @@ the proof + public signals. Per field, three modes:
 | Field | Reveal | Hide | Prove-without-revealing (ZK twist) |
 |---|---|---|---|
 | **PPP** portrait | show the image; proof binds `hash(image)` to `R` | omit it | (identity-binding variants) |
-| **CCC** course | show the course | omit it | predicate on `ccc` (extend circuit) |
-| **XXX** teacher | name the teacher (reveal `xxx`) | omit it | "is a real lineage teacher" — already guaranteed by `issuer_attested`, no reveal needed |
+| **CCC** course | show the course | omit it | **`courseAccredited`** — prove `ccc ∈ catalog` (Merkle) without naming the course |
+| **XXX** teacher | name the teacher (reveal `xxx`) | omit it | **`teacherRecognized`** — prove `xxx ∈ recognized-teacher set` (Merkle) without naming the teacher; *or* rely on on-chain `issuer_attested` ("a real lineage teacher") |
 | **DDD** date | show the exact date | omit it | **`dateOk = (ddd ≥ dateLowerBound)`** — prove the cert is recent/old enough without revealing the date |
 
 `revealF = 1` exposes `valueF == fieldF`; `revealF = 0` forces `valueF = 0`
@@ -59,11 +59,23 @@ the proof + public signals. Per field, three modes:
 it equals the public `root`, so every disclosure is provably about the *same
 authentic credential*.
 
-Public signals (snarkjs order, outputs first):
+**Predicate extensions** (each has an `enable` flag, so one circuit serves every
+combination):
+- **Course-in-catalog:** the holder proves `ccc` is a leaf of a public
+  `catalogRoot` (accredited courses) without revealing `ccc`. The verifier MUST
+  pin `catalogRoot` to the trusted published root.
+- **Teacher-in-set:** the holder proves `xxx` is a leaf of a public
+  `teacherSetRoot` (recognized teachers) without revealing `xxx`. Same pinning
+  requirement. The set is public, so the holder (who knows `xxx`) can build the
+  path themselves — unlike the *lineage* tree, which needs the teacher's own
+  witness and is therefore attested at issuance instead.
+
+Public signals (snarkjs order, outputs first — 17 total):
 
 ```
-[ dateOk, root, revealP, revealC, revealX, revealD,
-  valueP, valueC, valueX, valueD, dateLowerBound ]
+[ dateOk, courseAccredited, teacherRecognized, root,
+  revealP, revealC, revealX, revealD, valueP, valueC, valueX, valueD,
+  dateLowerBound, catalogRoot, enableCatalog, teacherSetRoot, enableTeacherSet ]
 ```
 
 ### Examples
@@ -85,24 +97,42 @@ A verifier checks two things:
 1. The `root` in the proof's public signals equals the `root` of a real on-chain
    `Acknowledgment` account (and reads `issuer_attested` / `attest_level`).
 2. The Groth16 disclosure proof verifies against the `ack_disclose` verifying key
-   (`app/acknowledgment/prove.ts` → `verifyDisclosure`, or on-chain via the same
-   `groth16-solana` verifier pattern with an `ack_disclose` VK).
+   (`app/acknowledgment/prove.ts` → `verifyDisclosure` off-chain, or on-chain via
+   `verify_disclosure`).
 
 If both hold, the verifier trusts the revealed values and proven predicates and
 learns nothing else.
+
+### On-chain predicate-gated access (`verify_disclosure`)
+
+For access that must be enforced on-chain (entry to a ceremony, a resource, a
+higher circle), the `verify_disclosure` instruction:
+
+1. pins `public_inputs[root]` to an on-chain `Acknowledgment`;
+2. enforces a `DisclosureGate` — which predicate outputs must be `1`
+   (`require_date_ok` / `require_course_accredited` / `require_teacher_recognized`)
+   and, for the set predicates, that the proof's `catalogRoot` / `teacherSetRoot`
+   equal the gate's **pinned** expected roots (else a prover could supply a
+   self-made set);
+3. verifies the Groth16 proof against `VERIFYING_KEY_ACK`;
+4. mints an **`AccessPass`** PDA (`seeds = ["access", gate, acknowledgment]`) —
+   durable proof of eligibility a downstream program checks by existence.
+
+So a gate like *"holders of a course in the accredited catalog, certificate less
+than a year old"* is enforced on-chain while the course, teacher, date, and face
+all stay private.
 
 ## 5. Notes & limits
 
 - **A literal picture can't be both hidden and shown.** Hidden, `PPP` is just a
   commitment; revealed, it's the image whose hash the proof binds to `R`.
-- **Extending predicates** (e.g. "CCC is in the accredited catalog", "XXX ∈ a
-  named teacher set") means adding Merkle-membership sub-proofs to the circuit —
-  for the *teacher set within the lineage*, that is literally
-  `lineage_grant.circom`'s inclusion gadget. Kept out of the base circuit to keep
-  it small.
+- **Predicate roots are pinned by the verifier.** `courseAccredited` /
+  `teacherRecognized` only mean something if the verifier checks the proof's
+  `catalogRoot` / `teacherSetRoot` against a *known published* root — otherwise a
+  prover supplies a set they made up. `verify_disclosure` enforces this on-chain.
 - **Trusted setup:** `ack_disclose.circom` needs its own ceremony + verifying
-  key, separate from the lineage one (see circuits/README.md). Issuance reuses
-  the lineage VK and so needs no new ceremony.
+  key (`verifying_key_ack.rs`), separate from the lineage one (see
+  circuits/README.md). Issuance reuses the lineage VK and needs no new ceremony.
 - On the EVM track the off-the-shelf equivalent is **BBS+ / Privado ID**
   (multi-attribute selective disclosure + predicates without hand-written
   circuits).

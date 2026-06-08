@@ -38,4 +38,8 @@ pub enum AyniError {
     ProposalCancelled,
     #[msg("This membership requires the member's co-signature to migrate")]
     MemberCosignRequired,
+    #[msg("Invalid acknowledgment disclosure proof")]
+    DisclosureProofInvalid,
+    #[msg("Disclosure does not satisfy the gate's predicate requirements")]
+    PredicateNotMet,
 }
