@@ -1,0 +1,54 @@
+name: ci
+
+on:
+  push:
+    branches: [solana]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      SOLANA_VERSION: 1.18.26
+      ANCHOR_VERSION: 0.30.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_VERSION}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install Anchor
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          avm install "${ANCHOR_VERSION}"
+          avm use "${ANCHOR_VERSION}"
+
+      - name: Localnet wallet
+        run: solana-keygen new --no-bip39-passphrase -s -o ~/.config/solana/id.json
+
+      - name: JS deps
+        run: yarn install --frozen-lockfile || npm install
+
+      - name: Build
+        run: anchor build
+
+      - name: Test (no-ZK suites)
+        run: anchor test

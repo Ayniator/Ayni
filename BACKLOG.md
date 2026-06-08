@@ -79,7 +79,7 @@ trusted-setup ceremonies. "✅" means code-complete & wired, not build-verified.
   - ⬜ Run **`/security-review`** against the compiled build to catch anything static analysis surfaces.
 
 ### Build & cryptography (blocking real use)
-- ⬜ Stand up toolchain; `anchor build` + `anchor test` (resilience & cosign tests are no-ZK and runnable first).
+- 🟡 Stand up toolchain & run `make setup && make build && make test` (no-ZK suites). **Scaffold ready** (`BUILD.md`, `scripts/`, `Makefile`, CI); needs a machine with the Solana/Anchor toolchain to execute and to shake out Anchor-0.30/borsh details unbuildable here.
 - ⬜ Trusted-setup ceremonies for the **3 circuits** (`lineage_grant`, `ack_disclose`, `member_vote`) → regenerate `verifying_key*.rs` (3 placeholders).
 - ⬜ Validate snarkjs→Solana proof byte encodings (`app/**/prove.ts`, `scripts/vk_to_rust.js`) against installed `groth16-solana`.
 
