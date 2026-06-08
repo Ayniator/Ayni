@@ -31,6 +31,11 @@ pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
         ProposalAction::RotateSeat { seat_index, new_holder } => {
             let i = *seat_index as usize;
             require!(i < COUNCIL_SEATS, AyniError::InvalidSeatIndex);
+            // One holder per seat: reject if `new_holder` already sits elsewhere.
+            require!(
+                !circle.council.occupied_elsewhere(new_holder, i),
+                AyniError::DuplicateSeat
+            );
             circle.council.seats[i] = *new_holder;
         }
         ProposalAction::MigrateWallet { old_wallet, new_wallet } => {
@@ -40,6 +45,10 @@ pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
                     *s = *new_wallet;
                 }
             }
+        }
+        ProposalAction::SetAuthority { new_authority } => {
+            // Recover/rotate the Circle authority (time-locked + contestable).
+            circle.authority = *new_authority;
         }
     }
 

@@ -46,7 +46,7 @@ trusted-setup ceremonies. "✅" means code-complete & wired, not build-verified.
 ### Resilience & recovery
 | # | Feature | Status | Instructions / files | Notes |
 |---|---------|--------|----------------------|-------|
-| F9 | Key recovery — migrate all artifacts (4-of-7) | ✅ | `propose`/`execute_proposal` (MigrateWallet), `recover_membership` | seats rebound atomically; memberships per-account |
+| F9 | Key recovery — migrate all artifacts (4-of-7) | ✅ | `propose`/`execute_proposal` (MigrateWallet / **SetAuthority**), `recover_membership` | seats rebound atomically; memberships per-account; **authority** rotatable (time-locked) |
 | F10 | Migration time-lock + any-seat contest | ✅ | `execute_proposal`, `cancel_proposal`, `Council.recovery_timelock` | anti-collusion |
 | F11 | Member co-signature & self-recovery (≤2 guardians, 1-of-2) | ✅ | `set_recovery`, `member_migrate`, `recover_membership` | `docs/resilience.md` |
 
@@ -67,6 +67,13 @@ trusted-setup ceremonies. "✅" means code-complete & wired, not build-verified.
 ---
 
 ## Backlog (planned / open)
+
+### Security (see SECURITY.md)
+- ✅ Bound `verify_disclosure` policy to the AccessPass (`requirements_hash`) — S1.
+- ✅ Council can rotate a lost/compromised Circle `authority` (4-of-7 + time-lock + contest) — S2.
+- ✅ Council seat uniqueness (no wallet in two seats) — S3.
+- ✅ Pin tree depth to the circuit depth — S4.
+- ⬜ Operational gates before mainnet: real VKs (fail-closed), `authority` = multisig, genesis key in MPC, rent-exempt treasury.
 
 ### Build & cryptography (blocking real use)
 - ⬜ Stand up toolchain; `anchor build` + `anchor test` (resilience & cosign tests are no-ZK and runnable first).

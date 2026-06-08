@@ -33,6 +33,7 @@ pub struct DisclosureGate {
 pub fn verify_disclosure(
     ctx: Context<VerifyDisclosure>,
     gate: [u8; 32],
+    requirements_hash: [u8; 32],
     public_inputs: [[u8; 32]; ACK_DISCLOSE_PUBLIC_INPUTS],
     requirements: DisclosureGate,
     proof_a: [u8; 64],
@@ -40,6 +41,16 @@ pub fn verify_disclosure(
     proof_c: [u8; 64],
 ) -> Result<()> {
     let ack = &ctx.accounts.acknowledgment;
+
+    // 0. Bind the policy to the pass: `requirements_hash` (also a PDA seed) must
+    //    be the keccak of the actual requirements enforced below. A consumer
+    //    derives the AccessPass PDA from the hash of ITS required policy, so a
+    //    pass minted under weaker requirements lands at a different PDA.
+    let computed = anchor_lang::solana_program::keccak::hashv(&[
+        requirements.try_to_vec()?.as_slice()
+    ])
+    .0;
+    require!(computed == requirements_hash, AyniError::GateMismatch);
 
     // 1. The disclosure must be about THIS on-chain acknowledgment.
     require!(public_inputs[I_ROOT] == ack.root, AyniError::DisclosureProofInvalid);
@@ -72,17 +83,18 @@ pub fn verify_disclosure(
         .verify()
         .map_err(|_| error!(AyniError::DisclosureProofInvalid))?;
 
-    // 4. Mint the access pass (init => one pass per (gate, acknowledgment)).
+    // 4. Mint the access pass (init => one pass per (gate, policy, acknowledgment)).
     let pass = &mut ctx.accounts.access_pass;
     pass.acknowledgment = ack.key();
     pass.gate = gate;
+    pass.requirements_hash = requirements_hash;
     pass.granted_at = Clock::get()?.unix_timestamp;
     pass.bump = ctx.bumps.access_pass;
     Ok(())
 }
 
 #[derive(Accounts)]
-#[instruction(gate: [u8; 32])]
+#[instruction(gate: [u8; 32], requirements_hash: [u8; 32])]
 pub struct VerifyDisclosure<'info> {
     pub acknowledgment: Account<'info, Acknowledgment>,
 
@@ -90,7 +102,7 @@ pub struct VerifyDisclosure<'info> {
         init,
         payer = payer,
         space = AccessPass::SPACE,
-        seeds = [b"access", gate.as_ref(), acknowledgment.key().as_ref()],
+        seeds = [b"access", gate.as_ref(), requirements_hash.as_ref(), acknowledgment.key().as_ref()],
         bump
     )]
     pub access_pass: Account<'info, AccessPass>,

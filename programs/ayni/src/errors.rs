@@ -52,4 +52,8 @@ pub enum AyniError {
     AlreadyFinalized,
     #[msg("Proof of personhood is required to join this Circle")]
     PersonhoodRequired,
+    #[msg("That wallet already holds another Council seat")]
+    DuplicateSeat,
+    #[msg("Gate requirements hash does not match the supplied requirements")]
+    GateMismatch,
 }

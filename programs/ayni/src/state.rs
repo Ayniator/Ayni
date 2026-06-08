@@ -180,12 +180,16 @@ impl Acknowledgment {
 pub struct AccessPass {
     pub acknowledgment: Pubkey,
     pub gate: [u8; 32],
+    /// keccak(DisclosureGate) — the exact predicate policy this pass was minted
+    /// under. A consumer MUST check this equals the hash of its own required
+    /// policy, so a pass minted under weaker requirements can't be reused.
+    pub requirements_hash: [u8; 32],
     pub granted_at: i64,
     pub bump: u8,
 }
 
 impl AccessPass {
-    pub const SPACE: usize = 8 + 32 + 32 + 8 + 1;
+    pub const SPACE: usize = 8 + 32 + 32 + 32 + 8 + 1;
 }
 
 /// The append-only Poseidon Merkle tree of *member* identity commitments for a

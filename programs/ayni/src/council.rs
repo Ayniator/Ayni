@@ -50,6 +50,20 @@ impl Council {
     pub fn occupied(&self) -> u8 {
         self.seats.iter().filter(|s| *s != &Pubkey::default()).count() as u8
     }
+
+    /// True if `who` already holds a seat other than `except`. Used to keep
+    /// seats one-holder-each, so no wallet can occupy several seats (which would
+    /// shrink the effective Council and could enable double approval across a
+    /// rotation). `default()` (vacant) never collides.
+    pub fn occupied_elsewhere(&self, who: &Pubkey, except: usize) -> bool {
+        if who == &Pubkey::default() {
+            return false;
+        }
+        self.seats
+            .iter()
+            .enumerate()
+            .any(|(i, s)| i != except && s == who)
+    }
 }
 
 /// What a 4-of-7 vote authorizes.
@@ -59,6 +73,9 @@ pub enum ProposalAction {
     RotateSeat { seat_index: u8, new_holder: Pubkey },
     /// Definitively migrate every artifact from `old_wallet` to `new_wallet`.
     MigrateWallet { old_wallet: Pubkey, new_wallet: Pubkey },
+    /// Rotate the Circle's `authority` (e.g. recover a lost/compromised admin or
+    /// hand it to a governance address). High-stakes ⇒ time-locked + contestable.
+    SetAuthority { new_authority: Pubkey },
 }
 
 impl ProposalAction {
@@ -106,7 +123,10 @@ impl Proposal {
     pub fn arm_if_ready(&mut self, threshold: u8, recovery_timelock: i64, now: i64) {
         if self.eligible_at == 0 && self.approval_count() >= threshold {
             let delay = match &self.action {
+                // Irreversible / all-powerful changes wait out the contest window.
                 ProposalAction::MigrateWallet { .. } => recovery_timelock,
+                ProposalAction::SetAuthority { .. } => recovery_timelock,
+                // Seat rotation is reversible and arms immediately.
                 ProposalAction::RotateSeat { .. } => 0,
             };
             self.eligible_at = now.saturating_add(delay).max(1);

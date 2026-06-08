@@ -12,7 +12,8 @@ pub fn initialize_lineage(
     genesis_commitment: [u8; 32],
     genesis_level: u8,
 ) -> Result<()> {
-    require!(depth as usize <= merkle::MAX_DEPTH, AyniError::DepthTooLarge);
+    // Must match the lineage_grant circuit's compiled depth, or proofs fail.
+    require!(depth == merkle::CIRCUIT_DEPTH, AyniError::DepthTooLarge);
 
     let lineage = &mut ctx.accounts.lineage;
     lineage.circle = ctx.accounts.circle.key();

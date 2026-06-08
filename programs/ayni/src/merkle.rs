@@ -14,6 +14,10 @@ use crate::state::Lineage;
 /// Maximum supported tree depth (2^20 ≈ 1.05M lifetime credentials).
 pub const MAX_DEPTH: usize = 20;
 
+/// The depth the circuits are compiled for (`lineage_grant`, `member_vote`).
+/// Tree accounts MUST use this depth or every inclusion proof fails.
+pub const CIRCUIT_DEPTH: u8 = 20;
+
 /// Poseidon(a, b) over BN254, big-endian — matches circomlib `Poseidon(2)`.
 pub fn poseidon2(a: &[u8; 32], b: &[u8; 32]) -> Result<[u8; 32]> {
     let h = hashv(Parameters::Bn254X5, Endianness::BigEndian, &[a, b])

@@ -229,6 +229,7 @@ pub mod ayni {
     pub fn verify_disclosure(
         ctx: Context<VerifyDisclosure>,
         gate: [u8; 32],
+        requirements_hash: [u8; 32],
         public_inputs: [[u8; 32]; instructions::verify_disclosure::ACK_DISCLOSE_PUBLIC_INPUTS],
         requirements: DisclosureGate,
         proof_a: [u8; 64],
@@ -238,6 +239,7 @@ pub mod ayni {
         instructions::verify_disclosure(
             ctx,
             gate,
+            requirements_hash,
             public_inputs,
             requirements,
             proof_a,
