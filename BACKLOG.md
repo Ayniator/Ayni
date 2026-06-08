@@ -79,7 +79,8 @@ trusted-setup ceremonies. "✅" means code-complete & wired, not build-verified.
   - ⬜ Run **`/security-review`** against the compiled build to catch anything static analysis surfaces.
 
 ### Build & cryptography (blocking real use)
-- 🟡 Stand up toolchain & run `make setup && make build && make test` (no-ZK suites). **Scaffold ready** (`BUILD.md`, `scripts/`, `Makefile`, CI); needs a machine with the Solana/Anchor toolchain to execute and to shake out Anchor-0.30/borsh details unbuildable here.
+- ✅ **Program compiles to BPF** (Solana 1.18.17 / Anchor 0.30.1). `target/deploy/ayni.so` builds clean. First real compile fixed 4 bugs: 2 borrow-checker (disjoint field borrow through `Account` Deref) + 2 BPF stack-overflow (>4KB frame in `GrantLevel`/`IssueAcknowledgment` `try_accounts` → `Box` the large accounts). Cargo.lock pinned off 2026 crates so platform-tools cargo (1.75) can build.
+- 🔴 **IDL/types generation blocked → no-ZK tests can't run yet.** `anchor idl build` (the only IDL path in 0.30.1) needs `proc_macro::source_file`, which proc-macro2 exposes only on a *genuine* nightly, but Anchor forces `RUSTC_BOOTSTRAP` on stable — no `(proc-macro2, rustc)` pairing satisfies it. **Fix: upgrade to Anchor 0.31+** (new IDL/proc-macro2 API). Caveat: 0.31 may require a Solana 2.x / Agave 2.x toolchain — verify before committing. Once IDL builds, `anchor test` runs the no-ZK suites (`ayni`/`resilience`/`cosign`).
 - ⬜ Trusted-setup ceremonies for the **3 circuits** (`lineage_grant`, `ack_disclose`, `member_vote`) → regenerate `verifying_key*.rs` (3 placeholders).
 - ⬜ Validate snarkjs→Solana proof byte encodings (`app/**/prove.ts`, `scripts/vk_to_rust.js`) against installed `groth16-solana`.
 
