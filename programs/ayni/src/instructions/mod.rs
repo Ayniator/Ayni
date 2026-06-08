@@ -1,5 +1,6 @@
 pub mod appoint_seat;
 pub mod approve;
+pub mod cancel_proposal;
 pub mod execute_proposal;
 pub mod grant_level;
 pub mod initialize_circle;
@@ -11,6 +12,7 @@ pub mod renew_membership;
 
 pub use appoint_seat::*;
 pub use approve::*;
+pub use cancel_proposal::*;
 pub use execute_proposal::*;
 pub use grant_level::*;
 pub use initialize_circle::*;

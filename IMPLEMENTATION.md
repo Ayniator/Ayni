@@ -90,14 +90,22 @@ Full design in [docs/resilience.md](./docs/resilience.md). Each Circle (and the
 World Service Circle) carries a `Council` of **7 seats** (3 named servants + 4
 elders) with a **threshold of 4**. Two recovery actions, each 4-of-7:
 
-- **RotateSeat** — replace a seat's wallet (lost key / end of term).
+- **RotateSeat** — replace a seat's wallet (lost key / end of term); executes
+  immediately at 4-of-7 (reversible).
 - **MigrateWallet** — definitive `walletA → walletB`: `execute_proposal` rebinds
   all 7 Council seats (bounded, atomic); `recover_membership` rebinds each
   membership `owner` (and the levels hanging off it) under the same authorized
   proposal. Approvals are a 7-bit bitmask, so each seat votes once.
 
-`tests/resilience.ts` exercises the full flow (no ZK), including the assertion
-that 3-of-7 cannot execute but 4-of-7 can.
+**Anti-collusion safeguards.** A migration is *armed* when it hits 4-of-7 but
+executes only after a per-Circle **time-lock** (`recovery_timelock`, set at
+`initialize_circle`; default 7 days). During that contest window **any single
+seat** can `cancel_proposal` to block it. Safety over liveness for irreversible
+recovery. (RotateSeat has no time-lock.)
+
+`tests/resilience.ts` exercises the full flow (no ZK): 3-of-7 cannot execute but
+4-of-7 can; a migration is held by the time-lock then executes; and a single
+seat's contest permanently blocks one.
 
 ## Status
 - Resilience: **code complete, unbuilt** (runnable via `anchor test` once the

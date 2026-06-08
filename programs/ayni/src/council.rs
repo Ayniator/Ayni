@@ -11,6 +11,8 @@ use crate::errors::AyniError;
 
 pub const COUNCIL_SEATS: usize = 7;
 pub const DEFAULT_THRESHOLD: u8 = 4;
+/// Default contest window before a wallet migration may execute (7 days).
+pub const DEFAULT_RECOVERY_TIMELOCK: i64 = 7 * 24 * 60 * 60;
 
 /// Named functional seats; seats 3..=6 are elders (quorum / resilience only).
 pub const SEAT_TREASURER: usize = 0;
@@ -21,15 +23,19 @@ pub const SEAT_RHYTHM_KEEPER: usize = 2;
 pub struct Council {
     pub seats: [Pubkey; COUNCIL_SEATS],
     pub threshold: u8,
+    /// Seconds a `MigrateWallet` must wait after reaching threshold before it
+    /// can execute — the contest window during which any seat may cancel it.
+    pub recovery_timelock: i64,
 }
 
 impl Council {
-    pub const SPACE: usize = 32 * COUNCIL_SEATS + 1;
+    pub const SPACE: usize = 32 * COUNCIL_SEATS + 1 + 8;
 
     pub fn empty() -> Self {
         Council {
             seats: [Pubkey::default(); COUNCIL_SEATS],
             threshold: DEFAULT_THRESHOLD,
+            recovery_timelock: DEFAULT_RECOVERY_TIMELOCK,
         }
     }
 
@@ -69,13 +75,18 @@ pub struct Proposal {
     pub action: ProposalAction,
     pub approvals: u8,
     pub executed: bool,
+    pub cancelled: bool,
     pub created_at: i64,
+    /// Earliest unix time the proposal may execute; 0 = not yet armed (threshold
+    /// unmet). Set when approvals first reach threshold: `now` for RotateSeat,
+    /// `now + recovery_timelock` for MigrateWallet.
+    pub eligible_at: i64,
     pub bump: u8,
 }
 
 impl Proposal {
     pub const SPACE: usize =
-        8 + 32 + 8 + ProposalAction::MAX_SIZE + 1 + 1 + 8 + 1;
+        8 + 32 + 8 + ProposalAction::MAX_SIZE + 1 + 1 + 1 + 8 + 8 + 1;
 
     pub fn approval_count(&self) -> u8 {
         self.approvals.count_ones() as u8
@@ -87,5 +98,18 @@ impl Proposal {
         require!(self.approvals & bit == 0, AyniError::AlreadyApproved);
         self.approvals |= bit;
         Ok(())
+    }
+
+    /// Once approvals reach `threshold`, set `eligible_at`. Seat rotation is
+    /// reversible and arms immediately; wallet migration arms after the
+    /// contest window. Idempotent (only arms once).
+    pub fn arm_if_ready(&mut self, threshold: u8, recovery_timelock: i64, now: i64) {
+        if self.eligible_at == 0 && self.approval_count() >= threshold {
+            let delay = match &self.action {
+                ProposalAction::MigrateWallet { .. } => recovery_timelock,
+                ProposalAction::RotateSeat { .. } => 0,
+            };
+            self.eligible_at = now.saturating_add(delay).max(1);
+        }
     }
 }

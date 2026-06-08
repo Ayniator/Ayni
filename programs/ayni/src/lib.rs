@@ -26,12 +26,15 @@ pub mod ayni {
     use super::*;
 
     /// Create a new Circle (a local AHA group) under the World Service Circle.
+    /// `recovery_timelock` is the per-Circle contest window (seconds) a wallet
+    /// migration must wait after reaching 4-of-7 before it can execute.
     pub fn initialize_circle(
         ctx: Context<InitializeCircle>,
         name: String,
         membership_period: i64,
+        recovery_timelock: i64,
     ) -> Result<()> {
-        instructions::initialize_circle(ctx, name, membership_period)
+        instructions::initialize_circle(ctx, name, membership_period, recovery_timelock)
     }
 
     /// Issue a soulbound yearly membership, identified by a ZK commitment.
@@ -67,9 +70,15 @@ pub mod ayni {
         instructions::approve(ctx)
     }
 
-    /// Execute a proposal once it reaches the 4-of-7 threshold.
+    /// Execute a proposal once it reaches 4-of-7 (and, for migration, once the
+    /// contest window has elapsed).
     pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
         instructions::execute_proposal(ctx)
+    }
+
+    /// Any single Council seat cancels a pending proposal (the contest tripwire).
+    pub fn cancel_proposal(ctx: Context<CancelProposal>) -> Result<()> {
+        instructions::cancel_proposal(ctx)
     }
 
     /// Rebind a membership's owner under an executed MigrateWallet proposal.

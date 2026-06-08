@@ -4,12 +4,14 @@ use crate::council::Proposal;
 use crate::errors::AyniError;
 use crate::state::Circle;
 
-/// A Council seat adds its approval to a pending proposal. Each seat may approve
-/// once (enforced by the approvals bitmask).
-pub fn approve(ctx: Context<Approve>) -> Result<()> {
+/// Any single Council seat may cancel a pending proposal before it executes —
+/// the contest tripwire. One honest seat is enough to halt a suspicious wallet
+/// migration during its time-lock window; it must then be re-proposed. Favours
+/// safety over liveness for irreversible recovery.
+pub fn cancel_proposal(ctx: Context<CancelProposal>) -> Result<()> {
     let circle = &ctx.accounts.circle;
     let seat = ctx.accounts.seat.key();
-    let index = circle
+    circle
         .council
         .seat_of(&seat)
         .ok_or(error!(AyniError::NotCouncilSeat))?;
@@ -17,17 +19,12 @@ pub fn approve(ctx: Context<Approve>) -> Result<()> {
     let proposal = &mut ctx.accounts.proposal;
     require!(!proposal.executed, AyniError::AlreadyExecuted);
     require!(!proposal.cancelled, AyniError::ProposalCancelled);
-    proposal.add_approval(index)?;
-    proposal.arm_if_ready(
-        circle.council.threshold,
-        circle.council.recovery_timelock,
-        Clock::get()?.unix_timestamp,
-    );
+    proposal.cancelled = true;
     Ok(())
 }
 
 #[derive(Accounts)]
-pub struct Approve<'info> {
+pub struct CancelProposal<'info> {
     pub circle: Account<'info, Circle>,
 
     #[account(mut, has_one = circle)]

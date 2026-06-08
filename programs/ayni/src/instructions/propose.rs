@@ -18,15 +18,19 @@ pub fn propose(ctx: Context<Propose>, nonce: u64, action: ProposalAction) -> Res
         require!((*seat_index as usize) < COUNCIL_SEATS, AyniError::InvalidSeatIndex);
     }
 
+    let now = Clock::get()?.unix_timestamp;
     let proposal = &mut ctx.accounts.proposal;
     proposal.circle = circle.key();
     proposal.nonce = nonce;
     proposal.action = action;
     proposal.approvals = 0;
     proposal.executed = false;
-    proposal.created_at = Clock::get()?.unix_timestamp;
+    proposal.cancelled = false;
+    proposal.created_at = now;
+    proposal.eligible_at = 0;
     proposal.bump = ctx.bumps.proposal;
     proposal.add_approval(index)?;
+    proposal.arm_if_ready(circle.council.threshold, circle.council.recovery_timelock, now);
     Ok(())
 }
 

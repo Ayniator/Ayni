@@ -32,4 +32,8 @@ pub enum AyniError {
     WalletMismatch,
     #[msg("Council seat index out of range")]
     InvalidSeatIndex,
+    #[msg("Migration time-lock has not elapsed yet")]
+    TimelockNotElapsed,
+    #[msg("Proposal has been cancelled")]
+    ProposalCancelled,
 }

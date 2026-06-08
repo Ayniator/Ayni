@@ -21,7 +21,7 @@ describe("ayni — AHA on Solana", () => {
 
   it("initializes a Circle under the World Service Circle", async () => {
     await program.methods
-      .initializeCircle(name, ONE_YEAR)
+      .initializeCircle(name, ONE_YEAR, new anchor.BN(0)) // recovery_timelock = 0
       .accounts({
         circle: circlePda,
         worldService,

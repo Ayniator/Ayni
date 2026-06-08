@@ -8,6 +8,7 @@ pub fn initialize_circle(
     ctx: Context<InitializeCircle>,
     name: String,
     membership_period: i64,
+    recovery_timelock: i64,
 ) -> Result<()> {
     require!(name.len() <= Circle::MAX_NAME, AyniError::NameTooLong);
 
@@ -15,8 +16,10 @@ pub fn initialize_circle(
     circle.world_service = ctx.accounts.world_service.key();
     circle.authority = ctx.accounts.authority.key();
     // Council starts empty (all seats vacant) at the default 4-of-7 threshold;
-    // seats are filled via `appoint_seat`, then rotated by 4-of-7 vote.
+    // seats are filled via `appoint_seat`, then rotated by 4-of-7 vote. The
+    // contest window for wallet migration is set per Circle here.
     circle.council = Council::empty();
+    circle.council.recovery_timelock = recovery_timelock;
     circle.membership_period = membership_period;
     circle.member_count = 0;
     circle.name = name;

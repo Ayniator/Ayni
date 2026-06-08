@@ -35,12 +35,29 @@ Flow:
 |---|---|---|
 | `appoint_seat(i, holder)` | circle `authority` (bootstrap) | seat the initial Council |
 | `propose(nonce, action)` | a Council seat | open a proposal; proposer auto-approves |
-| `approve()` | a Council seat | add this seat's approval (once) |
-| `execute_proposal()` | anyone | when `approvals ≥ threshold`: apply the action |
+| `approve()` | a Council seat | add this seat's approval (once); arms when threshold reached |
+| `cancel_proposal()` | **any** Council seat | contest: mark a pending proposal cancelled |
+| `execute_proposal()` | anyone | when `approvals ≥ threshold` **and** the time-lock has elapsed: apply the action |
 | `recover_membership()` | anyone | under an executed `MigrateWallet`, rebind a membership's `owner` |
 
 `appoint_seat` is the bootstrap/admin path; once seated, the Council rotates
 itself only through `RotateSeat` proposals.
+
+## Time-lock & contest (anti-collusion)
+
+When approvals first reach the threshold, the proposal is *armed* — its
+`eligible_at` is stamped:
+
+- **RotateSeat** → `eligible_at = now` (reversible; executes immediately).
+- **MigrateWallet** → `eligible_at = now + recovery_timelock` (the per-Circle
+  contest window, set at `initialize_circle`; default 7 days).
+
+`execute_proposal` refuses until `now ≥ eligible_at`. During the window, **any
+single Council seat** can `cancel_proposal`, permanently blocking it (the
+migration must be re-proposed). One honest seat is enough to halt a suspicious
+recovery — the design favours **safety over liveness** for irreversible
+actions. A colluding majority can re-propose, but honest seats can re-cancel and
+rotate the colluders out while the migration stays blocked.
 
 ## "Migrate all artifacts"
 
@@ -61,8 +78,9 @@ Council mirrors.
 
 ## Threat model
 
-- **Social trust:** 4 colluding seats can seize a wallet's artifacts. Mitigate
-  with elders from distinct trust domains, an execution time-lock, and
+- **Social trust:** 4 colluding seats can seize a wallet's artifacts. The
+  built-in time-lock + any-seat contest blunt this (a single honest seat halts a
+  migration); remaining mitigations are elders from distinct trust domains and
   (optionally) the member's co-signature while they still hold *a* key.
 - **No revocation of the migration itself:** once executed, a `MigrateWallet`
   is authoritative; a wrongful migration is corrected only by another vote.
