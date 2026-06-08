@@ -282,6 +282,8 @@ own affairs by group conscience. New Circles inherit the full template.
 
 ## 10. Open decisions
 
+- [x] Member voting: **anonymous one-member-one-vote** over a Semaphore-style member set (Merkle inclusion + per-proposal nullifier) — decided; implemented.
+- [x] Sybil resistance: **anonymous proof-of-personhood** (World ID-style unique nullifier, one membership per human per Circle) **+ social vouching** (issuance gated by a trusted servant) — decided; implemented. Resolves the anonymity-vs-one-person-one-vote tension and the Tradition 3 framing (a human admits a human).
 - [ ] Chain: **leaning EVM (Base/Gnosis)** for the ZK stack — confirm vs Solana.
 - [ ] Council size for small Circles: enforce 7/4 everywhere, or allow a smaller m/n until a Circle grows (with 7/4 the default and target)?
 - [x] Recovery safeguards: **time-lock + any-seat contest + member co-signature/self-recovery** (decided; implemented).
