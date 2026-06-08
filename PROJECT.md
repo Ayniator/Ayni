@@ -164,12 +164,26 @@ keys and seats; each local Circle's Council recovers its own — *"also
 4-of-7 at their level."* A Circle never needs World Service to recover a
 local key, preserving autonomy (T4).
 
-**Limits.** Recovery is **social**, so it is only as honest as the
-Council: 4 colluding seats can seize a wallet's artifacts. Mitigations:
-elders drawn from distinct trust domains, time-locks on execution, and
-(optionally) the member's own co-signature when they still hold *a* key.
-Treasury and governance-token recovery for funds held in Squads/Realms
-use those tools' own m-of-n recovery, which the Council mirrors.
+**Safeguards against collusion.** Recovery is **social**, so it is only
+as honest as the Council: 4 colluding seats could otherwise seize a
+wallet's artifacts. Two safeguards are built in:
+
+- **Time-lock on migration.** A `MigrateWallet` does not execute the
+  instant it reaches 4-of-7 — it becomes executable only after a
+  per-Circle **contest window** (e.g. 7 days). Seat rotation, which is
+  reversible, executes immediately; irreversible wallet migration waits.
+- **Any-seat contest.** During the window, **any single Council seat**
+  can cancel a pending migration. One honest seat is enough to halt a
+  suspicious recovery; the migration must then be re-proposed. This
+  deliberately favours **safety over liveness** — a contested migration
+  stays blocked while the dispute is resolved off-chain (and the honest
+  seats can rotate out colluders in the meantime).
+
+Remaining mitigations are operational: elders drawn from distinct trust
+domains, and (optionally) the member's own co-signature when they still
+hold *a* key. Treasury and governance-token recovery for funds held in
+Squads/Realms use those tools' own m-of-n recovery, which the Council
+mirrors.
 
 ---
 
@@ -245,7 +259,7 @@ own affairs by group conscience. New Circles inherit the full template.
 
 - [ ] Chain: **leaning EVM (Base/Gnosis)** for the ZK stack — confirm vs Solana.
 - [ ] Council size for small Circles: enforce 7/4 everywhere, or allow a smaller m/n until a Circle grows (with 7/4 the default and target)?
-- [ ] Recovery safeguards: time-lock between approval and execution? require the member's co-signature when they still hold a key?
+- [x] Recovery safeguards: **time-lock + any-seat contest on migration** (decided; implemented). Still open: require the member's co-signature when they still hold a key?
 - [ ] Anonymity baseline: anonymous-by-default (Semaphore membership set) vs visible soulbound token with optional ZK.
 - [ ] Lineage proofs: off-the-shelf trusted-issuer VCs (Privado ID) vs full issuer-anonymous delegatable credentials (custom).
 - [ ] Relayer / account-abstraction strategy to prevent metadata deanonymization.
