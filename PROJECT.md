@@ -88,7 +88,10 @@ belonging, not equity or profit.**
    castable anonymously and coercion-resistantly.
 5. **Track shamanic progress** — milestones/levels recorded as
    non-transferable credentials; a permanent, member-owned record of the
-   path, disclosable in zero-knowledge.
+   path, disclosable in zero-knowledge. Includes **acknowledgments**
+   (course/initiation certificates: *who, what course, taught by whom, on
+   what date*) whose holder chooses, field by field, what to reveal and
+   what to prove without revealing.
 6. **Fork a Circle** — spin up a new Circle with identical governance
    from the template ("Summon a Circle").
 7. **Prove without revealing** — prove membership, voting eligibility, or
