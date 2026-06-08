@@ -6,7 +6,8 @@
 //! proofs — see docs/zk-lineage.md §5.
 
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::poseidon::{hashv, Endianness, Parameters};
+// Poseidon moved out of solana-program in Solana 2.x → its own crate.
+use solana_poseidon::{hashv, Endianness, Parameters};
 
 use crate::errors::AyniError;
 use crate::state::Lineage;

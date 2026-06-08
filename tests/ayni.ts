@@ -44,8 +44,10 @@ describe("ayni — AHA on Solana", () => {
   });
 
   it("issues a soulbound yearly membership (keyed by a ZK commitment)", async () => {
-    // 32-byte stand-in for a Poseidon/keccak identity commitment.
+    // 32-byte stand-in for a Poseidon identity commitment. Clear the top 3 bits
+    // so it is < the BN254 field modulus (a valid Poseidon syscall input).
     const commitment = anchor.web3.Keypair.generate().publicKey.toBuffer();
+    commitment[0] &= 0x1f;
     const [membershipPda] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("membership"), circlePda.toBuffer(), commitment],
       program.programId

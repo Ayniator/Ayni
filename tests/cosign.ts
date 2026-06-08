@@ -60,6 +60,7 @@ describe("ayni — member co-signature & self-recovery", () => {
 
   it("blocks council-only migration of a require_cosign membership, allows it with either guardian", async () => {
     const commitment = anchor.web3.Keypair.generate().publicKey.toBuffer();
+    commitment[0] &= 0x1f; // < BN254 field modulus (valid Poseidon input)
     const memberOwner = anchor.web3.Keypair.generate().publicKey;
     const guardian1 = anchor.web3.Keypair.generate();
     const guardian2 = anchor.web3.Keypair.generate();
@@ -121,6 +122,7 @@ describe("ayni — member co-signature & self-recovery", () => {
 
   it("lets a member self-migrate with a key they hold (no council)", async () => {
     const commitment = anchor.web3.Keypair.generate().publicKey.toBuffer();
+    commitment[0] &= 0x1f; // < BN254 field modulus (valid Poseidon input)
     const owner = anchor.web3.Keypair.generate();
     const fresh = anchor.web3.Keypair.generate().publicKey;
     const membership = membershipPda(commitment);
