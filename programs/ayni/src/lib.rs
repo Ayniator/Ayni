@@ -16,6 +16,7 @@ pub mod merkle;
 pub mod state;
 pub mod verifying_key;
 pub mod verifying_key_ack;
+pub mod verifying_key_vote;
 
 use council::ProposalAction;
 use instructions::*;
@@ -56,6 +57,40 @@ pub mod ayni {
     /// Renew (extend) a membership for another term on donation.
     pub fn renew_membership(ctx: Context<RenewMembership>) -> Result<()> {
         instructions::renew_membership(ctx)
+    }
+
+    // --- Member voting: anonymous one-member-one-vote (see docs/member-voting.md) ---
+
+    /// Create the Circle's member-set tree (votable population). Run once.
+    pub fn initialize_member_tree(ctx: Context<InitializeMemberTree>, depth: u8) -> Result<()> {
+        instructions::initialize_member_tree(ctx, depth)
+    }
+
+    /// A Council seat opens a group-conscience proposal for the membership.
+    pub fn create_member_proposal(
+        ctx: Context<CreateMemberProposal>,
+        nonce: u64,
+        description_hash: [u8; 32],
+        voting_period: i64,
+    ) -> Result<()> {
+        instructions::create_member_proposal(ctx, nonce, description_hash, voting_period)
+    }
+
+    /// Cast one anonymous ballot (ZK member-set inclusion + per-proposal nullifier).
+    pub fn cast_vote(
+        ctx: Context<CastVote>,
+        choice: bool,
+        nullifier: [u8; 32],
+        proof_a: [u8; 64],
+        proof_b: [u8; 128],
+        proof_c: [u8; 64],
+    ) -> Result<()> {
+        instructions::cast_vote(ctx, choice, nullifier, proof_a, proof_b, proof_c)
+    }
+
+    /// Close voting and record the group conscience (quorum + majority).
+    pub fn finalize_member_proposal(ctx: Context<FinalizeMemberProposal>) -> Result<()> {
+        instructions::finalize_member_proposal(ctx)
     }
 
     // --- Resilience: 7-seat Council, 4-of-7 recovery (see docs/resilience.md) ---

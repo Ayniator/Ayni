@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="512" viewBox="0 0 1040 512" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="1040" height="512" fill="#F7F5F2"/>
+
+  <!-- header -->
+  <rect x="0" y="0" width="1040" height="84" fill="#2E2A26"/>
+  <text x="28" y="40" fill="#FFFFFF" font-size="26" font-weight="700">AHA · Ancestral Humanity Anonymous</text>
+  <text x="28" y="66" fill="#C9B8A8" font-size="14">Ayni — Solana implementation · Feature Map · 14 features across 5 domains · ZK-anonymous by design</text>
+
+  <!-- ===================== COLUMN 1 ===================== -->
+  <!-- Membership & Identity -->
+  <g>
+    <rect x="24" y="104" width="317" height="110" rx="6" fill="#FFFFFF" stroke="#E3DDD4"/>
+    <rect x="24" y="104" width="317" height="30" rx="6" fill="#6D4C41"/>
+    <rect x="24" y="120" width="317" height="14" fill="#6D4C41"/>
+    <text x="38" y="124" fill="#FFFFFF" font-size="14" font-weight="700">Membership &amp; Identity</text>
+    <circle cx="46" cy="152" r="11" fill="#6D4C41"/><text x="46" y="156" fill="#FFF" font-size="12" font-weight="700" text-anchor="middle">1</text>
+    <text x="66" y="156" fill="#2E2A26" font-size="13">Soulbound Yearly Membership</text>
+    <circle cx="46" cy="188" r="11" fill="#6D4C41"/><text x="46" y="192" fill="#FFF" font-size="12" font-weight="700" text-anchor="middle">2</text>
+    <text x="66" y="192" fill="#2E2A26" font-size="13">Selective-Disclosure Identity</text>
+  </g>
+  <!-- Governance & Voice -->
+  <g>
+    <rect x="24" y="228" width="317" height="110" rx="6" fill="#FFFFFF" stroke="#E3DDD4"/>
+    <rect x="24" y="228" width="317" height="30" rx="6" fill="#00695C"/>
+    <rect x="24" y="244" width="317" height="14" fill="#00695C"/>
+    <text x="38" y="248" fill="#FFFFFF" font-size="14" font-weight="700">Governance &amp; Voice</text>
+    <circle cx="46" cy="276" r="11" fill="#00695C"/><text x="46" y="280" fill="#FFF" font-size="12" font-weight="700" text-anchor="middle">3</text>
+    <text x="66" y="280" fill="#2E2A26" font-size="13">Anonymous Proposals &amp; Voting</text>
+    <circle cx="46" cy="312" r="11" fill="#00695C"/><text x="46" y="316" fill="#FFF" font-size="12" font-weight="700" text-anchor="middle">4</text>
+    <text x="66" y="316" fill="#2E2A26" font-size="13">Forkable Federated Circles</text>
+  </g>
+  <!-- Treasury -->
+  <g>
+    <rect x="24" y="352" width="317" height="74" rx="6" fill="#FFFFFF" stroke="#E3DDD4"/>
+    <rect x="24" y="352" width="317" height="30" rx="6" fill="#EF6C00"/>
+    <rect x="24" y="368" width="317" height="14" fill="#EF6C00"/>
+    <text x="38" y="372" fill="#FFFFFF" font-size="14" font-weight="700">Treasury</text>
+    <circle cx="46" cy="400" r="11" fill="#EF6C00"/><text x="46" y="404" fill="#FFF" font-size="12" font-weight="700" text-anchor="middle">5</text>
+    <text x="66" y="404" fill="#2E2A26" font-size="13">Self-Supporting Donation Treasury</text>
+  </g>
+
+  <!-- ===================== COLUMN 2 ===================== -->
+  <!-- Shamanic Lineage & Credentials -->
+  <g>
+    <rect x="361" y="104" width="317" height="218" rx="6" fill="#FFFFFF" stroke="#E3DDD4"/>
+    <rect x="361" y="104" width="317" height="30" rx="6" fill="#5E35B1"/>
+    <rect x="361" y="120" width="317" height="14" fill="#5E35B1"/>
+    <text x="375" y="124" fill="#FFFFFF" font-size="14" font-weight="700">Shamanic Lineage &amp; Credentials</text>
+    <circle cx="383" cy="152" r="11" fill="#5E35B1"/><text x="383" y="156" fill="#FFF" font-size="12" font-weight="700" text-anchor="middle">6</text>
+    <text x="403" y="156" fill="#2E2A26" font-size="13">ZK Lineage Level Grants</text>
+    <circle cx="383" cy="188" r="11" fill="#5E35B1"/><text x="383" y="192" fill="#FFF" font-size="12" font-weight="700" text-anchor="middle">7</text>
+    <text x="403" y="192" fill="#2E2A26" font-size="13">Acknowledgment Credentials</text>
+    <circle cx="383" cy="224" r="11" fill="#5E35B1"/><text x="383" y="228" fill="#FFF" font-size="12" font-weight="700" text-anchor="middle">8</text>
+    <text x="403" y="228" fill="#2E2A26" font-size="13">ZK Selective Field Disclosure</text>
+    <circle cx="383" cy="260" r="11" fill="#5E35B1"/><text x="383" y="264" fill="#FFF" font-size="12" font-weight="700" text-anchor="middle">9</text>
+    <text x="403" y="264" fill="#2E2A26" font-size="13">ZK Predicate Proofs (date·catalog·teacher)</text>
+    <circle cx="383" cy="296" r="11" fill="#5E35B1"/><text x="383" y="300" fill="#FFF" font-size="11" font-weight="700" text-anchor="middle">10</text>
+    <text x="403" y="300" fill="#2E2A26" font-size="13">On-Chain Predicate-Gated Access</text>
+  </g>
+
+  <!-- ===================== COLUMN 3 ===================== -->
+  <!-- Resilience & Recovery -->
+  <g>
+    <rect x="698" y="104" width="317" height="182" rx="6" fill="#FFFFFF" stroke="#E3DDD4"/>
+    <rect x="698" y="104" width="317" height="30" rx="6" fill="#C62828"/>
+    <rect x="698" y="120" width="317" height="14" fill="#C62828"/>
+    <text x="712" y="124" fill="#FFFFFF" font-size="14" font-weight="700">Resilience &amp; Recovery</text>
+    <circle cx="720" cy="152" r="11" fill="#C62828"/><text x="720" y="156" fill="#FFF" font-size="11" font-weight="700" text-anchor="middle">11</text>
+    <text x="740" y="156" fill="#2E2A26" font-size="13">7-Seat Council (4-of-7)</text>
+    <circle cx="720" cy="188" r="11" fill="#C62828"/><text x="720" y="192" fill="#FFF" font-size="11" font-weight="700" text-anchor="middle">12</text>
+    <text x="740" y="192" fill="#2E2A26" font-size="13">Key Recovery — Migrate Artifacts</text>
+    <circle cx="720" cy="224" r="11" fill="#C62828"/><text x="720" y="228" fill="#FFF" font-size="11" font-weight="700" text-anchor="middle">13</text>
+    <text x="740" y="228" fill="#2E2A26" font-size="13">Time-Lock + Any-Seat Contest</text>
+    <circle cx="720" cy="260" r="11" fill="#C62828"/><text x="720" y="264" fill="#FFF" font-size="11" font-weight="700" text-anchor="middle">14</text>
+    <text x="740" y="264" fill="#2E2A26" font-size="13">Member Co-Sign &amp; Self-Recovery (2 guardians)</text>
+  </g>
+  <!-- Stack note -->
+  <g>
+    <rect x="698" y="300" width="317" height="110" rx="6" fill="#EFE9E1" stroke="#E3DDD4"/>
+    <text x="712" y="324" fill="#2E2A26" font-size="14" font-weight="700">Stack</text>
+    <text x="712" y="348" fill="#5C544B" font-size="12">Realms · Squads v4 · Token-2022 (soulbound)</text>
+    <text x="712" y="368" fill="#5C544B" font-size="12">Groth16 + Poseidon via alt_bn128 syscalls</text>
+    <text x="712" y="388" fill="#5C544B" font-size="12">Anchor 0.30 · circom · append-only lineage tree</text>
+  </g>
+
+  <!-- footer -->
+  <rect x="0" y="446" width="1040" height="66" fill="#2E2A26"/>
+  <text x="520" y="476" fill="#FFFFFF" font-size="13" text-anchor="middle">AHA is the chain-agnostic organisation · Ayni realises it on Solana (branches: solana · ethereum · avalanche)</text>
+  <text x="520" y="496" fill="#C9B8A8" font-size="12" text-anchor="middle">Status: code-complete, awaiting toolchain build &amp; trusted-setup ceremonies · Token-2022 mint &amp; donation transfer stubbed</text>
+</svg>

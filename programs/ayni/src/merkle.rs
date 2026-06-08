@@ -29,6 +29,13 @@ pub fn field_from_u8(v: u8) -> [u8; 32] {
     b
 }
 
+/// Encode a u64 as a big-endian field element (value in the low 8 bytes).
+pub fn field_from_u64(v: u64) -> [u8; 32] {
+    let mut b = [0u8; 32];
+    b[24..32].copy_from_slice(&v.to_be_bytes());
+    b
+}
+
 /// Empty-subtree hashes: `zeros[0] = field 0`, `zeros[i+1] = H(zeros[i], zeros[i])`.
 /// Returns `depth + 1` entries. The off-chain prover must use the same zeros.
 pub fn zeros(depth: usize) -> Result<[[u8; 32]; MAX_DEPTH + 1]> {
@@ -40,39 +47,67 @@ pub fn zeros(depth: usize) -> Result<[[u8; 32]; MAX_DEPTH + 1]> {
     Ok(z)
 }
 
-/// Initialize a `Lineage` to an empty tree of the given depth.
-pub fn init_empty(lineage: &mut Lineage, depth: u8) -> Result<()> {
+/// Initialize an empty incremental tree (generic over the holding account's
+/// fields). `init_empty`/`insert` below are thin wrappers for `Lineage`.
+pub fn init_tree(
+    depth: u8,
+    next_index: &mut u64,
+    root: &mut [u8; 32],
+    filled: &mut [[u8; 32]; MAX_DEPTH],
+) -> Result<()> {
     let d = depth as usize;
     require!(d <= MAX_DEPTH, AyniError::DepthTooLarge);
     let z = zeros(d)?;
-    lineage.depth = depth;
-    lineage.next_index = 0;
-    lineage.root = z[d];
+    *next_index = 0;
+    *root = z[d];
     for i in 0..d {
-        lineage.filled_subtrees[i] = z[i];
+        filled[i] = z[i];
     }
     Ok(())
 }
 
-/// Append a leaf, updating `filled_subtrees`, `next_index`, and `root`.
-pub fn insert(lineage: &mut Lineage, leaf: [u8; 32]) -> Result<()> {
-    let depth = lineage.depth as usize;
-    require!(lineage.next_index < (1u64 << depth), AyniError::LineageFull);
-    let z = zeros(depth)?;
+/// Append a leaf to a generic incremental tree, updating its fields.
+pub fn insert_leaf(
+    depth: u8,
+    next_index: &mut u64,
+    root: &mut [u8; 32],
+    filled: &mut [[u8; 32]; MAX_DEPTH],
+    leaf: [u8; 32],
+) -> Result<()> {
+    let d = depth as usize;
+    require!(*next_index < (1u64 << d), AyniError::LineageFull);
+    let z = zeros(d)?;
 
-    let mut index = lineage.next_index;
+    let mut index = *next_index;
     let mut cur = leaf;
-    for i in 0..depth {
+    for i in 0..d {
         let (left, right) = if index & 1 == 0 {
-            lineage.filled_subtrees[i] = cur;
+            filled[i] = cur;
             (cur, z[i])
         } else {
-            (lineage.filled_subtrees[i], cur)
+            (filled[i], cur)
         };
         cur = poseidon2(&left, &right)?;
         index >>= 1;
     }
-    lineage.next_index += 1;
-    lineage.root = cur;
+    *next_index += 1;
+    *root = cur;
     Ok(())
+}
+
+/// Initialize a `Lineage` to an empty tree of the given depth.
+pub fn init_empty(lineage: &mut Lineage, depth: u8) -> Result<()> {
+    lineage.depth = depth;
+    init_tree(depth, &mut lineage.next_index, &mut lineage.root, &mut lineage.filled_subtrees)
+}
+
+/// Append a leaf to a `Lineage`.
+pub fn insert(lineage: &mut Lineage, leaf: [u8; 32]) -> Result<()> {
+    insert_leaf(
+        lineage.depth,
+        &mut lineage.next_index,
+        &mut lineage.root,
+        &mut lineage.filled_subtrees,
+        leaf,
+    )
 }

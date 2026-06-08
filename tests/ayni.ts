@@ -18,6 +18,10 @@ describe("ayni — AHA on Solana", () => {
     [Buffer.from("circle"), worldService.toBuffer(), Buffer.from(name)],
     program.programId
   );
+  const [memberTreePda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("members"), circlePda.toBuffer()],
+    program.programId
+  );
 
   it("initializes a Circle under the World Service Circle", async () => {
     await program.methods
@@ -27,6 +31,10 @@ describe("ayni — AHA on Solana", () => {
         worldService,
         authority: authority.publicKey,
       })
+      .rpc();
+    await program.methods
+      .initializeMemberTree(20)
+      .accounts({ circle: circlePda, memberTree: memberTreePda, authority: authority.publicKey })
       .rpc();
 
     const circle = await program.account.circle.fetch(circlePda);
@@ -50,6 +58,7 @@ describe("ayni — AHA on Solana", () => {
       .accounts({
         circle: circlePda,
         membership: membershipPda,
+        memberTree: memberTreePda,
         authority: authority.publicKey,
       })
       .rpc();

@@ -42,4 +42,14 @@ pub enum AyniError {
     DisclosureProofInvalid,
     #[msg("Disclosure does not satisfy the gate's predicate requirements")]
     PredicateNotMet,
+    #[msg("Invalid vote / personhood proof")]
+    VoteProofInvalid,
+    #[msg("Voting is closed for this proposal")]
+    VotingClosed,
+    #[msg("Voting period has not ended yet")]
+    VotingNotEnded,
+    #[msg("Proposal already finalized")]
+    AlreadyFinalized,
+    #[msg("Proof of personhood is required to join this Circle")]
+    PersonhoodRequired,
 }

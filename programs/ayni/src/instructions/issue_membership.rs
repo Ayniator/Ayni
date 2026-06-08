@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
-use crate::state::{Circle, Membership};
+use crate::merkle;
+use crate::state::{Circle, Membership, MemberTree};
 
 pub fn issue_membership(
     ctx: Context<IssueMembership>,
@@ -30,6 +31,11 @@ pub fn issue_membership(
 
     circle.member_count = circle.member_count.saturating_add(1);
 
+    // Add the member to the votable set (the commitment is the leaf, == the
+    // member-vote circuit's `Poseidon(secret)`).
+    let mt = &mut ctx.accounts.member_tree;
+    merkle::insert_leaf(mt.depth, &mut mt.next_index, &mut mt.root, &mut mt.filled_subtrees, commitment)?;
+
     // TODO(ayni): mint a Token-2022 NonTransferable (soulbound) membership token
     // bound to `commitment` via an anchor_spl::token_2022 CPI, for selective
     // public disclosure. Anonymity is preserved because the account is keyed by
@@ -51,6 +57,14 @@ pub struct IssueMembership<'info> {
         bump
     )]
     pub membership: Account<'info, Membership>,
+
+    #[account(
+        mut,
+        has_one = circle,
+        seeds = [b"members", circle.key().as_ref()],
+        bump = member_tree.bump
+    )]
+    pub member_tree: Account<'info, MemberTree>,
 
     #[account(mut)]
     pub authority: Signer<'info>,

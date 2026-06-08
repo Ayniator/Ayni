@@ -30,6 +30,10 @@ describe("ayni — member co-signature & self-recovery", () => {
       [Buffer.from("membership"), circlePda.toBuffer(), commitment],
       program.programId
     )[0];
+  const [memberTreePda] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("members"), circlePda.toBuffer()],
+    program.programId
+  );
 
   before(async () => {
     await Promise.all(
@@ -41,6 +45,10 @@ describe("ayni — member co-signature & self-recovery", () => {
     await program.methods
       .initializeCircle(name, new anchor.BN(365 * 24 * 60 * 60), new anchor.BN(0)) // no time-lock
       .accounts({ circle: circlePda, worldService, authority: authority.publicKey })
+      .rpc();
+    await program.methods
+      .initializeMemberTree(20)
+      .accounts({ circle: circlePda, memberTree: memberTreePda, authority: authority.publicKey })
       .rpc();
     for (let i = 0; i < 4; i++) {
       await program.methods
@@ -64,7 +72,7 @@ describe("ayni — member co-signature & self-recovery", () => {
     // require_cosign = true, two guardians (1-of-2)
     await program.methods
       .issueMembership([...commitment], memberOwner, [guardian1.publicKey, guardian2.publicKey], true)
-      .accounts({ circle: circlePda, membership, authority: authority.publicKey })
+      .accounts({ circle: circlePda, membership, memberTree: memberTreePda, authority: authority.publicKey })
       .rpc();
 
     // Council reaches 4/7 to migrate memberOwner -> newWallet and executes.
@@ -122,7 +130,7 @@ describe("ayni — member co-signature & self-recovery", () => {
 
     await program.methods
       .issueMembership([...commitment], owner.publicKey, [anchor.web3.PublicKey.default, anchor.web3.PublicKey.default], false)
-      .accounts({ circle: circlePda, membership, authority: authority.publicKey })
+      .accounts({ circle: circlePda, membership, memberTree: memberTreePda, authority: authority.publicKey })
       .rpc();
 
     await program.methods

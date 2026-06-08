@@ -175,3 +175,46 @@ pub struct AccessPass {
 impl AccessPass {
     pub const SPACE: usize = 8 + 32 + 32 + 8 + 1;
 }
+
+/// The append-only Poseidon Merkle tree of *member* identity commitments for a
+/// Circle (the votable population). Same shape as `Lineage`; `next_index` is the
+/// member count. A commitment is inserted at `issue_membership`. Member voting
+/// proves Semaphore-style inclusion against a snapshot of `root`.
+#[account]
+pub struct MemberTree {
+    pub circle: Pubkey,
+    pub depth: u8,
+    pub next_index: u64,
+    pub root: [u8; 32],
+    pub filled_subtrees: [[u8; 32]; crate::merkle::MAX_DEPTH],
+    pub bump: u8,
+}
+
+impl MemberTree {
+    pub const SPACE: usize =
+        8 + 32 + 1 + 8 + 32 + 32 * crate::merkle::MAX_DEPTH + 1;
+}
+
+/// A group-conscience proposal voted on by the whole membership: an idea, or a
+/// change to shared material/documentation. One member = one vote, cast
+/// anonymously (Merkle inclusion in the snapshotted member set + a per-proposal
+/// nullifier). `description_hash` commits to the off-chain text (e.g. an IPFS CID
+/// hash). See docs/member-voting.md.
+#[account]
+pub struct MemberProposal {
+    pub circle: Pubkey,
+    pub nonce: u64,
+    pub description_hash: [u8; 32],
+    pub member_root: [u8; 32], // snapshot of the eligible voter set
+    pub eligible_count: u64,   // member_count at snapshot (for quorum)
+    pub yes: u64,
+    pub no: u64,
+    pub deadline: i64,
+    pub finalized: bool,
+    pub passed: bool,
+    pub bump: u8,
+}
+
+impl MemberProposal {
+    pub const SPACE: usize = 8 + 32 + 8 + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 1 + 1;
+}
