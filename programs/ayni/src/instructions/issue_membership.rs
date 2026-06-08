@@ -6,7 +6,7 @@ pub fn issue_membership(
     ctx: Context<IssueMembership>,
     commitment: [u8; 32],
     owner: Pubkey,
-    recovery_key: Pubkey,
+    recovery_keys: [Pubkey; Membership::MAX_GUARDIANS],
     require_cosign: bool,
 ) -> Result<()> {
     let clock = Clock::get()?;
@@ -21,10 +21,10 @@ pub fn issue_membership(
     // `owner` may be Pubkey::default() for a fully anonymous member; if set, it
     // is the wallet a 4-of-7 migration can later rebind during key recovery.
     membership.owner = owner;
-    // A guardian key + co-sign policy may be set at issuance or later via
-    // `set_recovery`. With a recovery_key set, even a fully anonymous member
+    // Up to two guardian keys + co-sign policy may be set at issuance or later
+    // via `set_recovery`. With a guardian set, even a fully anonymous member
     // (owner = default) can self-migrate and co-sign.
-    membership.recovery_key = recovery_key;
+    membership.recovery_keys = recovery_keys;
     membership.require_cosign = require_cosign;
     membership.bump = ctx.bumps.membership;
 

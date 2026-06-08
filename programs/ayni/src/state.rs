@@ -54,25 +54,34 @@ pub struct Membership {
     /// fully anonymous (no wallet bound). This is the field a 4-of-7 wallet
     /// migration rebinds during key recovery.
     pub owner: Pubkey,
-    /// Optional guardian/backup key the member controls separately from `owner`.
-    /// Lets a member self-migrate or co-sign even after losing the owner key,
-    /// and preserves anonymity (owner may stay `default()` while this is set).
-    pub recovery_key: Pubkey,
+    /// Up to two optional guardian/backup keys the member controls separately
+    /// from `owner` (1-of-2: either can act, so losing one guardian still leaves
+    /// recovery possible). Lets a member self-migrate or co-sign even after
+    /// losing the owner key, and preserves anonymity (owner may stay `default()`
+    /// while a guardian is set). Unused slots are `default()`.
+    pub recovery_keys: [Pubkey; Self::MAX_GUARDIANS],
     /// If true, a Council `MigrateWallet` cannot rebind this membership without a
-    /// signature from `owner` or `recovery_key` — collusion-proof, but the
-    /// membership is unrecoverable if both keys are lost.
+    /// signature from `owner` or a guardian — collusion-proof, but the
+    /// membership is unrecoverable if every key is lost.
     pub require_cosign: bool,
     pub bump: u8,
 }
 
 impl Membership {
-    pub const SPACE: usize = 8 + 32 + 32 + 8 + 8 + 1 + 32 + 32 + 1 + 1;
+    pub const MAX_GUARDIANS: usize = 2;
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 8 + 1 + 32 + 32 * Self::MAX_GUARDIANS + 1 + 1;
 
-    /// True if `who` is a key the member controls (owner or recovery key),
+    /// True if `who` is a key the member controls (owner or a guardian),
     /// ignoring unset (`default()`) slots.
     pub fn is_member_key(&self, who: &Pubkey) -> bool {
+        if who == &Pubkey::default() {
+            return false;
+        }
         (self.owner != Pubkey::default() && who == &self.owner)
-            || (self.recovery_key != Pubkey::default() && who == &self.recovery_key)
+            || self
+                .recovery_keys
+                .iter()
+                .any(|k| k != &Pubkey::default() && k == who)
     }
 }
 

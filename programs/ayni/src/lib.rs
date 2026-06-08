@@ -39,16 +39,16 @@ pub mod ayni {
 
     /// Issue a soulbound yearly membership, identified by a ZK commitment.
     /// `owner` is an optional controlling wallet (default() = fully anonymous);
-    /// `recovery_key` an optional guardian; `require_cosign` opts into
+    /// `recovery_keys` up to two optional guardians; `require_cosign` opts into
     /// member-co-signed migration.
     pub fn issue_membership(
         ctx: Context<IssueMembership>,
         commitment: [u8; 32],
         owner: Pubkey,
-        recovery_key: Pubkey,
+        recovery_keys: [Pubkey; crate::state::Membership::MAX_GUARDIANS],
         require_cosign: bool,
     ) -> Result<()> {
-        instructions::issue_membership(ctx, commitment, owner, recovery_key, require_cosign)
+        instructions::issue_membership(ctx, commitment, owner, recovery_keys, require_cosign)
     }
 
     /// Renew (extend) a membership for another term on donation.
@@ -89,10 +89,10 @@ pub mod ayni {
     /// require-co-sign policy (signed by owner or current recovery key).
     pub fn set_recovery(
         ctx: Context<SetRecovery>,
-        recovery_key: Pubkey,
+        recovery_keys: [Pubkey; crate::state::Membership::MAX_GUARDIANS],
         require_cosign: bool,
     ) -> Result<()> {
-        instructions::set_recovery(ctx, recovery_key, require_cosign)
+        instructions::set_recovery(ctx, recovery_keys, require_cosign)
     }
 
     /// Self-recovery: a member holding a key migrates their own membership owner

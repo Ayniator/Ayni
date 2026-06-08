@@ -63,25 +63,43 @@ rotate the colluders out while the migration stays blocked.
 
 ## Member co-signature & self-recovery
 
-A `Membership` carries two optional fields: a guardian **`recovery_key`** (a
-backup key the member controls, separate from `owner`) and a **`require_cosign`**
-policy. They give the member control over their own recovery, independent of the
-Council:
+A `Membership` carries up to **two guardian keys** (`recovery_keys`, a 1-of-2
+backup set the member controls, separate from `owner`) and a **`require_cosign`**
+policy. Two guardians give redundancy — losing one still leaves recovery
+possible. They give the member control over their own recovery, independent of
+the Council:
 
 - **`require_cosign = true`:** `recover_membership` additionally requires a
-  signature from `owner` or `recovery_key`. *No Council majority — even all 7
-  colluding — can migrate this membership without the member.* The trade: lose
-  **both** keys and the membership is unrecoverable. The member chooses this
+  signature from `owner` or **either** guardian. *No Council majority — even all
+  7 colluding — can migrate this membership without the member.* The trade: lose
+  **every** key and the membership is unrecoverable. The member chooses this
   availability-vs-collusion-resistance balance for themselves.
-- **Self-recovery (`member_migrate`):** a member still holding either key
-  rebinds their own `owner` with no Council vote and no time-lock — because they
+- **Self-recovery (`member_migrate`):** a member still holding any key rebinds
+  their own `owner` with no Council vote and no time-lock — because they
   personally authorize it, no collusion is possible.
 - **Anonymity preserved:** `owner` may stay `default()` (no public wallet) while
-  a `recovery_key` is set, so even a fully anonymous member can self-migrate and
-  co-sign via the guardian key.
+  a guardian is set, so even a fully anonymous member can self-migrate and
+  co-sign via a guardian key.
 
 The Council-only path (`require_cosign = false`, default) remains for members who
 may lose every key — that is what the time-lock and contest protect.
+
+## Recovery options by level
+
+The same primitives apply at every level; what differs is **who recovers what**
+and the **recommended parameters**.
+
+| Level | What can be recovered | Mechanism | Recommended params |
+|---|---|---|---|
+| **Member** (any Circle) | the member's own `owner` wallet | `member_migrate` (self, any key held); else Council `MigrateWallet` + `recover_membership` (with co-sign if opted in) | up to 2 guardians; `require_cosign` for key-confident members |
+| **Council seat** (any Circle) | a seat's wallet | `RotateSeat` (4/7, immediate) or `MigrateWallet` (4/7 + time-lock + contest) | — |
+| **Local Circle** | its own seats + members | its own 7-seat Council, **autonomously** — never needs World Service (T4) | shorter contest window, e.g. **3–7 days** |
+| **Foundational — World Service Circle** | World-Service seats + the **lineage genesis key** | its own 7-seat Council; genesis key in **MPC / governance multisig**, never one wallet | longer window, e.g. **14–30 days**; elders from distinct trust domains |
+
+The genesis lineage key is the one secret with no on-chain recovery (it roots all
+ZK lineage proofs — see docs/zk-lineage.md §6/§7). Custody it in MPC or a Squads
+multisig from the start; "recovery" there means the multisig's own m-of-n, not
+this program.
 
 ## "Migrate all artifacts"
 
