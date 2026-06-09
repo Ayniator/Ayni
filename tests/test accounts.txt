@@ -1,0 +1,77 @@
+# Ayni — test accounts
+#
+# Fill in the wallets you control to run the tests against a real cluster
+# (devnet/mainnet) instead of localnet airdrops. Then tell Claude — it will wire
+# a config-driven runner that uses these instead of generating throwaways.
+#
+# Rules:
+#   - Lines with "keypair:" MUST sign  -> the file must exist AND the address
+#     must be FUNDED on the target cluster (devnet airdrops are rate-limited).
+#   - "address-only" roles never sign (pubkey is enough).
+#   - Do NOT paste secret keys here — give the PATH to the keypair .json file.
+#   - Leave blank for localnet (auto-generated + airdropped).
+#
+# See tests/README.md for the full role table.
+# ----------------------------------------------------------------------------
+
+cluster:   devnet
+rpcUrl:
+
+# Circle admin — initialize_*, appoint_seat, issuance, set_personhood, withdraw.
+# (In production this is a Squads/Realms multisig.)
+authority:
+  address:
+  keypair:
+
+# Parent / root authority — PDA seed + governing root. ADDRESS ONLY (never signs).
+worldService:
+  address:
+
+# The 7-seat Council (sign propose/approve/cancel; a seat creates proposals).
+councilSeat0_treasurer:
+  address:
+  keypair:
+councilSeat1_secretary:
+  address:
+  keypair:
+councilSeat2_rhythmKeeper:
+  address:
+  keypair:
+councilSeat3_elder:
+  address:
+  keypair:
+councilSeat4_elder:
+  address:
+  keypair:
+councilSeat5_elder:
+  address:
+  keypair:
+councilSeat6_elder:
+  address:
+  keypair:
+
+# Optional member controlling wallet (disclosure / recovery target).
+# Leave blank for a fully anonymous member.
+memberOwner:
+  address:
+  keypair:
+
+# Up to two guardian keys (co-sign recover_membership / member_migrate / set_recovery).
+guardian1:
+  address:
+  keypair:
+guardian2:
+  address:
+  keypair:
+
+# Relayer — pays fees for ZK actions so the real actor isn't linked
+# (cast_vote, grant_level, prove_personhood). May equal `authority`.
+relayer:
+  address:
+  keypair:
+
+# ----------------------------------------------------------------------------
+# NOT provided by you (derived / not addresses):
+#   treasury        = PDA ["treasury", circle]
+#   membershipMint  = the Circle PDA (mint authority)
+#   members         = ZK commitments Poseidon(secret), not wallets — relayer pays
