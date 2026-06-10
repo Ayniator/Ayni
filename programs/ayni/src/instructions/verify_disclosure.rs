@@ -11,6 +11,7 @@ const I_DATE_OK: usize = 0;
 const I_COURSE_ACCREDITED: usize = 1;
 const I_TEACHER_RECOGNIZED: usize = 2;
 const I_ROOT: usize = 3;
+const I_DATE_LOWER_BOUND: usize = 12;
 const I_CATALOG_ROOT: usize = 13;
 const I_TEACHER_SET_ROOT: usize = 15;
 pub const ACK_DISCLOSE_PUBLIC_INPUTS: usize = 17;
@@ -21,6 +22,11 @@ pub struct DisclosureGate {
     pub require_date_ok: bool,
     pub require_course_accredited: bool,
     pub require_teacher_recognized: bool,
+    /// The date the proof's `dateOk` boolean must have been evaluated against.
+    /// `dateLowerBound` is a prover-supplied public input, so without pinning it
+    /// the prover could set it to 0 and satisfy any "completed after X" gate. The
+    /// gate must therefore declare the exact threshold it requires.
+    pub expected_date_lower_bound: [u8; 32],
     /// Trusted, pinned roots the proof's predicate must have been checked against
     /// (a prover could otherwise pass a self-made set root).
     pub expected_catalog_root: [u8; 32],
@@ -59,6 +65,12 @@ pub fn verify_disclosure(
     let one = merkle::field_from_u8(1);
     if requirements.require_date_ok {
         require!(public_inputs[I_DATE_OK] == one, AyniError::PredicateNotMet);
+        // Pin the threshold the boolean was evaluated against, else dateOk is
+        // trivially satisfiable with dateLowerBound = 0.
+        require!(
+            public_inputs[I_DATE_LOWER_BOUND] == requirements.expected_date_lower_bound,
+            AyniError::PredicateNotMet
+        );
     }
     if requirements.require_course_accredited {
         require!(public_inputs[I_COURSE_ACCREDITED] == one, AyniError::PredicateNotMet);

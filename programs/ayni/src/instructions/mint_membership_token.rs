@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{mint_to, Mint, MintTo, TokenAccount, TokenInterface};
 
+use crate::council::SEAT_TREASURER;
 use crate::errors::AyniError;
 use crate::state::Circle;
 
@@ -15,6 +16,11 @@ pub fn mint_membership_token(ctx: Context<MintMembershipToken>) -> Result<()> {
         circle.membership_mint == ctx.accounts.mint.key(),
         AyniError::Unauthorized
     );
+    // The Treasurer seat stewards the soulbound mint — otherwise anyone could
+    // mint membership tokens to any account and fabricate apparent membership.
+    circle
+        .council
+        .require_seat(&ctx.accounts.treasurer.key(), SEAT_TREASURER)?;
 
     let parent = circle.parent;
     let name = circle.name.clone();
@@ -44,6 +50,9 @@ pub struct MintMembershipToken<'info> {
     /// The member's Token-2022 account (created by the client beforehand).
     #[account(mut)]
     pub member_token_account: InterfaceAccount<'info, TokenAccount>,
+
+    /// Must be the Council's Treasurer seat (authorizes the mint).
+    pub treasurer: Signer<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
 }

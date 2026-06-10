@@ -14,8 +14,23 @@ pub fn propose(ctx: Context<Propose>, nonce: u64, action: ProposalAction) -> Res
         .seat_of(&seat)
         .ok_or(error!(AyniError::NotCouncilSeat))?;
 
-    if let ProposalAction::RotateSeat { seat_index, .. } = &action {
-        require!((*seat_index as usize) < COUNCIL_SEATS, AyniError::InvalidSeatIndex);
+    match &action {
+        ProposalAction::RotateSeat { seat_index, .. } => {
+            require!((*seat_index as usize) < COUNCIL_SEATS, AyniError::InvalidSeatIndex);
+        }
+        ProposalAction::MigrateWallet { old_wallet, new_wallet } => {
+            // Never migrate the zero wallet: `recover_membership` rebinds every
+            // membership whose `owner == old_wallet`, so `old_wallet = default()`
+            // would seize ALL fully-anonymous memberships at once. Both ends must
+            // be real, distinct wallets.
+            require!(*old_wallet != Pubkey::default(), AyniError::WalletMismatch);
+            require!(*new_wallet != Pubkey::default(), AyniError::WalletMismatch);
+            require!(old_wallet != new_wallet, AyniError::WalletMismatch);
+        }
+        ProposalAction::WithdrawTreasury { amount, recipient } => {
+            require!(*amount > 0, AyniError::WrongProposalAction);
+            require!(*recipient != Pubkey::default(), AyniError::WalletMismatch);
+        }
     }
 
     let now = Clock::get()?.unix_timestamp;
@@ -26,6 +41,7 @@ pub fn propose(ctx: Context<Propose>, nonce: u64, action: ProposalAction) -> Res
     proposal.approvals = 0;
     proposal.executed = false;
     proposal.cancelled = false;
+    proposal.drained = false;
     proposal.created_at = now;
     proposal.eligible_at = 0;
     proposal.bump = ctx.bumps.proposal;

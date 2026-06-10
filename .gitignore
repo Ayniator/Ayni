@@ -142,9 +142,23 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+# AI tool
+.claude
+.claude/
+
 # === Solana / Anchor (Ayni) ===
 .anchor
 target
 test-ledger
 **/*.rs.bk
 .DS_Store
+
+# === ZK build artifacts ===
+# Keep proving essentials small in git: commit final proving keys (*_final.zkey),
+# the witness wasm (build/*_js/), and the tiny verifying keys (*_vkey.json + the
+# generated programs/ayni/src/verifying_key*.rs). Ignore the multi-MB setup-only
+# inputs, which are regenerable from circuits/ + a trusted-setup ceremony.
+build/*.ptau
+build/*_0.zkey
+build/*.r1cs
+build/*.sym

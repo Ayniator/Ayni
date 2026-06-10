@@ -10,17 +10,25 @@ use crate::state::Circle;
 /// proposal pins `amount` + `recipient`; the treasury PDA signs the transfer.
 /// Permissionless to trigger once authorized.
 pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>) -> Result<()> {
-    let proposal = &ctx.accounts.proposal;
+    let proposal = &mut ctx.accounts.proposal;
     require!(proposal.executed, AyniError::ThresholdNotMet);
+    // One-shot: an executed WithdrawTreasury authorizes exactly ONE transfer of
+    // the pinned amount. Without this guard the (permissionless) call could be
+    // replayed to drain the whole treasury — the critical bug this fixes.
+    require!(!proposal.drained, AyniError::AlreadyExecuted);
 
     let (amount, recipient) = match &proposal.action {
         ProposalAction::WithdrawTreasury { amount, recipient } => (*amount, *recipient),
         _ => return err!(AyniError::WrongProposalAction),
     };
+    require!(amount > 0, AyniError::WrongProposalAction);
     require!(
         ctx.accounts.recipient.key() == recipient,
         AyniError::WalletMismatch
     );
+
+    // Mark consumed before the CPI (no re-entrancy window).
+    proposal.drained = true;
 
     let circle_key = ctx.accounts.circle.key();
     let bump = ctx.bumps.treasury;
@@ -42,7 +50,7 @@ pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>) -> Result<()> {
 pub struct WithdrawTreasury<'info> {
     pub circle: Account<'info, Circle>,
 
-    #[account(has_one = circle)]
+    #[account(mut, has_one = circle)]
     pub proposal: Account<'info, Proposal>,
 
     #[account(mut, seeds = [b"treasury", circle.key().as_ref()], bump)]

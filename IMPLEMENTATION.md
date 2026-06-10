@@ -1,162 +1,305 @@
-# Ayni — AHA on Solana
+# Ayni — Implementation Runbook
 
-**Implementation of:** [AHA](./PROJECT.md) — Ancestral Humanity Anonymous.
-**Chain:** Solana.
-**Name meaning:** *Ayni* — Andean principle of sacred reciprocity / mutual
-giving; reflects the gift-economy, self-supporting nature of the fellowship.
+**Implementation of:** [AHA](./PROJECT.md) — Ancestral Humanity Anonymous · **Chain:** Solana.
 
-This branch holds the **Solana-specific** realization of the chain-agnostic
-AHA model. Nothing here changes the AHA definition on `main`.
+*Ayni* — the Andean principle of sacred reciprocity; the gift-economy, self-supporting nature of
+the fellowship.
 
-## Stack
+This is a **step-by-step runbook**: stand up the **foundation** (the World Service Circle), open a
+**first Circle** under it, and run the **four kinds of vote** AHA needs. Every step maps to a real
+instruction in `programs/ayni/src/lib.rs`. Calls are shown as Anchor/TypeScript (`@coral-xyz/anchor`)
+against the deployed `ayni` program; the same arguments work from any client.
 
-| Concern | Tool |
+> **Mental model.** The *foundation* is itself a Circle — the **World Service Circle** — whose
+> `parent` is a chosen root pubkey. A local group is a Circle whose `parent` is the foundation's
+> address. A "vote at foundation level" is just a member vote on the foundation Circle (so only
+> foundation members can cast it); a "vote at Circle level" is a member vote on that local Circle.
+> The Council (4-of-7) is the authority for recovery/treasury — **not** for everyday direction,
+> which the membership sets by vote.
+
+---
+
+## Conventions
+
+| Symbol | Meaning |
 |---|---|
-| Governance / proposals / voting | **Realms (SPL Governance)** — one Realm per Circle |
-| Treasury | **Squads Protocol v4** multisig (treasurer = signer) |
-| Membership token | **Token-2022** `NonTransferable` (soulbound) |
-| Yearly expiry | **Custom Anchor program** (checks `expiry` timestamp) |
-| Progress / levels | **Solana Attestation Service** or **Metaplex compressed NFTs** |
-| Servant roles | Squads member permissions + Realms council tokens |
-| Federation | World Service Realm holds authority over Circle Realms |
-| Forking | New Realm per Circle under the shared governance program |
-| Privacy / ZK | **Light Protocol** (ZK compression) / **Arcium** (confidential compute); on-chain Groth16 |
+| `program` | the deployed `ayni` Anchor program (`anchor.workspace.Ayni`) |
+| `ROOT` | a fixed pubkey you choose as the foundation's `parent` (a seed only — never signs). Can be a burner pubkey or a well-known constant. |
+| **seat keys** | the 7 Council keypairs: `treasurer, secretary, rhythmKeeper, elderN, elderE, elderS, elderW` (indices 0..6) |
+| **commitment** | a member's identity leaf = `Poseidon(secret)` — the private value behind every anonymous action. Build with `app/voting/prove.ts` / `app/lineage/poseidonTree.ts`. |
+| `MEMBER_DEPTH` | the member-tree depth; must equal `merkle::CIRCUIT_DEPTH` (the compiled circuit depth). |
 
-## Trade-off
-Sub-cent fees and easy forking, but the anonymous-credential layer
-(membership, voting, lineage proofs) is built largely from scratch —
-no Semaphore/MACI/Privado equivalent ships on Solana today.
-
-## Anchor workspace (`ayni` program)
+PDA derivations used below (all on the program id):
 
 ```
-Anchor.toml                  workspace + program id config
-Cargo.toml                   Rust workspace
-programs/ayni/
-  Cargo.toml · Xargo.toml
-  src/
-    lib.rs                   #[program] entrypoint
-    state.rs                 Circle, Membership, LevelGrant, Lineage, Nullifier
-    council.rs               Council (7 seats), Proposal, ProposalAction
-    errors.rs                AyniError
-    instructions/
-      initialize_circle.rs   fork a Circle under World Service
-      issue_membership.rs    soulbound yearly membership (by ZK commitment)
-      renew_membership.rs    extend a term on donation
-      appoint_seat.rs        seat the 7-member Council (bootstrap)
-      propose / approve / execute_proposal   4-of-7 Council vote
-      recover_membership.rs  rebind membership owner under a migration
-      grant_level.rs         shamanic level along an anonymous lineage (ZK)
-tests/ayni.ts                init Circle + issue membership
-tests/resilience.ts          7-seat Council: rotate seat + migrate wallet (4/7)
-migrations/deploy.ts
+circle      = ["circle",     parent,  name]
+member_tree = ["members",    circle]
+lineage     = ["lineage",    circle]
+membership  = ["membership", circle,  commitment]
+proposal    = ["proposal",   circle,  nonce_le]      // Council 4-of-7
+memberprop  = ["memberprop", circle,  nonce_le]      // member vote   (see create_member_proposal.rs)
+nullifier   = ["nullifier",  proposal, nullifier]    // one vote per member
+treasury    = ["treasury",   circle]
 ```
 
-Build (requires the Solana + Anchor toolchain, not installed in this repo):
+---
 
-```
-yarn install        # or npm install
-anchor build
-anchor test
-```
+## Phase 0 — Build & deploy
 
-## ZK shamanic lineage (implemented)
-
-Anonymous, ZK-verified level grants. Full design in
-[docs/zk-lineage.md](./docs/zk-lineage.md).
-
-```
-circuits/lineage_grant.circom    Groth16 circuit: Merkle inclusion + level rule + nullifier
-circuits/README.md               compile + trusted-setup ceremony + vk export
-programs/ayni/src/
-  merkle.rs                      on-chain incremental Poseidon Merkle tree (Bn254X5 syscall)
-  verifying_key.rs               embedded Groth16 vk (PLACEHOLDER — regenerate via ceremony)
-  instructions/initialize_lineage.rs   seat the World Service genesis credential
-  instructions/grant_level.rs    verify proof → spend nullifier → append credential → set level
-app/lineage/poseidonTree.ts      off-chain tree mirror (auth paths)
-app/lineage/prove.ts             assemble witness + format proof for the program
-scripts/vk_to_rust.js            verification_key.json → verifying_key.rs
+```bash
+npm install
+anchor build           # compiles the program + embeds the real verifying keys
+anchor test            # localnet sanity: membership, 4-of-7 recovery, a real ZK vote
+anchor deploy          # to your chosen cluster (localnet/devnet/mainnet)
 ```
 
-How it works: each level is a Poseidon credential leaf in an append-only tree
-whose root is on-chain. A grant proves, in zero-knowledge, that *some* hidden
-credential of sufficient level — chaining back to the World Service root —
-authorized it, emitting a nullifier to prevent replay. The granter's identity is
-never revealed; a relayer pays so their wallet isn't linked either.
+The verifying keys in `programs/ayni/src/verifying_key*.rs` are generated by a **dev** trusted setup
+(`scripts/` + `build/*.ptau`). For production, run a real multi-party ceremony and regenerate them
+(`node scripts/vk_to_rust.js …`) before deploy. See `circuits/README.md`.
 
-## Acknowledgment credentials (implemented)
+---
 
-Course/initiation certificates — *portrait PPP, course CCC, teacher XXX, date
-DDD* — whose holder discloses each field independently. Full design in
-[docs/acknowledgments.md](./docs/acknowledgments.md).
+## Phase 1 — Implement the foundation (World Service Circle)
 
+The foundation is the root Circle that holds the shared material — the **"12 Steps"**, the
+**Preamble**, the template. Seat its 7-of-7 Council with the **foundational keys**.
+
+**1.1 Create the foundation Circle.** `parent = ROOT`, a recognizable `name` (≤ 32 bytes), a
+one-year `membership_period`, and a `recovery_timelock` (contest window for recovery/treasury).
+
+```ts
+const ROOT = new PublicKey("…");                 // your chosen foundation root seed
+const name = "AHA-World-Service";
+const seats = [treasurer, secretary, rhythmKeeper, elderN, elderE, elderS, elderW]
+                .map(k => k.publicKey);          // exactly 7, all distinct, none default
+
+const [foundation] = PublicKey.findProgramAddressSync(
+  [Buffer.from("circle"), ROOT.toBuffer(), Buffer.from(name)], program.programId);
+
+await program.methods
+  .initializeCircle(ROOT, name, ONE_YEAR, SEVEN_DAYS, seats)
+  .accounts({ circle: foundation, parent: ROOT, payer: payer.publicKey,
+              systemProgram: SystemProgram.programId })
+  .signers([payer]).rpc();
 ```
-circuits/ack_disclose.circom            selective disclosure + predicates (date / catalog / teacher-set)
-programs/ayni/src/state.rs              Acknowledgment (stores only R) + AccessPass
-programs/ayni/src/instructions/issue_acknowledgment.rs
-                                        issuer-anonymous attestation — REUSES the lineage VK
-programs/ayni/src/instructions/verify_disclosure.rs
-                                        on-chain predicate-gated access -> mints AccessPass
-programs/ayni/src/verifying_key_ack.rs  ack_disclose vk (PLACEHOLDER — own ceremony)
-app/acknowledgment/prove.ts             build R, public sets, generate/verify disclosure proofs
+
+Creation is permissionless — the payer is only a fee-payer; from here the seated Council is the
+authority. (All 7 seats must be filled, distinct, non-default, enforced on-chain.)
+
+**1.2 Open the foundation's member set** (the votable population). Any seat signs.
+
+```ts
+await program.methods.initializeMemberTree(MEMBER_DEPTH)
+  .accounts({ circle: foundation, memberTree: foundationMembers, seat: rhythmKeeper.publicKey })
+  .signers([rhythmKeeper]).rpc();
 ```
 
-Only `R = Poseidon(cP,cC,cX,cD)` (the four blinded field commitments) is stored.
-Issuance verifies a lineage teacher of level ≥ `attest_level` authorized `R`
-(reusing `verifying_key.rs`, binding `R` in the grantee slot) — so "taught by a
-real lineage holder" is on-chain while the teacher stays anonymous. The holder
-later proves any subset against `R`: reveal a field, hide it, or prove a
-predicate without revealing it —
+**1.3 (optional) Seat the lineage genesis** — only if you use shamanic lineage / acknowledgments:
+`program.methods.initializeLineage(depth, genesisCommitment, genesisLevel)` (any seat).
 
-- **date:** `dateOk = (ddd ≥ bound)` (certificate freshness),
-- **course:** `courseAccredited` = `ccc ∈ catalog` (Merkle, root pinned),
-- **teacher:** `teacherRecognized` = `xxx ∈ recognized set` (Merkle, root pinned).
+**1.4 Admit the foundation members** — the people who hold *foundation-level* standing and will
+vote on the 12 Steps. The **Secretary** seat admits each one by their `commitment`.
 
-`verify_disclosure` enforces a `DisclosureGate` (which predicates must hold + the
-pinned set roots) on-chain and mints an `AccessPass` PDA — predicate-gated access
-while course/teacher/date/face stay private.
+```ts
+const { commitment } = buildCommitment(secret);  // app/voting/prove.ts
+const [membership] = PublicKey.findProgramAddressSync(
+  [Buffer.from("membership"), foundation.toBuffer(), commitment], program.programId);
 
-## Resilience: 7-seat Council & 4-of-7 key recovery (implemented)
+await program.methods
+  .issueMembership(commitment, owner /* or default for full anonymity */,
+                   [guardian1, guardian2], /*require_cosign*/ true)
+  .accounts({ circle: foundation, membership, memberTree: foundationMembers,
+              personhood: null, secretary: secretary.publicKey,
+              systemProgram: SystemProgram.programId })
+  .signers([secretary]).rpc();
+```
 
-Full design in [docs/resilience.md](./docs/resilience.md). Each Circle (and the
-World Service Circle) carries a `Council` of **7 seats** (3 named servants + 4
-elders) with a **threshold of 4**. Two recovery actions, each 4-of-7:
+> **Tip:** set at least one `guardian` and `require_cosign: true` for any membership that binds an
+> `owner` — so no Council majority can seize it and no single stolen backup key can lock you out.
 
-- **RotateSeat** — replace a seat's wallet (lost key / end of term); executes
-  immediately at 4-of-7 (reversible).
-- **MigrateWallet** — definitive `walletA → walletB`: `execute_proposal` rebinds
-  all 7 Council seats (bounded, atomic); `recover_membership` rebinds each
-  membership `owner` (and the levels hanging off it) under the same authorized
-  proposal. Approvals are a 7-bit bitmask, so each seat votes once.
+The foundation now exists, is governed by its 7 seats, and has a member roll. **This is "the
+foundation implemented."**
 
-**Anti-collusion safeguards.** A migration is *armed* when it hits 4-of-7 but
-executes only after a per-Circle **time-lock** (`recovery_timelock`, set at
-`initialize_circle`; default 7 days). During that contest window **any single
-seat** can `cancel_proposal` to block it. Safety over liveness for irreversible
-recovery. (RotateSeat has no time-lock.)
+---
 
-**Member co-signature & self-recovery.** A membership carries up to **two
-guardian keys** (`recovery_keys`, 1-of-2) and a `require_cosign` policy (set at
-`issue_membership` or later via `set_recovery`). With `require_cosign`,
-`recover_membership` also needs the member's signature (`owner` or **either**
-guardian) — so no Council majority can migrate an opted-in member. A member
-holding any key can `member_migrate` their own membership with no vote and no
-time-lock. `owner` may stay `default()` (fully anonymous) while a guardian is set.
-**Recovery options per level** (member / seat / local / World Service) are
-tabulated in [docs/resilience.md](./docs/resilience.md).
+## Phase 2 — Create a first Circle
 
-Tests (no ZK): `tests/resilience.ts` — 3-of-7 fails / 4-of-7 executes, time-lock
-hold-then-execute, single-seat contest. `tests/cosign.ts` — council-only
-migration of a `require_cosign` membership is blocked then succeeds with the
-**second** guardian (1-of-2); member self-migration.
+A local group. Same shape, but `parent = foundation` — that single link makes it a federated Circle
+without giving the foundation any power over it.
+
+```ts
+const cName = "Cusco";
+const cSeats = [/* this Circle's own 7 keys */].map(k => k.publicKey);
+const [circle] = PublicKey.findProgramAddressSync(
+  [Buffer.from("circle"), foundation.toBuffer(), Buffer.from(cName)], program.programId);
+
+await program.methods.initializeCircle(foundation, cName, ONE_YEAR, SEVEN_DAYS, cSeats)
+  .accounts({ circle, parent: foundation, payer: payer.publicKey,
+              systemProgram: SystemProgram.programId }).signers([payer]).rpc();
+
+await program.methods.initializeMemberTree(MEMBER_DEPTH)
+  .accounts({ circle, memberTree: circleMembers, seat: cSeats[2] }).signers([cRhythmKeeper]).rpc();
+
+// admit local members (Secretary of THIS Circle), exactly as Phase 1.4
+```
+
+A Circle is **autonomous**: its own Council, treasury (`["treasury", circle]`, fund with `donate`),
+members, and votes. Forking is "Summon a Circle" — repeat this phase for each new group.
+
+---
+
+## Phase 3 — A first vote at Circle level
+
+A local group-conscience decision (e.g. "do we meet weekly?"). Voters = **this Circle's** members.
+
+**3.1 A Council seat opens the proposal**, snapshotting the eligible voter set. `description_hash`
+commits to the off-chain text (e.g. `keccak(IPFS_CID)`).
+
+```ts
+const nonce = 1n;
+const [mprop] = PublicKey.findProgramAddressSync(
+  [Buffer.from("memberprop"), circle.toBuffer(), u64le(nonce)], program.programId);
+
+await program.methods.createMemberProposal(new BN(nonce), descriptionHash, SEVEN_DAYS)
+  .accounts({ circle, memberTree: circleMembers, proposal: mprop,
+              proposer: cSecretary.publicKey, systemProgram: SystemProgram.programId })
+  .signers([cSecretary]).rpc();
+```
+
+**3.2 Each member casts one anonymous ballot.** The client builds a ZK proof that their commitment
+is in the snapshotted `member_root` and emits a per-proposal **nullifier** (so they can't vote
+twice). The voter's wallet never appears — a relayer can even submit the tx.
+
+```ts
+const { proofA, proofB, proofC, nullifier } =
+  await proveVote({ secret, choice: true, memberRoot, proposalNonce: nonce, tree });  // app/voting/prove.ts
+
+const [nul] = PublicKey.findProgramAddressSync(
+  [Buffer.from("nullifier"), mprop.toBuffer(), nullifier], program.programId);
+
+await program.methods.castVote(true, nullifier, proofA, proofB, proofC)
+  .accounts({ proposal: mprop, voteNullifier: nul, payer: relayer.publicKey,
+              systemProgram: SystemProgram.programId }).signers([relayer]).rpc();
+```
+
+**3.3 Finalize after the deadline.** Anyone may call it. Passes if turnout ≥ a one-third quorum and
+yes > no — the recorded **group conscience**.
+
+```ts
+await program.methods.finalizeMemberProposal()
+  .accounts({ proposal: mprop, finalizer: anyone.publicKey }).signers([anyone]).rpc();
+// read program.account.memberProposal.fetch(mprop) → { yes, no, passed }
+```
+
+---
+
+## Phase 4 — Vote on a new version of the "12 Steps" (foundation level)
+
+A **charter** change voted by **foundational keys only**. Because the member tree is per-Circle, the
+foundation Circle's roll *already contains only foundation-level members* — so running the member
+vote **on the foundation Circle** naturally restricts it to foundational keys. No other Circle's
+members can cast a ballot here.
+
+It's the same three steps as Phase 3, pointed at the **foundation**:
+
+```ts
+const stepsHash = keccak(ipfsCidOf(newTwelveStepsText));   // the proposed text lives off-chain
+
+// 4.1 a FOUNDATION seat opens it, snapshotting the FOUNDATION member set
+await program.methods.createMemberProposal(new BN(101), stepsHash, FOURTEEN_DAYS)
+  .accounts({ circle: foundation, memberTree: foundationMembers, proposal: stepsProp,
+              proposer: secretary.publicKey, systemProgram: SystemProgram.programId })
+  .signers([secretary]).rpc();
+
+// 4.2 each FOUNDATION member casts an anonymous ballot (proof built against foundationMembers root)
+//      … identical to 3.2, using the foundation's tree + stepsProp …
+
+// 4.3 finalize → the foundation's group conscience on the new 12 Steps
+await program.methods.finalizeMemberProposal()
+  .accounts({ proposal: stepsProp, finalizer: anyone.publicKey }).signers([anyone]).rpc();
+```
+
+On pass, publish the new "12 Steps" text at the committed CID and update the template the foundation
+distributes. (Eligibility is enforced cryptographically: only a commitment in `foundationMembers`
+can produce a valid proof, so "only keys at the foundational level" holds without any allowlist.)
+
+---
+
+## Phase 5 — Update the suggested Circle Preamble (foundation + all Circles)
+
+A **federation-wide** vote: every Circle's members **and** the foundation's members each get one
+vote on the same shared text. There is no single cross-Circle electorate on-chain today, so compose
+it from the per-Circle primitive and aggregate — one shared proposal identity, tallied everywhere.
+
+**5.1 Announce one federation proposal**: a shared `preambleHash = keccak(ipfsCidOf(newPreamble))`
+and a shared `federationNonce` (use the same nonce in every Circle so the intent is auditably "the
+same vote").
+
+**5.2 Open the proposal in the foundation and in every Circle.** Each Circle's own seat runs
+`createMemberProposal(federationNonce, preambleHash, period)` against its own member tree — so each
+group's members vote over *their* snapshot.
+
+```ts
+for (const c of [foundation, ...allCircles]) {
+  await program.methods.createMemberProposal(new BN(federationNonce), preambleHash, FOURTEEN_DAYS)
+    .accounts({ circle: c, memberTree: treeOf(c), proposal: propOf(c),
+                proposer: seatOf(c).publicKey, systemProgram: SystemProgram.programId })
+    .signers([seatOf(c)]).rpc();
+}
+```
+
+**5.3 Members everywhere cast ballots** (Phase 3.2, each against their own Circle's tree/proposal)
+and **5.4 each proposal is finalized** locally after the deadline.
+
+**5.5 Aggregate the conscience.** Read every `MemberProposal` and combine. Choose the rule the
+fellowship agrees on, e.g.:
+
+- **one Circle = one voice:** count Circles whose `passed == true` (incl. the foundation) → carries
+  on a majority of Circles; or
+- **one member = one voice (federation-wide):** sum `yes`/`no` across all proposals and compare
+  against the summed `eligible_count` quorum.
+
+```ts
+const tallies = await Promise.all(
+  [foundation, ...allCircles].map(c => program.account.memberProposal.fetch(propOf(c))));
+const yes = tallies.reduce((s, t) => s + Number(t.yes), 0);
+const no  = tallies.reduce((s, t) => s + Number(t.no),  0);
+const circlesFor = tallies.filter(t => t.passed).length;
+// apply the agreed federation rule → adopt the new Preamble at its CID
+```
+
+On adoption, the foundation publishes the new **suggested** Preamble (suggested, not imposed —
+Tradition 4 autonomy: a Circle may keep its own).
+
+> **Roadmap.** A first-class federation vote — one aggregated member root spanning all Circles, so a
+> single proposal + single tally covers the whole fellowship — is tracked in `BACKLOG.md`. The
+> compositional method above is the supported path until then, and is auditable end-to-end.
+
+---
+
+## Recovery & treasury (Council 4-of-7) — reference
+
+Not one of the four "votes," but the other half of governance. Any seat opens a `propose(nonce,
+action)`; seats `approve(...)`; after 4-of-7 **and** the contest window, anyone `execute_proposal`s;
+any single seat may `cancel_proposal` during the window.
+
+| Action | Effect |
+|---|---|
+| `RotateSeat { seat_index, new_holder }` | replace a seat's wallet (lost key / end of term) |
+| `MigrateWallet { old_wallet, new_wallet }` | migrate all of a wallet's artifacts; rebind memberships via `recover_membership` |
+| `WithdrawTreasury { amount, recipient }` | spend treasury SOL; drawn once by `withdraw_treasury` |
+
+All three are time-locked and contestable (a single honest seat can stop a hostile majority before
+it executes); `WithdrawTreasury` is one-shot (cannot be replayed). Member self-recovery
+(`member_migrate`, `set_recovery`) needs no vote. Full design: [docs/resilience.md](./docs/resilience.md).
+
+---
 
 ## Status
-- Resilience: **code complete, unbuilt** (runnable via `anchor test` once the
-  toolchain is present — no ceremony needed, it's pure on-chain logic).
-- ZK lineage: **code complete, unbuilt.** Needs the Solana+Anchor+circom
-  toolchain (absent here) to `anchor build` and a **trusted-setup ceremony** to
-  replace the placeholder `verifying_key.rs`. The snarkjs→Solana proof byte
-  encodings in `prove.ts`/`vk_to_rust.js` must be validated against the
-  installed `groth16-solana` version.
-- Still stubbed: Token-2022 soulbound mint CPI (`issue_membership`) and the
-  donation transfer into the Squads treasury (`renew_membership`).
+
+- **Foundation, Circles, memberships, member voting, 4-of-7 recovery:** implemented & tested on
+  localnet (`anchor test`).
+- **ZK keys:** real **dev-ceremony** verifying keys are embedded (member vote, lineage, ack
+  disclosure). Production needs a multi-party ceremony.
+- **Open:** federation-wide vote aggregation (Phase 5 roadmap), coercion-resistant voting (MACI),
+  Token-2022 soulbound mint CPI, and donation-gated `renew_membership`. See `BACKLOG.md`.

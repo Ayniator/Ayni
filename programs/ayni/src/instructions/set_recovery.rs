@@ -14,10 +14,21 @@ pub fn set_recovery(
     require_cosign: bool,
 ) -> Result<()> {
     let membership = &mut ctx.accounts.membership;
-    require!(
-        membership.is_member_key(&ctx.accounts.member_authority.key()),
-        AyniError::Unauthorized
-    );
+    let who = ctx.accounts.member_authority.key();
+
+    // Rewriting guardians and toggling `require_cosign` is the highest-privilege
+    // membership action: a guardian able to do it could overwrite the OTHER
+    // guardians and flip `require_cosign` on to block the Council's recovery
+    // fallback — so a single stolen *backup* key could permanently hijack the
+    // membership. Therefore when an `owner` is set, ONLY the owner may call this.
+    // A fully-anonymous membership (owner == default) has no stronger key, so any
+    // guardian may seed/rotate its recovery config.
+    if membership.owner != Pubkey::default() {
+        require!(who == membership.owner, AyniError::Unauthorized);
+    } else {
+        require!(membership.is_member_key(&who), AyniError::Unauthorized);
+    }
+
     membership.recovery_keys = recovery_keys;
     membership.require_cosign = require_cosign;
     Ok(())

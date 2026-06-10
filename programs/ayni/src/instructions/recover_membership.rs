@@ -20,6 +20,11 @@ pub fn recover_membership(ctx: Context<RecoverMembership>) -> Result<()> {
         ProposalAction::MigrateWallet { old_wallet, new_wallet } => (*old_wallet, *new_wallet),
         _ => return err!(AyniError::WrongProposalAction),
     };
+    // Never rebind the zero wallet: a `MigrateWallet { old_wallet: default() }`
+    // would otherwise match every fully-anonymous membership (owner == default)
+    // and seize them all. `propose` already rejects this, but guard here too so
+    // the invariant holds regardless of how the proposal was created.
+    require!(old_wallet != Pubkey::default(), AyniError::WalletMismatch);
 
     let membership = &mut ctx.accounts.membership;
     require!(membership.owner == old_wallet, AyniError::WalletMismatch);

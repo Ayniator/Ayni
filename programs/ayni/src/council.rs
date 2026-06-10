@@ -114,6 +114,9 @@ pub struct Proposal {
     pub approvals: u8,
     pub executed: bool,
     pub cancelled: bool,
+    /// For `WithdrawTreasury`: set true once the lamports have actually moved, so
+    /// an executed proposal cannot be replayed to drain the treasury repeatedly.
+    pub drained: bool,
     pub created_at: i64,
     /// Earliest unix time the proposal may execute; 0 = not yet armed (threshold
     /// unmet). Set when approvals first reach threshold: `now` for RotateSeat,
@@ -124,7 +127,7 @@ pub struct Proposal {
 
 impl Proposal {
     pub const SPACE: usize =
-        8 + 32 + 8 + ProposalAction::MAX_SIZE + 1 + 1 + 1 + 8 + 8 + 1;
+        8 + 32 + 8 + ProposalAction::MAX_SIZE + 1 + 1 + 1 + 1 + 8 + 8 + 1;
 
     pub fn approval_count(&self) -> u8 {
         self.approvals.count_ones() as u8
@@ -138,19 +141,19 @@ impl Proposal {
         Ok(())
     }
 
-    /// Once approvals reach `threshold`, set `eligible_at`. Seat rotation is
-    /// reversible and arms immediately; wallet migration arms after the
-    /// contest window. Idempotent (only arms once).
+    /// Once approvals reach `threshold`, set `eligible_at`. EVERY action waits out
+    /// the contest window, so any single honest seat can `cancel_proposal` before
+    /// it executes. Idempotent (only arms once).
+    ///
+    /// Seat rotation is time-locked too (was instant): otherwise a 4-of-7 majority
+    /// could instantly rotate out the honest minority and *then* run a migration
+    /// or withdrawal with no seat left to contest it (the "purge-before-migrate"
+    /// escalation). With a uniform contest window the honest seats are still
+    /// present to cancel a hostile rotation.
     pub fn arm_if_ready(&mut self, threshold: u8, recovery_timelock: i64, now: i64) {
         if self.eligible_at == 0 && self.approval_count() >= threshold {
-            let delay = match &self.action {
-                // Irreversible changes wait out the contest window.
-                ProposalAction::MigrateWallet { .. } => recovery_timelock,
-                ProposalAction::WithdrawTreasury { .. } => recovery_timelock,
-                // Seat rotation is reversible and arms immediately.
-                ProposalAction::RotateSeat { .. } => 0,
-            };
-            self.eligible_at = now.saturating_add(delay).max(1);
+            // Uniform contest window for all high-stakes actions.
+            self.eligible_at = now.saturating_add(recovery_timelock).max(1);
         }
     }
 }
