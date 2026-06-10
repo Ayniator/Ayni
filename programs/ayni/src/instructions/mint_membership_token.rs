@@ -16,10 +16,10 @@ pub fn mint_membership_token(ctx: Context<MintMembershipToken>) -> Result<()> {
         AyniError::Unauthorized
     );
 
-    let world = circle.world_service;
+    let parent = circle.parent;
     let name = circle.name.clone();
     let bump = circle.bump;
-    let seeds: &[&[u8]] = &[b"circle", world.as_ref(), name.as_bytes(), &[bump]];
+    let seeds: &[&[u8]] = &[b"circle", parent.as_ref(), name.as_bytes(), &[bump]];
     let signer = &[seeds];
 
     let cpi = CpiContext::new_with_signer(

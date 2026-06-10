@@ -14,10 +14,15 @@ pub const DEFAULT_THRESHOLD: u8 = 4;
 /// Default contest window before a wallet migration may execute (7 days).
 pub const DEFAULT_RECOVERY_TIMELOCK: i64 = 7 * 24 * 60 * 60;
 
-/// Named functional seats; seats 3..=6 are elders (quorum / resilience only).
+/// Named seats. The Council IS the authority — there is no separate admin key.
+/// 3 functional servants + 4 elders of the four directions (medicine wheel).
 pub const SEAT_TREASURER: usize = 0;
 pub const SEAT_SECRETARY: usize = 1;
 pub const SEAT_RHYTHM_KEEPER: usize = 2;
+pub const SEAT_ELDER_NORTH: usize = 3;
+pub const SEAT_ELDER_EAST: usize = 4;
+pub const SEAT_ELDER_SOUTH: usize = 5;
+pub const SEAT_ELDER_WEST: usize = 6;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct Council {
@@ -51,6 +56,22 @@ impl Council {
         self.seats.iter().filter(|s| *s != &Pubkey::default()).count() as u8
     }
 
+    /// Require `who` to hold *some* seat (any of the 7 may act).
+    pub fn require_any_seat(&self, who: &Pubkey) -> Result<()> {
+        require!(self.seat_of(who).is_some(), AyniError::NotCouncilSeat);
+        Ok(())
+    }
+
+    /// Require `who` to hold the *specific* seat at `index` (e.g. the Secretary
+    /// admits members; the Treasurer stewards the mint).
+    pub fn require_seat(&self, who: &Pubkey, index: usize) -> Result<()> {
+        require!(
+            self.seats[index] != Pubkey::default() && &self.seats[index] == who,
+            AyniError::Unauthorized
+        );
+        Ok(())
+    }
+
     /// True if `who` already holds a seat other than `except`. Used to keep
     /// seats one-holder-each, so no wallet can occupy several seats (which would
     /// shrink the effective Council and could enable double approval across a
@@ -73,9 +94,9 @@ pub enum ProposalAction {
     RotateSeat { seat_index: u8, new_holder: Pubkey },
     /// Definitively migrate every artifact from `old_wallet` to `new_wallet`.
     MigrateWallet { old_wallet: Pubkey, new_wallet: Pubkey },
-    /// Rotate the Circle's `authority` (e.g. recover a lost/compromised admin or
-    /// hand it to a governance address). High-stakes ⇒ time-locked + contestable.
-    SetAuthority { new_authority: Pubkey },
+    /// Spend from the Circle treasury — group conscience over funds (Tradition 7).
+    /// High-stakes ⇒ time-locked + contestable, then drawn by `withdraw_treasury`.
+    WithdrawTreasury { amount: u64, recipient: Pubkey },
 }
 
 impl ProposalAction {
@@ -123,9 +144,9 @@ impl Proposal {
     pub fn arm_if_ready(&mut self, threshold: u8, recovery_timelock: i64, now: i64) {
         if self.eligible_at == 0 && self.approval_count() >= threshold {
             let delay = match &self.action {
-                // Irreversible / all-powerful changes wait out the contest window.
+                // Irreversible changes wait out the contest window.
                 ProposalAction::MigrateWallet { .. } => recovery_timelock,
-                ProposalAction::SetAuthority { .. } => recovery_timelock,
+                ProposalAction::WithdrawTreasury { .. } => recovery_timelock,
                 // Seat rotation is reversible and arms immediately.
                 ProposalAction::RotateSeat { .. } => 0,
             };

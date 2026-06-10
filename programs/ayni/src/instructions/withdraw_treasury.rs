@@ -1,12 +1,27 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
+use crate::council::{Proposal, ProposalAction};
+use crate::errors::AyniError;
 use crate::state::Circle;
 
-/// Withdraw SOL from a Circle's treasury to `recipient`. Authority-gated: in
-/// production the Circle `authority` is a Squads/Realms governance PDA, so the
-/// m-of-n (e.g. 4-of-7) lives there. The treasury PDA signs the transfer.
-pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>, amount: u64) -> Result<()> {
+/// Move SOL from a Circle's treasury, authorized by an executed 4-of-7
+/// `WithdrawTreasury` proposal (group conscience over funds, Tradition 7). The
+/// proposal pins `amount` + `recipient`; the treasury PDA signs the transfer.
+/// Permissionless to trigger once authorized.
+pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>) -> Result<()> {
+    let proposal = &ctx.accounts.proposal;
+    require!(proposal.executed, AyniError::ThresholdNotMet);
+
+    let (amount, recipient) = match &proposal.action {
+        ProposalAction::WithdrawTreasury { amount, recipient } => (*amount, *recipient),
+        _ => return err!(AyniError::WrongProposalAction),
+    };
+    require!(
+        ctx.accounts.recipient.key() == recipient,
+        AyniError::WalletMismatch
+    );
+
     let circle_key = ctx.accounts.circle.key();
     let bump = ctx.bumps.treasury;
     let seeds: &[&[u8]] = &[b"treasury", circle_key.as_ref(), &[bump]];
@@ -25,17 +40,17 @@ pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>, amount: u64) -> Result<
 
 #[derive(Accounts)]
 pub struct WithdrawTreasury<'info> {
-    #[account(has_one = authority)]
     pub circle: Account<'info, Circle>,
+
+    #[account(has_one = circle)]
+    pub proposal: Account<'info, Proposal>,
 
     #[account(mut, seeds = [b"treasury", circle.key().as_ref()], bump)]
     pub treasury: SystemAccount<'info>,
 
-    /// CHECK: any recipient of an authorized withdrawal.
+    /// CHECK: must equal the proposal's pinned recipient.
     #[account(mut)]
     pub recipient: UncheckedAccount<'info>,
-
-    pub authority: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }

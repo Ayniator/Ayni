@@ -14,6 +14,10 @@ pub fn initialize_lineage(
 ) -> Result<()> {
     // Must match the lineage_grant circuit's compiled depth, or proofs fail.
     require!(depth == merkle::CIRCUIT_DEPTH, AyniError::DepthTooLarge);
+    ctx.accounts
+        .circle
+        .council
+        .require_any_seat(&ctx.accounts.seat.key())?;
 
     let lineage = &mut ctx.accounts.lineage;
     lineage.circle = ctx.accounts.circle.key();
@@ -29,20 +33,20 @@ pub fn initialize_lineage(
 
 #[derive(Accounts)]
 pub struct InitializeLineage<'info> {
-    #[account(has_one = authority)]
     pub circle: Account<'info, Circle>,
 
     #[account(
         init,
-        payer = authority,
+        payer = seat,
         space = Lineage::SPACE,
         seeds = [b"lineage", circle.key().as_ref()],
         bump
     )]
     pub lineage: Account<'info, Lineage>,
 
+    /// Any Council seat (one-time setup; signs + pays).
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub seat: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }

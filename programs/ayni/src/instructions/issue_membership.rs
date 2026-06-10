@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 
+use crate::council::SEAT_SECRETARY;
 use crate::errors::AyniError;
 use crate::merkle;
 use crate::state::{Circle, Membership, MemberTree, PersonhoodCredential};
@@ -13,6 +14,12 @@ pub fn issue_membership(
 ) -> Result<()> {
     let clock = Clock::get()?;
     let circle = &mut ctx.accounts.circle;
+
+    // The Secretary admits members (records the rolls) — group conscience
+    // delegates routine issuance to that seat, revocable by Council rotation.
+    circle
+        .council
+        .require_seat(&ctx.accounts.secretary.key(), SEAT_SECRETARY)?;
 
     // Sybil gate: one human → one membership. Consume a (one-per-human)
     // PersonhoodCredential proven via `prove_personhood`.
@@ -60,12 +67,12 @@ pub fn issue_membership(
 #[derive(Accounts)]
 #[instruction(commitment: [u8; 32])]
 pub struct IssueMembership<'info> {
-    #[account(mut, has_one = authority)]
+    #[account(mut)]
     pub circle: Account<'info, Circle>,
 
     #[account(
         init,
-        payer = authority,
+        payer = secretary,
         space = Membership::SPACE,
         seeds = [b"membership", circle.key().as_ref(), commitment.as_ref()],
         bump
@@ -85,8 +92,9 @@ pub struct IssueMembership<'info> {
     #[account(mut)]
     pub personhood: Option<Account<'info, PersonhoodCredential>>,
 
+    /// Must be the Council's Secretary seat (signs + pays).
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub secretary: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }

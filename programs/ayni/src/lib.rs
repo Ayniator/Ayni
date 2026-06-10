@@ -28,16 +28,18 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 pub mod ayni {
     use super::*;
 
-    /// Create a new Circle (a local AHA group) under the World Service Circle.
-    /// `recovery_timelock` is the per-Circle contest window (seconds) a wallet
-    /// migration must wait after reaching 4-of-7 before it can execute.
+    /// Create a Circle and seat its 7-seat Council (the authority) in one tx.
+    /// `parent` is the Circle this nests under (the World Service address, or a
+    /// root for the foundation); `seats` are the 7 Council members.
     pub fn initialize_circle(
         ctx: Context<InitializeCircle>,
+        parent: Pubkey,
         name: String,
         membership_period: i64,
         recovery_timelock: i64,
+        seats: [Pubkey; crate::council::COUNCIL_SEATS],
     ) -> Result<()> {
-        instructions::initialize_circle(ctx, name, membership_period, recovery_timelock)
+        instructions::initialize_circle(ctx, parent, name, membership_period, recovery_timelock, seats)
     }
 
     /// Issue a soulbound yearly membership, identified by a ZK commitment.
@@ -66,9 +68,9 @@ pub mod ayni {
         instructions::donate(ctx, amount)
     }
 
-    /// Withdraw from the treasury (authority = the Circle's Squads/Realms m-of-n).
-    pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>, amount: u64) -> Result<()> {
-        instructions::withdraw_treasury(ctx, amount)
+    /// Move treasury SOL, authorized by an executed 4-of-7 WithdrawTreasury proposal.
+    pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>) -> Result<()> {
+        instructions::withdraw_treasury(ctx)
     }
 
     /// Register the Circle's Token-2022 NonTransferable (soulbound) membership mint.
@@ -137,15 +139,9 @@ pub mod ayni {
         instructions::prove_personhood(ctx, nullifier, proof_a, proof_b, proof_c)
     }
 
-    // --- Resilience: 7-seat Council, 4-of-7 recovery (see docs/resilience.md) ---
+    // --- The Council is the authority: 4-of-7 proposals (see docs/resilience.md) ---
 
-    /// Seat a Council member (bootstrap / governance path). Seats 0..2 are the
-    /// named servants (treasurer/secretary/rhythm keeper); 3..6 are elders.
-    pub fn appoint_seat(ctx: Context<AppointSeat>, seat_index: u8, holder: Pubkey) -> Result<()> {
-        instructions::appoint_seat(ctx, seat_index, holder)
-    }
-
-    /// A Council seat opens a proposal (RotateSeat or MigrateWallet).
+    /// A Council seat opens a proposal (RotateSeat / MigrateWallet / WithdrawTreasury).
     pub fn propose(ctx: Context<Propose>, nonce: u64, action: ProposalAction) -> Result<()> {
         instructions::propose(ctx, nonce, action)
     }

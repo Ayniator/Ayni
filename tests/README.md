@@ -37,6 +37,12 @@ accounts in one file = **8** (`resilience.ts`: provider + 7 seats).
 Members are **not** addresses — a member is a ZK commitment `Poseidon(secret)`;
 a relayer pays so the voter/shaman is never linked on-chain.
 
+The structure is two-tier: the **World Service** foundation at the top and many
+local **Circles** under it. Every governance role exists at both tiers, so in
+`test accounts.txt` they are prefixed **`World Service …`** (foundation) and
+**`Circle …`** (local). The World Service Root is the parent seed of every local
+Circle. The table below uses the generic role; read it as applying to either tier.
+
 | Address / role | Used for | Signs? |
 |---|---|---|
 | **`authority`** (provider; a Squads/Realms multisig in prod) | Circle admin: `initialize_*`, `appoint_seat`, issuance, `set_personhood`, treasury `withdraw` | yes |

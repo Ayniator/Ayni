@@ -8,13 +8,14 @@ use crate::council::Council;
 /// those tools do not provide.
 #[account]
 pub struct Circle {
-    /// The AHA World Service Circle authority this Circle forks under.
-    pub world_service: Pubkey,
-    /// Circle admin — typically a Realms/Squads governance PDA. Used to
-    /// bootstrap and seat the Council; ongoing changes go through the 4-of-7
-    /// proposal flow.
-    pub authority: Pubkey,
-    /// The 7-seat Council (3 named servants + 4 elders); threshold 4-of-7.
+    /// The parent Circle this one is nested under (the World Service Circle's
+    /// address, or a fixed root for the foundation itself). A PDA seed + the
+    /// federation link — never an actor. There is NO admin key: the **Council is
+    /// the authority** (group conscience), so a Circle is governed only by its
+    /// 7 seats.
+    pub parent: Pubkey,
+    /// The 7-seat Council (3 named servants + 4 elders) — the Circle's authority;
+    /// threshold 4-of-7.
     pub council: Council,
     /// Length of one membership term, in seconds (e.g. one year).
     pub membership_period: i64,
@@ -36,9 +37,8 @@ pub struct Circle {
 impl Circle {
     pub const MAX_NAME: usize = 32; // PDA seed components must be <= 32 bytes
     pub const SPACE: usize = 8        // account discriminator
-        + 32                           // world_service
-        + 32                           // authority
-        + Council::SPACE               // 7 seats + threshold
+        + 32                           // parent
+        + Council::SPACE               // 7 seats + threshold (the authority)
         + 8                            // membership_period
         + 8                            // member_count
         + 1                            // require_personhood

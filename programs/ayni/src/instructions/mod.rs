@@ -1,4 +1,3 @@
-pub mod appoint_seat;
 pub mod approve;
 pub mod cancel_proposal;
 pub mod cast_vote;
@@ -24,7 +23,6 @@ pub mod set_recovery;
 pub mod verify_disclosure;
 pub mod withdraw_treasury;
 
-pub use appoint_seat::*;
 pub use approve::*;
 pub use cancel_proposal::*;
 pub use cast_vote::*;

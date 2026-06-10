@@ -9,6 +9,10 @@ use crate::state::{Circle, MemberTree};
 pub fn initialize_member_tree(ctx: Context<InitializeMemberTree>, depth: u8) -> Result<()> {
     // Must match the member_vote circuit's compiled depth, or vote proofs fail.
     require!(depth == merkle::CIRCUIT_DEPTH, AyniError::DepthTooLarge);
+    ctx.accounts
+        .circle
+        .council
+        .require_any_seat(&ctx.accounts.seat.key())?;
     let circle_key = ctx.accounts.circle.key();
     let bump = ctx.bumps.member_tree;
     let t: &mut MemberTree = &mut ctx.accounts.member_tree;
@@ -20,20 +24,20 @@ pub fn initialize_member_tree(ctx: Context<InitializeMemberTree>, depth: u8) -> 
 
 #[derive(Accounts)]
 pub struct InitializeMemberTree<'info> {
-    #[account(has_one = authority)]
     pub circle: Account<'info, Circle>,
 
     #[account(
         init,
-        payer = authority,
+        payer = seat,
         space = MemberTree::SPACE,
         seeds = [b"members", circle.key().as_ref()],
         bump
     )]
     pub member_tree: Account<'info, MemberTree>,
 
+    /// Any Council seat (one-time setup; signs + pays).
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub seat: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }

@@ -1,77 +1,29 @@
-# Ayni — test accounts
-#
-# Fill in the wallets you control to run the tests against a real cluster
-# (devnet/mainnet) instead of localnet airdrops. Then tell Claude — it will wire
-# a config-driven runner that uses these instead of generating throwaways.
-#
-# Rules:
-#   - Lines with "keypair:" MUST sign  -> the file must exist AND the address
-#     must be FUNDED on the target cluster (devnet airdrops are rate-limited).
-#   - "address-only" roles never sign (pubkey is enough).
-#   - Do NOT paste secret keys here — give the PATH to the keypair .json file.
-#   - Leave blank for localnet (auto-generated + airdropped).
-#
-# See tests/README.md for the full role table.
-# ----------------------------------------------------------------------------
+Address	Role
 
-cluster:   devnet
-rpcUrl:
+== World Service Council (foundation — at top) ==
+	World Service Authority      (signs — needs keypair)
+AHAx0000000000000000000000000000000000000000	World Service Root           (address only — never signs)
+AHA4LV8metWgJrggsAuwi1WmHXtRn9cZ2dHffJvsscVr	World Service Council — Treasurer & Relayer    (signs — pays fees)
+AHAQjDz6KbRvJcju2Wa7FLceEEgSZ9Yaq3KiFGFFaXT8	World Service Council — Sribe Secretary        (signs)
+AHA3Ny4S9UrWz8VvJvPXr1Gy6k73zxh8L7TtvLtkooyh	World Service Council — Rhythm Keeper    (signs)
+AHAcwzarXqmeCM8UjNopagy1YHCHnwrcjvZU1btjjXzA	World Service Council — Elder North         (signs) Guardian 1
+AHAoLRoMWRxwQEJc7BWTQq2dRkMtwswrYpi6iaS2pWPA	World Service Council — Elder East          (signs) Guardian 2
+AHAtkLEFKENxHx4yJqGTgx8aE19WUDmFtvkVBLFHFy25	World Service Council — Elder South         (signs) Guardian 3
+AHAWUEbgwByKC1kpdLEWi29GmtjD4j8StGdoSBKZse1b	World Service Council — Elder East          (signs) Guardian 4
+                    
 
-# Circle admin — initialize_*, appoint_seat, issuance, set_personhood, withdraw.
-# (In production this is a Squads/Realms multisig.)
-authority:
-  address:
-  keypair:
+== Circle (local — many; repeat per circle) ==
+AHAxpb88qzKFNuN4uCD8UXXfXtzFAQU2wVjUWsKfFySj	Circle Council — Treasurer & Relayer   (signs)
+AHAYZpbUKPWjsCvwyqn5Y6dhV1MFcYWSVGYuNoU17MBV	Circle Council — Scribe Secretary    (signs — pays fees)
+AHAzEk8yWyMyLCzZYRTpbeeWHtw7qstg5uyt2Xti4wjC	Circle Council — Rhythm Keeper (signs)
+(none — ZK commitment)	Circle Member 1              (Poseidon(secret) — not a wallet)
+(none — ZK commitment)	Circle Member 2              (not a wallet)
 
-# Parent / root authority — PDA seed + governing root. ADDRESS ONLY (never signs).
-worldService:
-  address:
-
-# The 7-seat Council (sign propose/approve/cancel; a seat creates proposals).
-councilSeat0_treasurer:
-  address:
-  keypair:
-councilSeat1_secretary:
-  address:
-  keypair:
-councilSeat2_rhythmKeeper:
-  address:
-  keypair:
-councilSeat3_elder:
-  address:
-  keypair:
-councilSeat4_elder:
-  address:
-  keypair:
-councilSeat5_elder:
-  address:
-  keypair:
-councilSeat6_elder:
-  address:
-  keypair:
-
-# Optional member controlling wallet (disclosure / recovery target).
-# Leave blank for a fully anonymous member.
-memberOwner:
-  address:
-  keypair:
-
-# Up to two guardian keys (co-sign recover_membership / member_migrate / set_recovery).
-guardian1:
-  address:
-  keypair:
-guardian2:
-  address:
-  keypair:
-
-# Relayer — pays fees for ZK actions so the real actor isn't linked
-# (cast_vote, grant_level, prove_personhood). May equal `authority`.
-relayer:
-  address:
-  keypair:
-
-# ----------------------------------------------------------------------------
-# NOT provided by you (derived / not addresses):
-#   treasury        = PDA ["treasury", circle]
-#   membershipMint  = the Circle PDA (mint authority)
-#   members         = ZK commitments Poseidon(secret), not wallets — relayer pays
+# How to fill:
+#  - Replace every <paste address> with a base58 wallet address.
+#  - Rows marked "(signs ...)" ALSO need the keypair .json PATH to actually run
+#    on a cluster — append e.g.   keypair=/path/to/seat0.json   after the role,
+#    or hand me the paths separately. Address alone cannot sign.
+#  - "(none ...)" rows need nothing: Treasury is a PDA; Members are ZK commitments.
+#  - World Service Root is the parent seed for every local Circle.
+#  - Council = 7 seats (3 named servants + 4 elders), 4-of-7 to act.

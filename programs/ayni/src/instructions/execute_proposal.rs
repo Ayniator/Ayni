@@ -46,9 +46,9 @@ pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
                 }
             }
         }
-        ProposalAction::SetAuthority { new_authority } => {
-            // Recover/rotate the Circle authority (time-locked + contestable).
-            circle.authority = *new_authority;
+        ProposalAction::WithdrawTreasury { .. } => {
+            // Authorization only — the lamports move in `withdraw_treasury`,
+            // gated on this executed proposal (so the treasury PDA can sign).
         }
     }
 
