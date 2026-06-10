@@ -37,8 +37,8 @@ member_tree = ["members",    circle]
 lineage     = ["lineage",    circle]
 membership  = ["membership", circle,  commitment]
 proposal    = ["proposal",   circle,  nonce_le]      // Council 4-of-7
-memberprop  = ["memberprop", circle,  nonce_le]      // member vote   (see create_member_proposal.rs)
-nullifier   = ["nullifier",  proposal, nullifier]    // one vote per member
+memberprop  = ["mproposal",  circle,  nonce_le]      // member vote   (see create_member_proposal.rs)
+nullifier   = ["vote_nullifier", memberprop, nullifier]  // one vote per member
 treasury    = ["treasury",   circle]
 ```
 
@@ -158,7 +158,7 @@ commits to the off-chain text (e.g. `keccak(IPFS_CID)`).
 ```ts
 const nonce = 1n;
 const [mprop] = PublicKey.findProgramAddressSync(
-  [Buffer.from("memberprop"), circle.toBuffer(), u64le(nonce)], program.programId);
+  [Buffer.from("mproposal"), circle.toBuffer(), u64le(nonce)], program.programId);
 
 await program.methods.createMemberProposal(new BN(nonce), descriptionHash, SEVEN_DAYS)
   .accounts({ circle, memberTree: circleMembers, proposal: mprop,
@@ -175,7 +175,7 @@ const { proofA, proofB, proofC, nullifier } =
   await proveVote({ secret, choice: true, memberRoot, proposalNonce: nonce, tree });  // app/voting/prove.ts
 
 const [nul] = PublicKey.findProgramAddressSync(
-  [Buffer.from("nullifier"), mprop.toBuffer(), nullifier], program.programId);
+  [Buffer.from("vote_nullifier"), mprop.toBuffer(), nullifier], program.programId);
 
 await program.methods.castVote(true, nullifier, proofA, proofB, proofC)
   .accounts({ proposal: mprop, voteNullifier: nul, payer: relayer.publicKey,

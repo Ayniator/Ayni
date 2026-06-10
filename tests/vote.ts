@@ -11,13 +11,15 @@ describe("ayni — anonymous member voting (ZK)", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
   const program = anchor.workspace.Ayni as Program<Ayni>;
-  const authority = provider.wallet as anchor.Wallet;
-  const worldService = anchor.web3.Keypair.generate().publicKey;
+  const payer = provider.wallet as anchor.Wallet;
+  const parent = anchor.web3.Keypair.generate().publicKey;
   const name = "vote-circle";
-  const seat0 = anchor.web3.Keypair.generate();
+
+  const seats = Array.from({ length: 7 }, () => anchor.web3.Keypair.generate());
+  const SECRETARY = 1;
 
   const [circlePda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("circle"), worldService.toBuffer(), Buffer.from(name)],
+    [Buffer.from("circle"), parent.toBuffer(), Buffer.from(name)],
     program.programId
   );
   const [memberTreePda] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -25,23 +27,25 @@ describe("ayni — anonymous member voting (ZK)", () => {
     program.programId
   );
 
+  before(async () => {
+    await Promise.all(
+      seats.map(async (s) => {
+        const sig = await provider.connection.requestAirdrop(s.publicKey, 1e9);
+        await provider.connection.confirmTransaction(sig);
+      })
+    );
+  });
+
   it("issues a member; off-chain & on-chain Poseidon roots match", async () => {
     await program.methods
-      .initializeCircle(name, new anchor.BN(365 * 24 * 60 * 60), new anchor.BN(0))
-      .accounts({ circle: circlePda, worldService, authority: authority.publicKey })
+      .initializeCircle(parent, name, new anchor.BN(365 * 24 * 60 * 60), new anchor.BN(0), seats.map((s) => s.publicKey))
+      .accounts({ circle: circlePda, parent, payer: payer.publicKey })
       .rpc();
     await program.methods
       .initializeMemberTree(20)
-      .accounts({ circle: circlePda, memberTree: memberTreePda, authority: authority.publicKey })
+      .accounts({ circle: circlePda, memberTree: memberTreePda, seat: seats[0].publicKey })
+      .signers([seats[0]])
       .rpc();
-    await program.methods
-      .appointSeat(0, seat0.publicKey)
-      .accounts({ circle: circlePda, authority: authority.publicKey })
-      .rpc();
-    // seat0 signs + pays for create_member_proposal → fund it
-    await provider.connection.confirmTransaction(
-      await provider.connection.requestAirdrop(seat0.publicKey, 1e9)
-    );
 
     // off-chain: secret -> commitment = Poseidon(secret) -> leaf in mirror tree
     const tree = await MemberTree.create(20);
@@ -59,7 +63,14 @@ describe("ayni — anonymous member voting (ZK)", () => {
     );
     await program.methods
       .issueMembership([...commitmentBytes], anchor.web3.PublicKey.default, [anchor.web3.PublicKey.default, anchor.web3.PublicKey.default], false)
-      .accounts({ circle: circlePda, membership: membershipPda, memberTree: memberTreePda, personhood: null, authority: authority.publicKey })
+      .accounts({
+        circle: circlePda,
+        membership: membershipPda,
+        memberTree: memberTreePda,
+        personhood: null,
+        secretary: seats[SECRETARY].publicKey,
+      })
+      .signers([seats[SECRETARY]])
       .rpc();
 
     const mt = await program.account.memberTree.fetch(memberTreePda);
@@ -81,8 +92,8 @@ describe("ayni — anonymous member voting (ZK)", () => {
     const descriptionHash = Buffer.alloc(32, 7);
     await program.methods
       .createMemberProposal(new anchor.BN(nonce), [...descriptionHash], new anchor.BN(3600))
-      .accounts({ circle: circlePda, memberTree: memberTreePda, proposal: proposalPda, proposer: seat0.publicKey })
-      .signers([seat0])
+      .accounts({ circle: circlePda, memberTree: memberTreePda, proposal: proposalPda, proposer: seats[0].publicKey })
+      .signers([seats[0]])
       .rpc();
 
     // generate the proof (proposalId == nonce)
@@ -94,7 +105,7 @@ describe("ayni — anonymous member voting (ZK)", () => {
     );
     await program.methods
       .castVote(true, nullifier, proofA, proofB, proofC)
-      .accounts({ proposal: proposalPda, voteNullifier: voteNullifierPda, payer: authority.publicKey })
+      .accounts({ proposal: proposalPda, voteNullifier: voteNullifierPda, payer: payer.publicKey })
       .rpc();
 
     const p = await program.account.memberProposal.fetch(proposalPda);
@@ -120,7 +131,7 @@ describe("ayni — anonymous member voting (ZK)", () => {
     try {
       await program.methods
         .castVote(true, nullifier, proofA, proofB, proofC)
-        .accounts({ proposal: proposalPda, voteNullifier: voteNullifierPda, payer: authority.publicKey })
+        .accounts({ proposal: proposalPda, voteNullifier: voteNullifierPda, payer: payer.publicKey })
         .rpc();
     } catch {
       threw = true;

@@ -68,6 +68,13 @@ pub mod ayni {
         instructions::donate(ctx, amount)
     }
 
+    /// Donate any SPL / Token-2022 token to a Circle's treasury (anyone, any
+    /// amount). For the foundation, pass the foundation Circle — see the
+    /// `fundFoundation` client helper.
+    pub fn donate_token(ctx: Context<DonateToken>, amount: u64) -> Result<()> {
+        instructions::donate_token(ctx, amount)
+    }
+
     /// Move treasury SOL, authorized by an executed 4-of-7 WithdrawTreasury proposal.
     pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>) -> Result<()> {
         instructions::withdraw_treasury(ctx)

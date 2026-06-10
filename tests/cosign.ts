@@ -9,15 +9,16 @@ describe("ayni — member co-signature & self-recovery", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
   const program = anchor.workspace.Ayni as Program<Ayni>;
-  const authority = provider.wallet as anchor.Wallet;
-  const worldService = anchor.web3.Keypair.generate().publicKey;
+  const payer = provider.wallet as anchor.Wallet;
+  const parent = anchor.web3.Keypair.generate().publicKey;
   const name = "cosign-circle";
 
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  const seats = Array.from({ length: 4 }, () => anchor.web3.Keypair.generate());
+  // 7 seats (the Council is seated at creation); threshold is 4-of-7.
+  const seats = Array.from({ length: 7 }, () => anchor.web3.Keypair.generate());
+  const SECRETARY = 1;
 
   const [circlePda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("circle"), worldService.toBuffer(), Buffer.from(name)],
+    [Buffer.from("circle"), parent.toBuffer(), Buffer.from(name)],
     program.programId
   );
   const proposalPda = (n: number) =>
@@ -35,6 +36,19 @@ describe("ayni — member co-signature & self-recovery", () => {
     program.programId
   );
 
+  const issue = (commitment: Buffer, owner: anchor.web3.PublicKey, guardians: anchor.web3.PublicKey[], cosign: boolean) =>
+    program.methods
+      .issueMembership([...commitment], owner, guardians, cosign)
+      .accounts({
+        circle: circlePda,
+        membership: membershipPda(commitment),
+        memberTree: memberTreePda,
+        personhood: null,
+        secretary: seats[SECRETARY].publicKey,
+      })
+      .signers([seats[SECRETARY]])
+      .rpc();
+
   before(async () => {
     await Promise.all(
       seats.map(async (s) => {
@@ -43,19 +57,14 @@ describe("ayni — member co-signature & self-recovery", () => {
       })
     );
     await program.methods
-      .initializeCircle(name, new anchor.BN(365 * 24 * 60 * 60), new anchor.BN(0)) // no time-lock
-      .accounts({ circle: circlePda, worldService, authority: authority.publicKey })
+      .initializeCircle(parent, name, new anchor.BN(365 * 24 * 60 * 60), new anchor.BN(0), seats.map((s) => s.publicKey)) // no time-lock
+      .accounts({ circle: circlePda, parent, payer: payer.publicKey })
       .rpc();
     await program.methods
       .initializeMemberTree(20)
-      .accounts({ circle: circlePda, memberTree: memberTreePda, authority: authority.publicKey })
+      .accounts({ circle: circlePda, memberTree: memberTreePda, seat: seats[0].publicKey })
+      .signers([seats[0]])
       .rpc();
-    for (let i = 0; i < 4; i++) {
-      await program.methods
-        .appointSeat(i, seats[i].publicKey)
-        .accounts({ circle: circlePda, authority: authority.publicKey })
-        .rpc();
-    }
   });
 
   it("blocks council-only migration of a require_cosign membership, allows it with either guardian", async () => {
@@ -71,10 +80,7 @@ describe("ayni — member co-signature & self-recovery", () => {
     );
 
     // require_cosign = true, two guardians (1-of-2)
-    await program.methods
-      .issueMembership([...commitment], memberOwner, [guardian1.publicKey, guardian2.publicKey], true)
-      .accounts({ circle: circlePda, membership, memberTree: memberTreePda, personhood: null, authority: authority.publicKey })
-      .rpc();
+    await issue(commitment, memberOwner, [guardian1.publicKey, guardian2.publicKey], true);
 
     // Council reaches 4/7 to migrate memberOwner -> newWallet and executes.
     const nonce = 1;
@@ -102,7 +108,7 @@ describe("ayni — member co-signature & self-recovery", () => {
     try {
       await program.methods
         .recoverMembership()
-        .accounts({ circle: circlePda, proposal, membership, memberAuthority: null, payer: authority.publicKey })
+        .accounts({ circle: circlePda, proposal, membership, memberAuthority: null, payer: payer.publicKey })
         .rpc();
     } catch {
       threw = true;
@@ -112,7 +118,7 @@ describe("ayni — member co-signature & self-recovery", () => {
     // The SECOND guardian co-signs (proves 1-of-2 redundancy) — it succeeds.
     await program.methods
       .recoverMembership()
-      .accounts({ circle: circlePda, proposal, membership, memberAuthority: guardian2.publicKey, payer: authority.publicKey })
+      .accounts({ circle: circlePda, proposal, membership, memberAuthority: guardian2.publicKey, payer: payer.publicKey })
       .signers([guardian2])
       .rpc();
 
@@ -130,10 +136,7 @@ describe("ayni — member co-signature & self-recovery", () => {
       await provider.connection.requestAirdrop(owner.publicKey, 1e9)
     );
 
-    await program.methods
-      .issueMembership([...commitment], owner.publicKey, [anchor.web3.PublicKey.default, anchor.web3.PublicKey.default], false)
-      .accounts({ circle: circlePda, membership, memberTree: memberTreePda, personhood: null, authority: authority.publicKey })
-      .rpc();
+    await issue(commitment, owner.publicKey, [anchor.web3.PublicKey.default, anchor.web3.PublicKey.default], false);
 
     await program.methods
       .memberMigrate(fresh)

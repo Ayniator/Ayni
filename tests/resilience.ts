@@ -3,22 +3,24 @@ import { Program } from "@coral-xyz/anchor";
 import { Ayni } from "../target/types/ayni";
 import { assert } from "chai";
 
-// Exercises the 7-seat Council 4-of-7 flow, the migration time-lock, and the
+// Exercises the 7-seat Council 4-of-7 flow, the contest-window time-lock, and the
 // any-seat contest. No ZK involved, so this runs as a normal anchor test.
+// NOTE: after the security fixes, EVERY action (RotateSeat included) waits out
+// the contest window, so a hostile majority can't purge-then-migrate uncontested.
 describe("ayni — resilience (7-seat Council, 4-of-7, time-lock, contest)", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
   const program = anchor.workspace.Ayni as Program<Ayni>;
-  const authority = provider.wallet as anchor.Wallet;
-  const worldService = anchor.web3.Keypair.generate().publicKey;
+  const payer = provider.wallet as anchor.Wallet;
+  const parent = anchor.web3.Keypair.generate().publicKey;
   const name = "resilience-circle";
   const TIMELOCK = 2; // seconds — short so the test can wait it out
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   const [circlePda] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("circle"), worldService.toBuffer(), Buffer.from(name)],
+    [Buffer.from("circle"), parent.toBuffer(), Buffer.from(name)],
     program.programId
   );
 
@@ -53,19 +55,12 @@ describe("ayni — resilience (7-seat Council, 4-of-7, time-lock, contest)", () 
     );
 
     await program.methods
-      .initializeCircle(name, new anchor.BN(365 * 24 * 60 * 60), new anchor.BN(TIMELOCK))
-      .accounts({ circle: circlePda, worldService, authority: authority.publicKey })
+      .initializeCircle(parent, name, new anchor.BN(365 * 24 * 60 * 60), new anchor.BN(TIMELOCK), seats.map((s) => s.publicKey))
+      .accounts({ circle: circlePda, parent, payer: payer.publicKey })
       .rpc();
-
-    for (let i = 0; i < 7; i++) {
-      await program.methods
-        .appointSeat(i, seats[i].publicKey)
-        .accounts({ circle: circlePda, authority: authority.publicKey })
-        .rpc();
-    }
   });
 
-  it("rotates a seat with exactly 4 approvals (immediate, no time-lock)", async () => {
+  it("rotates a seat at 4-of-7, but only after the contest window (no instant purge)", async () => {
     const nonce = 1;
     const proposal = proposalPda(nonce);
     const newHolder = anchor.web3.Keypair.generate().publicKey;
@@ -84,11 +79,18 @@ describe("ayni — resilience (7-seat Council, 4-of-7, time-lock, contest)", () 
     try { await execute(proposal, seats[0]); } catch { threw = true; }
     assert.isTrue(threw, "should not execute below threshold");
 
-    await approveBy(proposal, 3); // 4/7 → armed immediately (rotation)
+    await approveBy(proposal, 3); // 4/7 → armed WITH the contest window
+
+    // within the window: rotation must NOT execute yet (the security fix)
+    threw = false;
+    try { await execute(proposal, seats[0]); } catch { threw = true; }
+    assert.isTrue(threw, "rotation must wait out the contest window");
+
+    await sleep((TIMELOCK + 1) * 1000);
     await execute(proposal, seats[0]);
 
     const circle = await program.account.circle.fetch(circlePda);
-    assert.ok(circle.council.seats[6].equals(newHolder), "seat 6 rotated");
+    assert.ok(circle.council.seats[6].equals(newHolder), "seat 6 rotated after the window");
   });
 
   it("holds a wallet migration for the time-lock, then executes (4/7)", async () => {
