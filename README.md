@@ -60,34 +60,7 @@ every member stays **anonymous by default** through zero-knowledge proofs.
 
 ---
 
-## 🚀 Quick start
-
-> Prereqs: **Rust**, **Solana/Agave CLI 2.x**, **Anchor 0.31.1**, **Node 20+**, and (for proofs)
-> **circom 2.1** + **snarkjs**.
-
-```bash
-# 1. clone
-git clone https://github.com/Ayniator/Ayni.git && cd Ayni
-
-# 2. install JS deps (proving helpers + tests)
-npm install
-
-# 3. build the on-chain program
-anchor build
-
-# 4. run the test suite (localnet: memberships, 4-of-7 recovery, a real ZK vote round-trip)
-anchor test
-```
-
-That's the whole first-run. The tests stand up a Circle, issue anonymous memberships, run a 4-of-7
-recovery, and verify a real Groth16 vote proof on-chain (and reject a replayed nullifier).
-
-To stand up your own fellowship and run all four kinds of vote, follow
-**[IMPLEMENTATION.md](IMPLEMENTATION.md)** step by step.
-
----
-
-## How it fits together
+## 💡 How it fits together
 
 Read it like a tree — the people are the canopy at the top, the Circles are the
 branches, and the World Service Circle is the trunk and roots at the base:
@@ -117,7 +90,7 @@ branches, and the World Service Circle is the trunk and roots at the base:
   Circle creation, but does **not** override local group conscience. The link is a *federation link*,
   not a chain of command.
 
-## Who does what — the 7-seat Council
+## 🎩 Who does what — the 7-seat Council
 
 ```
                           THE COUNCIL  (7 seats · acts by 4-of-7 · IS the authority)
@@ -159,6 +132,33 @@ The four kinds of decision Ayni supports, and where each lives:
 | **Recovery / treasury** | the 7-seat Council | 4-of-7 proposal + contest window |
 
 Worked, copy-pasteable walkthroughs for all of these are in **[IMPLEMENTATION.md](IMPLEMENTATION.md)**.
+
+---
+
+## 🚀 Quick start
+
+> Prereqs: **Rust**, **Solana/Agave CLI 2.x**, **Anchor 0.31.1**, **Node 20+**, and (for proofs)
+> **circom 2.1** + **snarkjs**.
+
+```bash
+# 1. clone
+git clone https://github.com/Ayniator/Ayni.git && cd Ayni
+
+# 2. install JS deps (proving helpers + tests)
+npm install
+
+# 3. build the on-chain program
+anchor build
+
+# 4. run the test suite (localnet: memberships, 4-of-7 recovery, a real ZK vote round-trip)
+anchor test
+```
+
+That's the whole first-run. The tests stand up a Circle, issue anonymous memberships, run a 4-of-7
+recovery, and verify a real Groth16 vote proof on-chain (and reject a replayed nullifier).
+
+To stand up your own fellowship and run all four kinds of vote, follow
+**[IMPLEMENTATION.md](IMPLEMENTATION.md)** step by step.
 
 ---
 
