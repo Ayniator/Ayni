@@ -22,10 +22,12 @@ selectively-disclosable lineage credentials.
 
 ## What is Ayni?
 
-Ayni is the Solana implementation of **AHA (Ancestral Humanity Anonymous)** — a chain-agnostic
-template for worldwide fellowships modeled on the AA / 12-step traditions. It gives any group a
-ready-made way to **admit members, hold a treasury, decide by group conscience, and recover from
-lost keys** — while every member stays **anonymous by default** through zero-knowledge proofs.
+Ayni is the Solana implementation of an **anonymous Decentralised Autonomous Organisation (DAO)** —
+originally designed to meet the needs of **AHA (Ancestral Humanity Anonymous)**, but open to any
+organisation. At its essence it is a chain-agnostic template for worldwide fellowships, modeled on
+the century-proven success of the **AA / 12-step traditions**. It gives any group a ready-made way to
+**admit members, hold a treasury, decide by group conscience, and recover from lost keys** — while
+every member stays **anonymous by default** through zero-knowledge proofs.
 
 - **What it does** — runs a membership fellowship on-chain: soulbound yearly memberships,
   anonymous one-member-one-vote, a donation-only treasury, and a 7-seat Council with 4-of-7 key
@@ -91,20 +93,20 @@ Read it like a tree — the people are the canopy at the top, the Circles are th
 branches, and the World Service Circle is the trunk and roots at the base:
 
 ```
-      ● ● ●                ● ● ●                ● ● ●          members — anonymous
-      \ | /                \ | /                \ | /          ZK commitments
-  ┌─────┬─────┐        ┌─────┬─────┐        ┌─────┬─────┐      (one member, one vote)
-  │   Cusco   │        │  Lisbon   │        │  Berlin   │
-  │ Council 7 │        │ Council 7 │        │ Council 7 │  …   autonomous local groups
-  └─────┴─────┘        └─────┴─────┘        └─────┴─────┘      = the branches (own
-        └────────────────────┬────────────────────┘            treasury, votes, Council)
-                             │   every Circle is forked from one shared template
-              ┌──────────────┴──────────────┐
-              │     WORLD SERVICE CIRCLE     │   the trunk / root ("foundation"):
-              │  template · shared docs ·    │   holds the 12 Steps, the Preamble,
-              │    "12 Steps" & Preamble     │   and a 7-seat Council (4-of-7) that
-              │     7-seat Council · 4/7     │   coordinates but does NOT govern
-              └─────────────────────────────┘
+ member member member      member member member      member member member     ← the members
+ (anon) (anon) (anon)      (anon) (anon) (anon)      (anon) (anon) (anon)         (anonymous,
+    \      |      /          \      |      /          \      |      /              one member,
+     ┌─────┬─────┐            ┌─────┬─────┐            ┌─────┬─────┐               one vote)
+     │   Cusco   │            │  Lisbon   │            │  Berlin   │
+     │ Council 7 │            │ Council 7 │            │ Council 7 │   …        ← Circles: the
+     └─────┴─────┘            └─────┴─────┘            └─────┴─────┘               branches
+           └────────────────────────┬────────────────────────┘
+                                    │   every Circle is forked from one shared template
+                     ┌───────────────┴───────────────┐
+                     │     WORLD SERVICE CIRCLE       │   ← the trunk / root ("foundation"):
+                     │   12 Steps · Preamble · docs   │      holds the shared template + a
+                     │    7-seat Council · 4-of-7     │      Council (4/7) that coordinates
+                     └───────────────────────────────┘      but does NOT govern
 ```
 
 - **Members (the canopy)** — each joins a Circle's member set as an anonymous commitment and acts
