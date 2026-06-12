@@ -162,3 +162,6 @@ build/*.ptau
 build/*_0.zkey
 build/*.r1cs
 build/*.sym
+
+# graphify knowledge-graph cache (generated)
+graphify-out/

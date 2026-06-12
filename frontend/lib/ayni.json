@@ -1,0 +1,3132 @@
+{
+  "address": "3ogteUFYhbHaV7UEWuGCqGVm1X4HDgAswvSePvDspHCw",
+  "metadata": {
+    "name": "ayni",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Ayni — Solana implementation of AHA (Ancestral Humanity Anonymous)"
+  },
+  "instructions": [
+    {
+      "name": "approve",
+      "docs": [
+        "A Council seat approves a pending proposal."
+      ],
+      "discriminator": [
+        69,
+        74,
+        217,
+        36,
+        115,
+        117,
+        97,
+        76
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "seat",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_proposal",
+      "docs": [
+        "Any single Council seat cancels a pending proposal (the contest tripwire)."
+      ],
+      "discriminator": [
+        106,
+        74,
+        128,
+        146,
+        19,
+        65,
+        39,
+        23
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "seat",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cast_vote",
+      "docs": [
+        "Cast one anonymous ballot (ZK member-set inclusion + per-proposal nullifier)."
+      ],
+      "discriminator": [
+        20,
+        212,
+        15,
+        189,
+        69,
+        180,
+        69,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "vote_nullifier",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101,
+                  95,
+                  110,
+                  117,
+                  108,
+                  108,
+                  105,
+                  102,
+                  105,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              },
+              {
+                "kind": "arg",
+                "path": "nullifier"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "A relayer pays so the voter's wallet is never linked to the ballot."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "choice",
+          "type": "bool"
+        },
+        {
+          "name": "nullifier",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_member_proposal",
+      "docs": [
+        "A Council seat opens a group-conscience proposal for the membership."
+      ],
+      "discriminator": [
+        239,
+        200,
+        176,
+        255,
+        88,
+        55,
+        188,
+        188
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "member_tree"
+          ]
+        },
+        {
+          "name": "member_tree",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "description_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "voting_period",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "donate",
+      "docs": [
+        "Donate SOL to a Circle's treasury (anyone may contribute)."
+      ],
+      "discriminator": [
+        121,
+        186,
+        218,
+        211,
+        73,
+        70,
+        196,
+        180
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "donor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "donate_token",
+      "docs": [
+        "Donate any SPL / Token-2022 token to a Circle's treasury (anyone, any",
+        "amount). For the foundation, pass the foundation Circle — see the",
+        "`fundFoundation` client helper."
+      ],
+      "discriminator": [
+        25,
+        216,
+        125,
+        238,
+        108,
+        3,
+        44,
+        126
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "The Circle treasury PDA — the owner/authority of the treasury token",
+            "account. A plain account here (it only needs to be a valid owner pubkey)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "treasury_token_account",
+          "docs": [
+            "The treasury's token account for `mint`, owned by the treasury PDA. The",
+            "client creates it idempotently (associated token account) before/with the",
+            "donation; here we only require it belongs to the treasury for this mint."
+          ],
+          "writable": true
+        },
+        {
+          "name": "donor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "donor_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute_proposal",
+      "docs": [
+        "Execute a proposal once it reaches 4-of-7 (and, for migration, once the",
+        "contest window has elapsed)."
+      ],
+      "discriminator": [
+        186,
+        60,
+        116,
+        133,
+        108,
+        128,
+        111,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "writable": true,
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "executor",
+          "docs": [
+            "Anyone may trigger execution once the threshold is met."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "finalize_member_proposal",
+      "docs": [
+        "Close voting and record the group conscience (quorum + majority)."
+      ],
+      "discriminator": [
+        150,
+        92,
+        226,
+        122,
+        4,
+        70,
+        218,
+        188
+      ],
+      "accounts": [
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "finalizer",
+          "docs": [
+            "Anyone may finalize once the deadline has passed."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "grant_level",
+      "docs": [
+        "Grant a shamanic level along an anonymous, ZK-verified lineage."
+      ],
+      "discriminator": [
+        190,
+        149,
+        45,
+        132,
+        185,
+        77,
+        5,
+        50
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "lineage",
+            "membership"
+          ]
+        },
+        {
+          "name": "lineage",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  110,
+                  101,
+                  97,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "grantee_commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nullifier_record",
+          "docs": [
+            "Spent-nullifier marker. `init` fails if it already exists → replay-proof."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  108,
+                  108,
+                  105,
+                  102,
+                  105,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lineage"
+              },
+              {
+                "kind": "arg",
+                "path": "nullifier"
+              }
+            ]
+          }
+        },
+        {
+          "name": "level_grant",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "A relayer pays so the granting shaman's wallet never touches the chain,",
+            "preserving issuer anonymity (docs/zk-lineage.md — metadata caveat)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "granted_level",
+          "type": "u8"
+        },
+        {
+          "name": "grantee_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nullifier",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_circle",
+      "docs": [
+        "Create a Circle and seat its 7-seat Council (the authority) in one tx.",
+        "`parent` is the Circle this nests under (the World Service address, or a",
+        "root for the foundation); `seats` are the 7 Council members."
+      ],
+      "discriminator": [
+        165,
+        209,
+        84,
+        125,
+        187,
+        103,
+        98,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  114,
+                  99,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "parent"
+              },
+              {
+                "kind": "arg",
+                "path": "name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "parent"
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "parent",
+          "type": "pubkey"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "membership_period",
+          "type": "i64"
+        },
+        {
+          "name": "recovery_timelock",
+          "type": "i64"
+        },
+        {
+          "name": "seats",
+          "type": {
+            "array": [
+              "pubkey",
+              7
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_lineage",
+      "docs": [
+        "Bootstrap a Circle's lineage tree with the World Service genesis credential."
+      ],
+      "discriminator": [
+        75,
+        163,
+        150,
+        38,
+        21,
+        209,
+        138,
+        24
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "lineage",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  110,
+                  101,
+                  97,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (one-time setup; signs + pays)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "depth",
+          "type": "u8"
+        },
+        {
+          "name": "genesis_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "genesis_level",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "initialize_member_tree",
+      "docs": [
+        "Create the Circle's member-set tree (votable population). Run once."
+      ],
+      "discriminator": [
+        103,
+        229,
+        136,
+        187,
+        116,
+        143,
+        21,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "member_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (one-time setup; signs + pays)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "depth",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "issue_acknowledgment",
+      "docs": [
+        "Issue an acknowledgment credential (course/initiation certificate),",
+        "attested by an anonymous lineage teacher. Stores only the Poseidon root",
+        "of the four blinded fields; selective disclosure happens off-chain via",
+        "`circuits/ack_disclose.circom`. Reuses the lineage verifying key."
+      ],
+      "discriminator": [
+        246,
+        0,
+        99,
+        176,
+        113,
+        193,
+        159,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "lineage",
+            "membership"
+          ]
+        },
+        {
+          "name": "lineage",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  110,
+                  101,
+                  97,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "membership",
+          "docs": [
+            "Binds the credential to an existing member of this circle."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "member_commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "acknowledgment",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "ack_root"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ack_nullifier",
+          "docs": [
+            "Spent-nullifier marker (distinct namespace from level-grant nullifiers)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  99,
+                  107,
+                  95,
+                  110,
+                  117,
+                  108,
+                  108,
+                  105,
+                  102,
+                  105,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lineage"
+              },
+              {
+                "kind": "arg",
+                "path": "nullifier"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "A relayer pays so the attesting teacher's wallet never touches the chain."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "ack_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "member_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "attest_level",
+          "type": "u8"
+        },
+        {
+          "name": "nullifier",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "issue_membership",
+      "docs": [
+        "Issue a soulbound yearly membership, identified by a ZK commitment.",
+        "`owner` is an optional controlling wallet (default() = fully anonymous);",
+        "`recovery_keys` up to two optional guardians; `require_cosign` opts into",
+        "member-co-signed migration."
+      ],
+      "discriminator": [
+        249,
+        56,
+        118,
+        255,
+        30,
+        18,
+        140,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "writable": true,
+          "relations": [
+            "member_tree"
+          ]
+        },
+        {
+          "name": "membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "personhood",
+          "docs": [
+            "Required only when `circle.require_personhood`: a one-per-human",
+            "`PersonhoodCredential` (from `prove_personhood`), consumed here."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "secretary",
+          "docs": [
+            "Must be the Council's Secretary seat (signs + pays)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "type": "pubkey"
+        },
+        {
+          "name": "recovery_keys",
+          "type": {
+            "array": [
+              "pubkey",
+              2
+            ]
+          }
+        },
+        {
+          "name": "require_cosign",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "member_migrate",
+      "docs": [
+        "Self-recovery: a member holding a key migrates their own membership owner",
+        "with no Council vote and no time-lock."
+      ],
+      "discriminator": [
+        83,
+        42,
+        79,
+        235,
+        2,
+        243,
+        70,
+        228
+      ],
+      "accounts": [
+        {
+          "name": "membership",
+          "writable": true
+        },
+        {
+          "name": "member_authority",
+          "docs": [
+            "The member's current `owner` or `recovery_key`."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "mint_membership_token",
+      "docs": [
+        "Mint one soulbound membership token to a member's Token-2022 account."
+      ],
+      "discriminator": [
+        28,
+        55,
+        110,
+        237,
+        220,
+        154,
+        64,
+        30
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "member_token_account",
+          "docs": [
+            "The member's Token-2022 account (created by the client beforehand)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "treasurer",
+          "docs": [
+            "Must be the Council's Treasurer seat (authorizes the mint)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "propose",
+      "docs": [
+        "A Council seat opens a proposal (RotateSeat / MigrateWallet / WithdrawTreasury)."
+      ],
+      "discriminator": [
+        93,
+        253,
+        82,
+        168,
+        118,
+        33,
+        102,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "action",
+          "type": {
+            "defined": {
+              "name": "ProposalAction"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prove_personhood",
+      "docs": [
+        "Mint a one-per-human PersonhoodCredential from an anonymous proof."
+      ],
+      "discriminator": [
+        143,
+        221,
+        31,
+        1,
+        189,
+        42,
+        157,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "personhood",
+          "docs": [
+            "Unique per human per Circle (seeded by the personhood nullifier) — `init`",
+            "fails on a second attempt by the same human."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  115,
+                  111,
+                  110,
+                  104,
+                  111,
+                  111,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "nullifier"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nullifier",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "recover_membership",
+      "docs": [
+        "Rebind a membership's owner under an executed MigrateWallet proposal",
+        "(with the member's co-signature when the membership requires it)."
+      ],
+      "discriminator": [
+        63,
+        19,
+        104,
+        134,
+        66,
+        87,
+        181,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "proposal",
+            "membership"
+          ]
+        },
+        {
+          "name": "proposal"
+        },
+        {
+          "name": "membership",
+          "writable": true
+        },
+        {
+          "name": "member_authority",
+          "docs": [
+            "Required only when `membership.require_cosign`: the member's `owner` or",
+            "`recovery_key`. Omitted (None) for council-only recovery."
+          ],
+          "signer": true,
+          "optional": true
+        },
+        {
+          "name": "payer",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "renew_membership",
+      "docs": [
+        "Renew (extend) a membership for another term on donation."
+      ],
+      "discriminator": [
+        233,
+        115,
+        41,
+        188,
+        251,
+        104,
+        51,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "membership"
+          ]
+        },
+        {
+          "name": "membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone may pay to renew a membership (a member can renew anonymously,",
+            "or another member can gift a renewal)."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_membership_mint",
+      "docs": [
+        "Register the Circle's Token-2022 NonTransferable (soulbound) membership mint."
+      ],
+      "discriminator": [
+        71,
+        198,
+        208,
+        67,
+        153,
+        173,
+        193,
+        50
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "writable": true
+        },
+        {
+          "name": "treasurer",
+          "docs": [
+            "Must be the Council's Treasurer seat."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "mint",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_personhood",
+      "docs": [
+        "Configure the Circle's sybil gate (on/off + the unique-human Merkle root)."
+      ],
+      "discriminator": [
+        175,
+        226,
+        233,
+        61,
+        184,
+        245,
+        40,
+        194
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "writable": true
+        },
+        {
+          "name": "secretary",
+          "docs": [
+            "Must be the Council's Secretary seat."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "require_personhood",
+          "type": "bool"
+        },
+        {
+          "name": "personhood_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_recovery",
+      "docs": [
+        "Member configures their own recovery: set/rotate the guardian key and the",
+        "require-co-sign policy (signed by owner or current recovery key)."
+      ],
+      "discriminator": [
+        70,
+        35,
+        195,
+        148,
+        6,
+        140,
+        128,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "membership",
+          "writable": true
+        },
+        {
+          "name": "member_authority",
+          "docs": [
+            "The member's current `owner` or a guardian `recovery_key`."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "recovery_keys",
+          "type": {
+            "array": [
+              "pubkey",
+              2
+            ]
+          }
+        },
+        {
+          "name": "require_cosign",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "upsert_circle_profile",
+      "docs": [
+        "Create/update a Circle's public directory profile (geo + IPFS doc CIDs)",
+        "that powers \"Find a Circle Near You\". Any Council seat may set it."
+      ],
+      "discriminator": [
+        201,
+        57,
+        81,
+        82,
+        147,
+        13,
+        66,
+        55
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (signs + pays)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "lat_microdeg",
+          "type": "i32"
+        },
+        {
+          "name": "lon_microdeg",
+          "type": "i32"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "city",
+          "type": "string"
+        },
+        {
+          "name": "address",
+          "type": "string"
+        },
+        {
+          "name": "twelve_steps_cid",
+          "type": "string"
+        },
+        {
+          "name": "preamble_cid",
+          "type": "string"
+        },
+        {
+          "name": "daily_reflections_cid",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "verify_disclosure",
+      "docs": [
+        "Verify an acknowledgment selective-disclosure proof against a gate's",
+        "predicate requirements and mint an AccessPass (predicate-gated access)."
+      ],
+      "discriminator": [
+        20,
+        227,
+        87,
+        123,
+        114,
+        23,
+        72,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "acknowledgment"
+        },
+        {
+          "name": "access_pass",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  99,
+                  99,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "gate"
+              },
+              {
+                "kind": "arg",
+                "path": "requirements_hash"
+              },
+              {
+                "kind": "account",
+                "path": "acknowledgment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "gate",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "requirements_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "public_inputs",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              17
+            ]
+          }
+        },
+        {
+          "name": "requirements",
+          "type": {
+            "defined": {
+              "name": "DisclosureGate"
+            }
+          }
+        },
+        {
+          "name": "proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "withdraw_treasury",
+      "docs": [
+        "Move treasury SOL, authorized by an executed 4-of-7 WithdrawTreasury proposal."
+      ],
+      "discriminator": [
+        40,
+        63,
+        122,
+        158,
+        144,
+        216,
+        83,
+        96
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AccessPass",
+      "discriminator": [
+        24,
+        47,
+        32,
+        42,
+        150,
+        120,
+        87,
+        169
+      ]
+    },
+    {
+      "name": "Acknowledgment",
+      "discriminator": [
+        151,
+        43,
+        136,
+        228,
+        73,
+        156,
+        151,
+        240
+      ]
+    },
+    {
+      "name": "Circle",
+      "discriminator": [
+        27,
+        59,
+        8,
+        117,
+        62,
+        199,
+        222,
+        252
+      ]
+    },
+    {
+      "name": "CircleProfile",
+      "discriminator": [
+        50,
+        64,
+        135,
+        9,
+        110,
+        20,
+        180,
+        118
+      ]
+    },
+    {
+      "name": "LevelGrant",
+      "discriminator": [
+        69,
+        25,
+        19,
+        174,
+        82,
+        80,
+        156,
+        134
+      ]
+    },
+    {
+      "name": "Lineage",
+      "discriminator": [
+        125,
+        53,
+        5,
+        134,
+        108,
+        167,
+        89,
+        101
+      ]
+    },
+    {
+      "name": "MemberProposal",
+      "discriminator": [
+        4,
+        231,
+        192,
+        158,
+        99,
+        212,
+        96,
+        254
+      ]
+    },
+    {
+      "name": "MemberTree",
+      "discriminator": [
+        44,
+        223,
+        234,
+        111,
+        55,
+        91,
+        238,
+        213
+      ]
+    },
+    {
+      "name": "Membership",
+      "discriminator": [
+        231,
+        141,
+        180,
+        98,
+        109,
+        168,
+        175,
+        166
+      ]
+    },
+    {
+      "name": "Nullifier",
+      "discriminator": [
+        18,
+        56,
+        142,
+        165,
+        181,
+        158,
+        187,
+        133
+      ]
+    },
+    {
+      "name": "PersonhoodCredential",
+      "discriminator": [
+        99,
+        148,
+        123,
+        152,
+        133,
+        26,
+        32,
+        166
+      ]
+    },
+    {
+      "name": "Proposal",
+      "discriminator": [
+        26,
+        94,
+        189,
+        187,
+        116,
+        136,
+        53,
+        33
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NameTooLong",
+      "msg": "Circle name exceeds maximum length"
+    },
+    {
+      "code": 6001,
+      "name": "MembershipExpired",
+      "msg": "Membership has expired"
+    },
+    {
+      "code": 6002,
+      "name": "Unauthorized",
+      "msg": "Caller is not the circle authority"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidLineageProof",
+      "msg": "Invalid lineage / level-grant proof"
+    },
+    {
+      "code": 6004,
+      "name": "NonIncreasingLevel",
+      "msg": "New level must be greater than the current level"
+    },
+    {
+      "code": 6005,
+      "name": "PoseidonError",
+      "msg": "Poseidon hashing failed"
+    },
+    {
+      "code": 6006,
+      "name": "LineageFull",
+      "msg": "Lineage Merkle tree is full"
+    },
+    {
+      "code": 6007,
+      "name": "DepthTooLarge",
+      "msg": "Requested depth exceeds MAX_DEPTH"
+    },
+    {
+      "code": 6008,
+      "name": "NotCouncilSeat",
+      "msg": "Signer does not hold a Council seat"
+    },
+    {
+      "code": 6009,
+      "name": "AlreadyApproved",
+      "msg": "This Council seat has already approved"
+    },
+    {
+      "code": 6010,
+      "name": "AlreadyExecuted",
+      "msg": "Proposal has already been executed"
+    },
+    {
+      "code": 6011,
+      "name": "ThresholdNotMet",
+      "msg": "Proposal has not reached the 4-of-7 threshold"
+    },
+    {
+      "code": 6012,
+      "name": "WrongProposalAction",
+      "msg": "Proposal action does not match this operation"
+    },
+    {
+      "code": 6013,
+      "name": "WalletMismatch",
+      "msg": "Artifact is not owned by the wallet being migrated"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidSeatIndex",
+      "msg": "Council seat index out of range"
+    },
+    {
+      "code": 6015,
+      "name": "TimelockNotElapsed",
+      "msg": "Migration time-lock has not elapsed yet"
+    },
+    {
+      "code": 6016,
+      "name": "ProposalCancelled",
+      "msg": "Proposal has been cancelled"
+    },
+    {
+      "code": 6017,
+      "name": "MemberCosignRequired",
+      "msg": "This membership requires the member's co-signature to migrate"
+    },
+    {
+      "code": 6018,
+      "name": "DisclosureProofInvalid",
+      "msg": "Invalid acknowledgment disclosure proof"
+    },
+    {
+      "code": 6019,
+      "name": "PredicateNotMet",
+      "msg": "Disclosure does not satisfy the gate's predicate requirements"
+    },
+    {
+      "code": 6020,
+      "name": "VoteProofInvalid",
+      "msg": "Invalid vote / personhood proof"
+    },
+    {
+      "code": 6021,
+      "name": "VotingClosed",
+      "msg": "Voting is closed for this proposal"
+    },
+    {
+      "code": 6022,
+      "name": "VotingNotEnded",
+      "msg": "Voting period has not ended yet"
+    },
+    {
+      "code": 6023,
+      "name": "AlreadyFinalized",
+      "msg": "Proposal already finalized"
+    },
+    {
+      "code": 6024,
+      "name": "PersonhoodRequired",
+      "msg": "Proof of personhood is required to join this Circle"
+    },
+    {
+      "code": 6025,
+      "name": "DuplicateSeat",
+      "msg": "That wallet already holds another Council seat"
+    },
+    {
+      "code": 6026,
+      "name": "GateMismatch",
+      "msg": "Gate requirements hash does not match the supplied requirements"
+    },
+    {
+      "code": 6027,
+      "name": "ProfileFieldTooLong",
+      "msg": "Circle profile field exceeds its maximum length"
+    },
+    {
+      "code": 6028,
+      "name": "InvalidCoordinate",
+      "msg": "Geographic coordinate out of range"
+    }
+  ],
+  "types": [
+    {
+      "name": "AccessPass",
+      "docs": [
+        "A durable proof-of-eligibility minted by `verify_disclosure`: it records that",
+        "some acknowledgment satisfied a gate's predicate requirements. A downstream",
+        "program (a ceremony, a resource) checks the pass exists for its `gate`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "acknowledgment",
+            "type": "pubkey"
+          },
+          {
+            "name": "gate",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "requirements_hash",
+            "docs": [
+              "keccak(DisclosureGate) — the exact predicate policy this pass was minted",
+              "under. A consumer MUST check this equals the hash of its own required",
+              "policy, so a pass minted under weaker requirements can't be reused."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "granted_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Acknowledgment",
+      "docs": [
+        "An acknowledgment credential — a course/initiation certificate attesting",
+        "\"portrait PPP followed course CCC, taught by XXX, on date DDD\". Only the",
+        "Poseidon root `root = Poseidon(cP, cC, cX, cD)` of the four blinded field",
+        "commitments is stored, so nothing about the fields is public. The holder",
+        "later opens any subset with a ZK proof (`circuits/ack_disclose.circom`).",
+        "",
+        "`issuer_attested` is set true because issuance verified an *issuer-anonymous*",
+        "lineage proof: a teacher of level >= `attest_level` in the lineage tree",
+        "authorized this `root` — so \"taught by a real lineage holder\" is guaranteed",
+        "without recording which teacher. See docs/acknowledgments.md."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "member_commitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "attest_level",
+            "type": "u8"
+          },
+          {
+            "name": "issued_at",
+            "type": "i64"
+          },
+          {
+            "name": "issuer_attested",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Circle",
+      "docs": [
+        "A Circle — a local AHA group, forked under the World Service Circle.",
+        "Governance (proposals/voting) lives in a Realms Realm; the treasury in a",
+        "Squads multisig. This account holds the membership/Council/lineage state that",
+        "those tools do not provide."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "parent",
+            "docs": [
+              "The parent Circle this one is nested under (the World Service Circle's",
+              "address, or a fixed root for the foundation itself). A PDA seed + the",
+              "federation link — never an actor. There is NO admin key: the **Council is",
+              "the authority** (group conscience), so a Circle is governed only by its",
+              "7 seats."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "council",
+            "docs": [
+              "The 7-seat Council (3 named servants + 4 elders) — the Circle's authority;",
+              "threshold 4-of-7."
+            ],
+            "type": {
+              "defined": {
+                "name": "Council"
+              }
+            }
+          },
+          {
+            "name": "membership_period",
+            "docs": [
+              "Length of one membership term, in seconds (e.g. one year)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "member_count",
+            "type": "u64"
+          },
+          {
+            "name": "require_personhood",
+            "docs": [
+              "Sybil gate: if true, `issue_membership` requires a `PersonhoodCredential`",
+              "(one human → one membership per Circle) proven against `personhood_root`."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "personhood_root",
+            "docs": [
+              "Merkle root of a unique-human set (e.g. a World ID group, or a Circle's",
+              "vouching set) that personhood proofs are checked against."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "membership_mint",
+            "docs": [
+              "Token-2022 NonTransferable (soulbound) membership mint, if configured.",
+              "`default()` = none. Mint authority must be this Circle PDA."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "docs": [
+              "Human-readable Circle name (also a PDA seed, so <= MAX_NAME bytes)."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CircleProfile",
+      "docs": [
+        "Public directory profile for a Circle — powers the \"Find a Circle Near You\"",
+        "map and the shared-document links. Optional and separate from `Circle` (so it",
+        "never touches the audited core account); a Circle with no profile simply",
+        "doesn't appear on the map. Set/updated by any Council seat via",
+        "`upsert_circle_profile`. Coordinates are fixed-point **microdegrees**",
+        "(degrees × 1e6) to avoid floats: lat ∈ [-90e6, 90e6], lon ∈ [-180e6, 180e6].",
+        "The IPFS CIDs point to the Circle's shared material (12 Steps, Preamble, and",
+        "the Daily Reflections collection), fetched read-only from a public gateway."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "lat_microdeg",
+            "type": "i32"
+          },
+          {
+            "name": "lon_microdeg",
+            "type": "i32"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "city",
+            "type": "string"
+          },
+          {
+            "name": "address",
+            "type": "string"
+          },
+          {
+            "name": "twelve_steps_cid",
+            "type": "string"
+          },
+          {
+            "name": "preamble_cid",
+            "type": "string"
+          },
+          {
+            "name": "daily_reflections_cid",
+            "type": "string"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Council",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "seats",
+            "type": {
+              "array": [
+                "pubkey",
+                7
+              ]
+            }
+          },
+          {
+            "name": "threshold",
+            "type": "u8"
+          },
+          {
+            "name": "recovery_timelock",
+            "docs": [
+              "Seconds a `MigrateWallet` must wait after reaching threshold before it",
+              "can execute — the contest window during which any seat may cancel it."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DisclosureGate",
+      "docs": [
+        "What a gate demands of a disclosure before granting access."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "require_date_ok",
+            "type": "bool"
+          },
+          {
+            "name": "require_course_accredited",
+            "type": "bool"
+          },
+          {
+            "name": "require_teacher_recognized",
+            "type": "bool"
+          },
+          {
+            "name": "expected_date_lower_bound",
+            "docs": [
+              "The date the proof's `dateOk` boolean must have been evaluated against.",
+              "`dateLowerBound` is a prover-supplied public input, so without pinning it",
+              "the prover could set it to 0 and satisfy any \"completed after X\" gate. The",
+              "gate must therefore declare the exact threshold it requires."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "expected_catalog_root",
+            "docs": [
+              "Trusted, pinned roots the proof's predicate must have been checked against",
+              "(a prover could otherwise pass a self-made set root)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "expected_teacher_set_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LevelGrant",
+      "docs": [
+        "Record of a single shamanic level grant along an anonymous lineage.",
+        "",
+        "`issuer_commitment` is the ZK commitment of the granting shaman — recorded",
+        "so the chain of transmission can be re-proved later, WITHOUT revealing the",
+        "granter's identity on-chain."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "membership",
+            "type": "pubkey"
+          },
+          {
+            "name": "level",
+            "type": "u8"
+          },
+          {
+            "name": "issuer_commitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "granted_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Lineage",
+      "docs": [
+        "The append-only Poseidon Merkle tree of lineage credentials for a Circle.",
+        "`root` is what ZK `grant_level` proofs are checked against. Incremental",
+        "insertion state (`filled_subtrees`, `next_index`) follows the Tornado",
+        "MerkleTreeWithHistory pattern. See docs/zk-lineage.md."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "depth",
+            "type": "u8"
+          },
+          {
+            "name": "next_index",
+            "type": "u64"
+          },
+          {
+            "name": "root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "filled_subtrees",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                20
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MemberProposal",
+      "docs": [
+        "A group-conscience proposal voted on by the whole membership: an idea, or a",
+        "change to shared material/documentation. One member = one vote, cast",
+        "anonymously (Merkle inclusion in the snapshotted member set + a per-proposal",
+        "nullifier). `description_hash` commits to the off-chain text (e.g. an IPFS CID",
+        "hash). See docs/member-voting.md."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "description_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "member_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "eligible_count",
+            "type": "u64"
+          },
+          {
+            "name": "yes",
+            "type": "u64"
+          },
+          {
+            "name": "no",
+            "type": "u64"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          },
+          {
+            "name": "finalized",
+            "type": "bool"
+          },
+          {
+            "name": "passed",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MemberTree",
+      "docs": [
+        "The append-only Poseidon Merkle tree of *member* identity commitments for a",
+        "Circle (the votable population). Same shape as `Lineage`; `next_index` is the",
+        "member count. A commitment is inserted at `issue_membership`. Member voting",
+        "proves Semaphore-style inclusion against a snapshot of `root`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "depth",
+            "type": "u8"
+          },
+          {
+            "name": "next_index",
+            "type": "u64"
+          },
+          {
+            "name": "root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "filled_subtrees",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                20
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Membership",
+      "docs": [
+        "A yearly, non-transferable (soulbound) membership.",
+        "",
+        "For anonymity the member is identified by a ZK `commitment` (a Poseidon/",
+        "keccak hash of their secret identity), NOT by a wallet — so on-chain reads",
+        "never reveal who the member is. A Token-2022 NonTransferable token may be",
+        "minted alongside for selective public disclosure."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "commitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "issued_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "level",
+            "docs": [
+              "Highest shamanic level attained (0 = none)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Optional controlling wallet for selective disclosure. `default()` means",
+              "fully anonymous (no wallet bound). This is the field a 4-of-7 wallet",
+              "migration rebinds during key recovery."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "recovery_keys",
+            "docs": [
+              "Up to two optional guardian/backup keys the member controls separately",
+              "from `owner` (1-of-2: either can act, so losing one guardian still leaves",
+              "recovery possible). Lets a member self-migrate or co-sign even after",
+              "losing the owner key, and preserves anonymity (owner may stay `default()`",
+              "while a guardian is set). Unused slots are `default()`."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                2
+              ]
+            }
+          },
+          {
+            "name": "require_cosign",
+            "docs": [
+              "If true, a Council `MigrateWallet` cannot rebind this membership without a",
+              "signature from `owner` or a guardian — collusion-proof, but the",
+              "membership is unrecoverable if every key is lost."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Nullifier",
+      "docs": [
+        "A spent ZK nullifier. Existence == \"this grant has already been made\";",
+        "Anchor `init` fails if the PDA already exists, giving replay protection."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    },
+    {
+      "name": "PersonhoodCredential",
+      "docs": [
+        "Proof that a unique human is eligible for one membership in a Circle, minted",
+        "by `prove_personhood` after an anonymous proof-of-personhood (World ID-style).",
+        "Its PDA is seeded by the personhood nullifier, so one human yields exactly one",
+        "credential per Circle; `issue_membership` consumes it (`used = true`) — one",
+        "human, one membership. The human's identity is never revealed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "used",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Proposal",
+      "docs": [
+        "A pending Council decision. Approvals are a bitmask over the 7 seats, so a",
+        "seat can approve only once and a tally is `count_ones()`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "action",
+            "type": {
+              "defined": {
+                "name": "ProposalAction"
+              }
+            }
+          },
+          {
+            "name": "approvals",
+            "type": "u8"
+          },
+          {
+            "name": "executed",
+            "type": "bool"
+          },
+          {
+            "name": "cancelled",
+            "type": "bool"
+          },
+          {
+            "name": "drained",
+            "docs": [
+              "For `WithdrawTreasury`: set true once the lamports have actually moved, so",
+              "an executed proposal cannot be replayed to drain the treasury repeatedly."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "eligible_at",
+            "docs": [
+              "Earliest unix time the proposal may execute; 0 = not yet armed (threshold",
+              "unmet). Set when approvals first reach threshold: `now` for RotateSeat,",
+              "`now + recovery_timelock` for MigrateWallet."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalAction",
+      "docs": [
+        "What a 4-of-7 vote authorizes."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "RotateSeat",
+            "fields": [
+              {
+                "name": "seat_index",
+                "type": "u8"
+              },
+              {
+                "name": "new_holder",
+                "type": "pubkey"
+              }
+            ]
+          },
+          {
+            "name": "MigrateWallet",
+            "fields": [
+              {
+                "name": "old_wallet",
+                "type": "pubkey"
+              },
+              {
+                "name": "new_wallet",
+                "type": "pubkey"
+              }
+            ]
+          },
+          {
+            "name": "WithdrawTreasury",
+            "fields": [
+              {
+                "name": "amount",
+                "type": "u64"
+              },
+              {
+                "name": "recipient",
+                "type": "pubkey"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

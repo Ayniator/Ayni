@@ -56,4 +56,8 @@ pub enum AyniError {
     DuplicateSeat,
     #[msg("Gate requirements hash does not match the supplied requirements")]
     GateMismatch,
+    #[msg("Circle profile field exceeds its maximum length")]
+    ProfileFieldTooLong,
+    #[msg("Geographic coordinate out of range")]
+    InvalidCoordinate,
 }

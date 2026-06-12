@@ -250,3 +250,61 @@ pub struct PersonhoodCredential {
 impl PersonhoodCredential {
     pub const SPACE: usize = 8 + 32 + 1 + 1;
 }
+
+/// Public directory profile for a Circle — powers the "Find a Circle Near You"
+/// map and the shared-document links. Optional and separate from `Circle` (so it
+/// never touches the audited core account); a Circle with no profile simply
+/// doesn't appear on the map. Set/updated by any Council seat via
+/// `upsert_circle_profile`. Coordinates are fixed-point **microdegrees**
+/// (degrees × 1e6) to avoid floats: lat ∈ [-90e6, 90e6], lon ∈ [-180e6, 180e6].
+/// The IPFS CIDs point to the Circle's shared material (12 Steps, Preamble, and
+/// the Daily Reflections collection), fetched read-only from a public gateway.
+#[account]
+pub struct CircleProfile {
+    pub circle: Pubkey,
+    pub lat_microdeg: i32,
+    pub lon_microdeg: i32,
+    pub name: String,
+    pub city: String,
+    pub address: String,
+    pub twelve_steps_cid: String,
+    pub preamble_cid: String,
+    pub daily_reflections_cid: String,
+    pub bump: u8,
+}
+
+impl CircleProfile {
+    pub const MAX_NAME: usize = 64;
+    pub const MAX_CITY: usize = 64;
+    pub const MAX_ADDRESS: usize = 160;
+    pub const MAX_CID: usize = 64; // IPFS CIDv1 base32 is ~59 chars
+
+    pub const SPACE: usize = 8        // discriminator
+        + 32                           // circle
+        + 4                            // lat_microdeg
+        + 4                            // lon_microdeg
+        + 4 + Self::MAX_NAME           // name
+        + 4 + Self::MAX_CITY           // city
+        + 4 + Self::MAX_ADDRESS        // address
+        + 4 + Self::MAX_CID            // twelve_steps_cid
+        + 4 + Self::MAX_CID            // preamble_cid
+        + 4 + Self::MAX_CID            // daily_reflections_cid
+        + 1; // bump
+
+    /// Reject over-long fields (PDAs/strings have fixed budgets).
+    pub fn validate(
+        name: &str,
+        city: &str,
+        address: &str,
+        twelve_steps_cid: &str,
+        preamble_cid: &str,
+        daily_reflections_cid: &str,
+    ) -> bool {
+        name.len() <= Self::MAX_NAME
+            && city.len() <= Self::MAX_CITY
+            && address.len() <= Self::MAX_ADDRESS
+            && twelve_steps_cid.len() <= Self::MAX_CID
+            && preamble_cid.len() <= Self::MAX_CID
+            && daily_reflections_cid.len() <= Self::MAX_CID
+    }
+}

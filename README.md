@@ -87,33 +87,33 @@ To stand up your own fellowship and run all four kinds of vote, follow
 
 ## How it fits together
 
+Read it like a tree — the people are the canopy at the top, the Circles are the
+branches, and the World Service Circle is the trunk and roots at the base:
+
 ```
-                        ┌────────────────────────────────┐
-                        │      WORLD SERVICE CIRCLE        │   the root / "foundation"
-                        │   (template · shared docs ·      │
-                        │    the "12 Steps" & Preamble)    │
-                        │      7-seat Council, 4-of-7      │
-                        └───────────────┬──────────────────┘
-                       coordinates,     │     does NOT override
-                       holds the template│     local group conscience
-            ┌─────────────────┬─────────┴─────────┬─────────────────┐
-            ▼                 ▼                   ▼                 ▼
-      ┌───────────┐     ┌───────────┐       ┌───────────┐    ┌───────────┐
-      │  CIRCLE   │     │  CIRCLE   │       │  CIRCLE   │ …  │  CIRCLE   │   autonomous local groups
-      │ (Cusco)   │     │ (Lisbon)  │       │ (Berlin)  │    │  (forked) │   each: own members,
-      │ Council 7 │     │ Council 7 │       │ Council 7 │    │ Council 7 │   treasury, votes, Council
-      └─────┬─────┘     └─────┬─────┘       └───────────┘    └───────────┘
-            │                 │
-     ┌──────┼──────┐   ┌──────┼──────┐
-     ▼      ▼      ▼   ▼      ▼      ▼
-   member member member …                       members = private ZK commitments
-   (anon) (anon) (anon)                          in the Circle's member set
+      ● ● ●                ● ● ●                ● ● ●          members — anonymous
+      \ | /                \ | /                \ | /          ZK commitments
+  ┌─────┬─────┐        ┌─────┬─────┐        ┌─────┬─────┐      (one member, one vote)
+  │   Cusco   │        │  Lisbon   │        │  Berlin   │
+  │ Council 7 │        │ Council 7 │        │ Council 7 │  …   autonomous local groups
+  └─────┴─────┘        └─────┴─────┘        └─────┴─────┘      = the branches (own
+        └────────────────────┬────────────────────┘            treasury, votes, Council)
+                             │   every Circle is forked from one shared template
+              ┌──────────────┴──────────────┐
+              │     WORLD SERVICE CIRCLE     │   the trunk / root ("foundation"):
+              │  template · shared docs ·    │   holds the 12 Steps, the Preamble,
+              │    "12 Steps" & Preamble     │   and a 7-seat Council (4-of-7) that
+              │     7-seat Council · 4/7     │   coordinates but does NOT govern
+              └─────────────────────────────┘
 ```
 
-- **World Service Circle → Circle**: a *federation link* (a forked template), **not** a chain of
-  command. Each Circle is governed only by its own 7 seats and its own members.
-- **Circle → Member**: a member joins the Circle's member set as an anonymous commitment, and acts
-  through proofs — never needing to expose a wallet.
+- **Members (the canopy)** — each joins a Circle's member set as an anonymous commitment and acts
+  through proofs; never needs to expose a wallet. One member, one vote.
+- **Circles (the branches)** — autonomous local groups, each with its own 7-seat Council, treasury,
+  and votes; forked from the template.
+- **World Service Circle (the trunk/root)** — holds the shared template and documents and coordinates
+  Circle creation, but does **not** override local group conscience. The link is a *federation link*,
+  not a chain of command.
 
 ## Who does what — the 7-seat Council
 

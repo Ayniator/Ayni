@@ -3,7 +3,7 @@ name = "ayni"
 version = "0.1.0"
 description = "Ayni — Solana implementation of AHA (Ancestral Humanity Anonymous)"
 edition = "2021"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 
 [lib]
 crate-type = ["cdylib", "lib"]
@@ -18,7 +18,9 @@ no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
-anchor-lang = "0.31.1"
+# init-if-needed: the CircleProfile (directory geo + IPFS doc CIDs) is upserted
+# by the Council over time. Safe here — the instruction is seat-gated + has_one.
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
 # Token-2022 (soulbound membership) + SPL helpers.
 anchor-spl = "0.31.1"
 # On-chain Groth16 verification over BN254 via the alt_bn128 syscalls.

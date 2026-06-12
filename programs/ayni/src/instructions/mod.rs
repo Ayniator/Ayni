@@ -21,6 +21,7 @@ pub mod renew_membership;
 pub mod set_membership_mint;
 pub mod set_personhood;
 pub mod set_recovery;
+pub mod upsert_circle_profile;
 pub mod verify_disclosure;
 pub mod withdraw_treasury;
 
@@ -47,5 +48,6 @@ pub use renew_membership::*;
 pub use set_membership_mint::*;
 pub use set_personhood::*;
 pub use set_recovery::*;
+pub use upsert_circle_profile::*;
 pub use verify_disclosure::*;
 pub use withdraw_treasury::*;

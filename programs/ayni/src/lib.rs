@@ -22,7 +22,7 @@ use council::ProposalAction;
 use instructions::*;
 use instructions::verify_disclosure::DisclosureGate;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("3ogteUFYhbHaV7UEWuGCqGVm1X4HDgAswvSePvDspHCw");
 
 #[program]
 pub mod ayni {
@@ -83,6 +83,32 @@ pub mod ayni {
     /// Register the Circle's Token-2022 NonTransferable (soulbound) membership mint.
     pub fn set_membership_mint(ctx: Context<SetMembershipMint>, mint: Pubkey) -> Result<()> {
         instructions::set_membership_mint(ctx, mint)
+    }
+
+    /// Create/update a Circle's public directory profile (geo + IPFS doc CIDs)
+    /// that powers "Find a Circle Near You". Any Council seat may set it.
+    pub fn upsert_circle_profile(
+        ctx: Context<UpsertCircleProfile>,
+        lat_microdeg: i32,
+        lon_microdeg: i32,
+        name: String,
+        city: String,
+        address: String,
+        twelve_steps_cid: String,
+        preamble_cid: String,
+        daily_reflections_cid: String,
+    ) -> Result<()> {
+        instructions::upsert_circle_profile(
+            ctx,
+            lat_microdeg,
+            lon_microdeg,
+            name,
+            city,
+            address,
+            twelve_steps_cid,
+            preamble_cid,
+            daily_reflections_cid,
+        )
     }
 
     /// Mint one soulbound membership token to a member's Token-2022 account.
