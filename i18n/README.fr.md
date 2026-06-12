@@ -4,7 +4,7 @@
 
 # Ayni
 
-**Des fraternités d'adhésion autogérées et anonymes sur Solana — incessibles, privées par ZK, sans propriétaire.**
+**Fraternités Autonomes & Anonymes sur Solana — Libres, Privées par ZK, Decentralisees, Autonomes.**
 
 Cadre ouvert pour des DAO d'adhésion fraternelle, avec vote anonyme à divulgation nulle de connaissance
 (zero-knowledge) et attestations de lignée à divulgation sélective.
