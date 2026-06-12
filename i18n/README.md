@@ -11,26 +11,26 @@ the **source of truth**; translations may lag behind it.
 | Language | Native name | Code | File | Status |
 |---|---|---|---|---|
 | French | Français | `fr` | [README.fr.md](README.fr.md) | ✅ drafted |
-| Spanish | Español | `es` | [README.es.md](README.es.md) | ⏳ todo |
-| Italian | Italiano | `it` | [README.it.md](README.it.md) | ⏳ todo |
-| Romanian | Română | `ro` | [README.ro.md](README.ro.md) | ⏳ todo |
-| Russian | Русский | `ru` | [README.ru.md](README.ru.md) | ⏳ todo |
-| Chinese | 中文 | `zh` | [README.zh.md](README.zh.md) | ⏳ todo |
-| Japanese | 日本語 | `ja` | [README.ja.md](README.ja.md) | ⏳ todo |
-| Korean | 한국어 | `ko` | [README.ko.md](README.ko.md) | ⏳ todo |
-| Thai | ไทย | `th` | [README.th.md](README.th.md) | ⏳ todo |
-| Lao | ລາວ | `lo` | [README.lo.md](README.lo.md) | ⏳ todo |
-| Tagalog (Filipino) | Tagalog | `tl` | [README.tl.md](README.tl.md) | ⏳ todo |
-| Indonesian (Bahasa) | Bahasa Indonesia | `id` | [README.id.md](README.id.md) | ⏳ todo |
-| Burmese | မြန်မာ | `my` | [README.my.md](README.my.md) | ⏳ todo |
-| Mongolian | Монгол | `mn` | [README.mn.md](README.mn.md) | ⏳ todo |
-| Hindi (India) | हिन्दी | `hi` | [README.hi.md](README.hi.md) | ⏳ todo |
-| Tibetan | བོད་སྐད་ | `bo` | [README.bo.md](README.bo.md) | ⏳ todo |
-| Dzongkha (Bhutan) | རྫོང་ཁ | `dz` | [README.dz.md](README.dz.md) | ⏳ todo |
-| Quechua | Runa Simi | `qu` | [README.qu.md](README.qu.md) | ⏳ todo |
-| Māori | Te Reo Māori | `mi` | [README.mi.md](README.mi.md) | ⏳ todo |
-| Northern Sámi | Davvisámegiella | `se` | [README.se.md](README.se.md) | ⏳ todo |
-| Inuktitut | ᐃᓄᒃᑎᑐᑦ | `iu` | [README.iu.md](README.iu.md) | ⏳ todo |
+| Spanish | Español | `es` | [README.es.md](README.es.md) | ✅ drafted |
+| Italian | Italiano | `it` | [README.it.md](README.it.md) | ✅ drafted |
+| Romanian | Română | `ro` | [README.ro.md](README.ro.md) | ✅ drafted |
+| Russian | Русский | `ru` | [README.ru.md](README.ru.md) | ✅ drafted |
+| Chinese | 中文 | `zh` | [README.zh.md](README.zh.md) | ✅ drafted |
+| Japanese | 日本語 | `ja` | [README.ja.md](README.ja.md) | ✅ drafted |
+| Korean | 한국어 | `ko` | [README.ko.md](README.ko.md) | ✅ drafted |
+| Thai | ไทย | `th` | [README.th.md](README.th.md) | ✅ drafted |
+| Lao | ລາວ | `lo` | [README.lo.md](README.lo.md) | ✅ drafted |
+| Tagalog (Filipino) | Tagalog | `tl` | [README.tl.md](README.tl.md) | ✅ drafted |
+| Indonesian (Bahasa) | Bahasa Indonesia | `id` | [README.id.md](README.id.md) | ✅ drafted |
+| Burmese | မြန်မာ | `my` | [README.my.md](README.my.md) | ✅ drafted |
+| Mongolian | Монгол | `mn` | [README.mn.md](README.mn.md) | ✅ drafted |
+| Hindi (India) | हिन्दी | `hi` | [README.hi.md](README.hi.md) | ✅ drafted |
+| Tibetan | བོད་སྐད་ | `bo` | [README.bo.md](README.bo.md) | ✅ drafted |
+| Dzongkha (Bhutan) | རྫོང་ཁ | `dz` | [README.dz.md](README.dz.md) | ✅ drafted |
+| Quechua | Runa Simi | `qu` | [README.qu.md](README.qu.md) | ✅ drafted |
+| Māori | Te Reo Māori | `mi` | [README.mi.md](README.mi.md) | ✅ drafted |
+| Northern Sámi | Davvisámegiella | `se` | [README.se.md](README.se.md) | ✅ drafted |
+| Inuktitut | ᐃᓄᒃᑎᑐᑦ | `iu` | [README.iu.md](README.iu.md) | ✅ drafted |
 
 ### Notes on a couple of requests
 - **"Indian"** → rendered as **Hindi** (`hi`), India's most-spoken language. India

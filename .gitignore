@@ -165,3 +165,6 @@ build/*.sym
 
 # graphify knowledge-graph cache (generated)
 graphify-out/
+
+# Windows alternate-data-stream junk (WSL)
+*:Zone.Identifier

@@ -62,7 +62,15 @@ trusted-setup ceremonies. "✅" means code-complete & wired, not build-verified.
 ### Treasury
 | # | Feature | Status | Instructions / files | Notes |
 |---|---------|--------|----------------------|-------|
-| F17 | Self-supporting donation treasury | ✅ | `donate`, `withdraw_treasury` (treasury PDA) | withdraw authority = Squads/Realms m-of-n; `docs/treasury.md` |
+| F17 | Self-supporting donation treasury | ✅ | `donate`, `donate_token` (any SPL/Token-2022), `withdraw_treasury` (treasury PDA) | `app/treasury/fund.ts` (`fundFoundation`); `docs/treasury.md` |
+
+### Directory & frontend
+| # | Feature | Status | Instructions / files | Notes |
+|---|---------|--------|----------------------|-------|
+| F18 | Public Circle directory (geo + IPFS doc CIDs) | ✅ | `upsert_circle_profile`, `CircleProfile`; `frontend/` (Find a Circle / Reflections / Documents) | "Find a Circle Near You" map; one `getProgramAccounts` read |
+| F19 | Update circle locations (in-place, no history) | ✅ | `update_circle_location` | a relocating Circle changes only its coordinates/city/address — name & doc CIDs untouched; **overwrite only, no location history kept** |
+| F20 | Deterministic Jazzicon identicons | ✅ | `frontend/lib/jazzicon.ts`; `tests/jazzicon.ts` | self-contained SVG + SHA-256; used as the avatar everywhere |
+| F21 | Delist a Circle from the directory | ✅ | `close_circle_profile` | closes the `CircleProfile` (rent → seat); Circle/Council/members untouched; `scripts/close-circle.js` |
 
 ---
 

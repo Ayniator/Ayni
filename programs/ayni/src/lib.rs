@@ -111,6 +111,26 @@ pub mod ayni {
         )
     }
 
+    /// Update only a Circle's location (coordinates + city + address) on its
+    /// existing directory profile — name & doc CIDs untouched. Overwrite only,
+    /// no location history kept. Any Council seat may move the Circle.
+    pub fn update_circle_location(
+        ctx: Context<UpdateCircleLocation>,
+        lat_microdeg: i32,
+        lon_microdeg: i32,
+        city: String,
+        address: String,
+    ) -> Result<()> {
+        instructions::update_circle_location(ctx, lat_microdeg, lon_microdeg, city, address)
+    }
+
+    /// Delist a Circle from the public directory by closing its `CircleProfile`
+    /// (the Circle itself is untouched). Any Council seat may do it; rent is
+    /// refunded to that seat.
+    pub fn close_circle_profile(ctx: Context<CloseCircleProfile>) -> Result<()> {
+        instructions::close_circle_profile(ctx)
+    }
+
     /// Mint one soulbound membership token to a member's Token-2022 account.
     pub fn mint_membership_token(ctx: Context<MintMembershipToken>) -> Result<()> {
         instructions::mint_membership_token(ctx)

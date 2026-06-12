@@ -70,7 +70,7 @@ branches, and the World Service Circle is the trunk and roots at the base:
  (anon) (anon) (anon)      (anon) (anon) (anon)      (anon) (anon) (anon)         (anonymous,
     \      |      /          \      |      /          \      |      /              one member,
      ┌─────┬─────┐            ┌─────┬─────┐            ┌─────┬─────┐               one vote)
-     │   Cusco   │            │  Lisbon   │            │  Berlin   │
+     │   Cusco   │            │  Lisbon   │            │  Bangkok  │
      │ Council 7 │            │ Council 7 │            │ Council 7 │   …        ← Circles: the
      └─────┴─────┘            └─────┴─────┘            └─────┴─────┘               branches
            └────────────────────────┬────────────────────────┘
@@ -132,6 +132,10 @@ The four kinds of decision Ayni supports, and where each lives:
 | **Recovery / treasury** | the 7-seat Council | 4-of-7 proposal + contest window |
 
 Worked, copy-pasteable walkthroughs for all of these are in **[IMPLEMENTATION.md](IMPLEMENTATION.md)**.
+
+<div align="center">
+  <img src="images/BluePrint.png" alt="Ayni — blueprint" width="880" />
+</div>
 
 ---
 
@@ -227,4 +231,8 @@ modified Ayni as a service, you must share your source under the same license.
 If Ayni's model of **anonymous, owner-less fellowship** resonates with you, ⭐ **star the repo** to
 follow along — it helps others find it.
 
+</div>
+
+<div align="center">
+  <img src="images/Model.png" alt="AHA / Ayni — the full model" width="920" />
 </div>

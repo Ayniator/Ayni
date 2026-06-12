@@ -14,7 +14,8 @@ const KEYPAIR = process.env.HOME + "/.config/solana/aha-deployer.json";
 const CITIES = [
   { name: "AHA Cusco", city: "Cusco, Peru", address: "Plaza de Armas", lat: -13531900, lon: -71967500 },
   { name: "AHA Lisbon", city: "Lisbon, Portugal", address: "Alfama", lat: 38722300, lon: -9139300 },
-  { name: "AHA Berlin", city: "Berlin, Germany", address: "Kreuzberg", lat: 52520000, lon: 13405000 },
+  { name: "AHA Bangkok", city: "Bangkok, Thailand", address: "PHCM+XP (13.7224, 100.5837)", lat: 13722405, lon: 100583672 },
+  { name: "AHA Chiang Mai", city: "Chiang Mai, Thailand", address: "WWCH+HQ Mae Raem, Mae Rim District", lat: 18921528, lon: 98929417 },
 ];
 
 async function main() {

@@ -185,6 +185,65 @@
       ]
     },
     {
+      "name": "close_circle_profile",
+      "docs": [
+        "Delist a Circle from the public directory by closing its `CircleProfile`",
+        "(the Circle itself is untouched). Any Council seat may do it; rent is",
+        "refunded to that seat."
+      ],
+      "discriminator": [
+        80,
+        176,
+        39,
+        75,
+        9,
+        68,
+        76,
+        242
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "profile"
+          ]
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (receives the reclaimed rent)."
+          ],
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "create_member_proposal",
       "docs": [
         "A Council seat opens a group-conscience proposal for the membership."
@@ -1742,6 +1801,85 @@
         {
           "name": "require_cosign",
           "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "update_circle_location",
+      "docs": [
+        "Update only a Circle's location (coordinates + city + address) on its",
+        "existing directory profile — name & doc CIDs untouched. Overwrite only,",
+        "no location history kept. Any Council seat may move the Circle."
+      ],
+      "discriminator": [
+        128,
+        236,
+        135,
+        107,
+        20,
+        142,
+        48,
+        158
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "profile"
+          ]
+        },
+        {
+          "name": "profile",
+          "docs": [
+            "The Circle's directory profile — must already exist (created via",
+            "`upsert_circle_profile`). `has_one = circle` ties it to this Circle."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat may relocate the Circle."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "lat_microdeg",
+          "type": "i32"
+        },
+        {
+          "name": "lon_microdeg",
+          "type": "i32"
+        },
+        {
+          "name": "city",
+          "type": "string"
+        },
+        {
+          "name": "address",
+          "type": "string"
         }
       ]
     },

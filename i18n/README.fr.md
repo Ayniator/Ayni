@@ -16,7 +16,7 @@ Cadre ouvert pour des DAO d'adhésion fraternelle, avec vote anonyme à divulgat
 [![Status](https://img.shields.io/badge/status-research%2Fpre--audit-yellow)](../BACKLOG.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#-contribuer)
 
-🌍 [Autres langues / Other languages](README.md) · [English](../README.md)
+🌍 [Other languages](README.md) · [English](../README.md)
 
 </div>
 
@@ -27,7 +27,7 @@ Cadre ouvert pour des DAO d'adhésion fraternelle, avec vote anonyme à divulgat
 Ayni est l'implémentation Solana d'une **organisation autonome décentralisée (DAO) anonyme** — conçue
 à l'origine pour répondre aux besoins d'**AHA (Ancestral Humanity Anonymous)**, mais ouverte à toute
 organisation. Elle est par essence un modèle indépendant de toute blockchain, destiné à des fraternités
-mondiales, inspiré du succès centenaire des traditions des AA / programme en 12 étapes. Elle offre à
+mondiales, inspiré du succès centenaire des **traditions des AA / programme en 12 étapes**. Elle offre à
 tout groupe une manière prête à l'emploi d'**accueillir des membres, tenir une trésorerie, décider par
 conscience collective et récupérer des clés perdues** — tandis que chaque membre demeure **anonyme par
 défaut** grâce aux preuves à divulgation nulle de connaissance.
@@ -62,60 +62,32 @@ défaut** grâce aux preuves à divulgation nulle de connaissance.
   d'un portefeuille perdu vers un nouveau, derrière une fenêtre de contestation qu'un seul siège honnête
   peut déclencher.
 - 🌱 **Cercles forkables** — tout groupe lance un nouveau Cercle avec une gouvernance identique ; le
-  Cercle de Service Mondial coordonne le matériel partagé, il ne commande pas.
+  World Service Circle coordonne le matériel partagé, il ne commande pas.
 - 📜 **Attestations à divulgation sélective** — certificats de cours / d'initiation (« qui, quel cours,
   enseigné par qui, quand ») ouverts *champ par champ* en divulgation nulle.
 
 ---
 
-## 🚀 Démarrage rapide
-
-> Prérequis : **Rust**, **Solana/Agave CLI 2.x**, **Anchor 0.31.1**, **Node 20+**, et (pour les preuves)
-> **circom 2.1** + **snarkjs**.
-
-```bash
-# 1. cloner
-git clone https://github.com/Ayniator/Ayni.git && cd Ayni
-
-# 2. installer les dépendances JS (outils de preuve + tests)
-npm install
-
-# 3. compiler le programme on-chain
-anchor build
-
-# 4. lancer la suite de tests (localnet : adhésions, récupération 4/7, un vrai aller-retour de vote ZK)
-anchor test
-```
-
-Voilà tout le premier lancement. Les tests créent un Cercle, émettent des adhésions anonymes, exécutent
-une récupération à 4 sur 7, et vérifient une vraie preuve de vote Groth16 on-chain (et rejettent un
-nullifier rejoué).
-
-Pour mettre en place votre propre fraternité et exécuter les quatre types de vote, suivez pas à pas
-**[IMPLEMENTATION.md](../IMPLEMENTATION.md)**.
-
----
-
-## Comment tout s'articule
+## 💡 Comment tout s'articule
 
 Lisez-le comme un arbre — les personnes forment la canopée en haut, les Cercles sont les branches,
-et le Cercle de Service Mondial est le tronc et les racines, à la base :
+et le World Service Circle est le tronc et les racines, à la base :
 
 ```
- membre membre membre      membre membre membre      membre membre membre   ← les membres
- (anon) (anon) (anon)      (anon) (anon) (anon)      (anon) (anon) (anon)       (anonymes,
-    \      |      /          \      |      /          \      |      /            un membre,
-     ┌─────┬─────┐            ┌─────┬─────┐            ┌─────┬─────┐             une voix)
-     │   Cusco   │            │  Lisbon   │            │  Berlin   │
-     │ Council 7 │            │ Council 7 │            │ Council 7 │   …       ← Cercles : les
-     └─────┴─────┘            └─────┴─────┘            └─────┴─────┘             branches
+ member member member      member member member      member member member     ← les membres
+ (anon) (anon) (anon)      (anon) (anon) (anon)      (anon) (anon) (anon)         (anonymes,
+    \      |      /          \      |      /          \      |      /              un membre,
+     ┌─────┬─────┐            ┌─────┬─────┐            ┌─────┬─────┐               une voix)
+     │   Cusco   │            │  Lisbon   │            │  Bangkok  │
+     │ Council 7 │            │ Council 7 │            │ Council 7 │   …        ← Cercles : les
+     └─────┴─────┘            └─────┴─────┘            └─────┴─────┘               branches
            └────────────────────────┬────────────────────────┘
-                                    │   chaque Cercle est forké depuis un modèle partagé
-                    ┌───────────────┴───────────────┐
-                    │     WORLD SERVICE CIRCLE       │   ← le tronc / la racine (« fondation ») :
-                    │   12 Steps · Preamble · docs   │      détient le modèle partagé + un
-                    │    7-seat Council · 4-of-7     │      Conseil (4/7) qui coordonne
-                    └───────────────────────────────┘      mais ne GOUVERNE pas
+                                    │   every Circle is forked from one shared template
+                     ┌───────────────┴───────────────┐
+                     │     WORLD SERVICE CIRCLE       │   ← le tronc / la racine (« fondation ») :
+                     │   12 Steps · Preamble · docs   │      détient le modèle partagé + un
+                     │    7-seat Council · 4-of-7     │      Conseil (4/7) qui coordonne
+                     └───────────────────────────────┘      mais ne gouverne PAS
 ```
 
 - **Les membres (la canopée)** — chacun rejoint l'ensemble des membres d'un Cercle sous forme
@@ -123,34 +95,32 @@ et le Cercle de Service Mondial est le tronc et les racines, à la base :
   voix.
 - **Les Cercles (les branches)** — groupes locaux autonomes, chacun avec son propre Conseil de 7 sièges,
   sa trésorerie et ses votes ; forkés depuis le modèle.
-- **Le Cercle de Service Mondial (le tronc / la racine)** — détient le modèle et les documents partagés
+- **Le World Service Circle (le tronc / la racine)** — détient le modèle et les documents partagés
   et coordonne la création des Cercles, mais ne **prime pas** sur la conscience collective locale. Le
   lien est un *lien de fédération*, pas une chaîne de commandement.
 
-## Qui fait quoi — le Conseil de 7 sièges
+## 🎩 Qui fait quoi — le Conseil de 7 sièges
 
 ```
                           THE COUNCIL  (7 seats · acts by 4-of-7 · IS the authority)
    ┌──────────────────────── 3 functional servants ────────────────────────┐
    │                                                                        │
    │   TREASURER          SECRETARY            RHYTHM KEEPER                 │
-   │   (Trésorier)        (Secrétaire)         (Gardien du Rythme)          │
-   │   gère la            accueille les        garde la cadence des         │
-   │   trésorerie &       membres, archives    réunions/cérémonies ;        │
-   │   le mint soulbound  & documents          siège de référence           │
+   │   stewards the       admits members,      keeps the cadence of         │
+   │   treasury &         records & docs,      meetings/ceremonies;         │
+   │   soulbound mint     proposal hygiene     the reference / lead seat    │
    │                                                                        │
    └────────────────────────────────────────────────────────────────────────┘
-   ┌──────────────── 4 anciens des directions (roue de médecine) ──────────┐
+   ┌──────────────────────── 4 elders of the directions ───────────────────┐
    │                                                                        │
    │   ELDER NORTH      ELDER EAST       ELDER SOUTH       ELDER WEST        │
-   │   (Ancien Nord)    (Ancien Est)     (Ancien Sud)      (Ancien Ouest)    │
-   │   aucune tâche quotidienne — leur rôle est le quorum et la résilience,  │
-   │   pour que la récupération ne dépende jamais des seuls trois servants   │
+   │   no daily duty — their role is quorum & resilience, so recovery       │
+   │   never depends on the three busy servants alone (medicine wheel)      │
    │                                                                        │
    └────────────────────────────────────────────────────────────────────────┘
 
-   MEMBRES  ──un membre, une voix (anonyme, ZK)──▶  décisions de conscience collective
-            le Conseil sert et récupère ; l'ensemble des membres décide de la direction
+   MEMBERS  ──one-member-one-vote (anonymous, ZK)──▶  group-conscience decisions
+            the Council serves and recovers; the membership decides direction
 ```
 
 - **Aucune clé d'administration.** Toute action privilégiée est un devoir d'un siège du Conseil ou une
@@ -167,11 +137,43 @@ Les quatre types de décision pris en charge par Ayni, et où chacun se situe :
 | Décision | Qui vote | Mécanisme |
 |---|---|---|
 | **Affaire locale** (les affaires propres d'un Cercle) | les membres de ce Cercle | vote de membre anonyme (ZK) |
-| **Charte de la fondation** (p. ex. les « 12 Étapes ») | seules les clés de niveau fondation | vote des membres/du Conseil du Service Mondial |
+| **Charte de la fondation** (p. ex. les « 12 Étapes ») | seules les clés de niveau fondation | vote des membres/du Conseil du World Service |
 | **Texte partagé** (p. ex. le Préambule suggéré) | **tous** les Cercles + la fondation | vote agrégé à l'échelle de la fédération |
 | **Récupération / trésorerie** | le Conseil de 7 sièges | proposition 4/7 + fenêtre de contestation |
 
 Des procédures détaillées, prêtes à copier-coller, pour tout cela se trouvent dans
+**[IMPLEMENTATION.md](../IMPLEMENTATION.md)**.
+
+<div align="center">
+  <img src="../images/BluePrint.png" alt="Ayni — blueprint" width="880" />
+</div>
+
+---
+
+## 🚀 Démarrage rapide
+
+> Prérequis : **Rust**, **Solana/Agave CLI 2.x**, **Anchor 0.31.1**, **Node 20+**, et (pour les preuves)
+> **circom 2.1** + **snarkjs**.
+
+```bash
+# 1. clone
+git clone https://github.com/Ayniator/Ayni.git && cd Ayni
+
+# 2. install JS deps (proving helpers + tests)
+npm install
+
+# 3. build the on-chain program
+anchor build
+
+# 4. run the test suite (localnet: memberships, 4-of-7 recovery, a real ZK vote round-trip)
+anchor test
+```
+
+Voilà tout le premier lancement. Les tests créent un Cercle, émettent des adhésions anonymes, exécutent
+une récupération à 4 sur 7, et vérifient une vraie preuve de vote Groth16 on-chain (et rejettent un
+nullifier rejoué).
+
+Pour mettre en place votre propre fraternité et exécuter les quatre types de vote, suivez pas à pas
 **[IMPLEMENTATION.md](../IMPLEMENTATION.md)**.
 
 ---
@@ -244,4 +246,8 @@ sous la même licence.
 Si le modèle d'Ayni — une **fraternité anonyme et sans propriétaire** — vous parle, ⭐ **mettez une
 étoile au dépôt** pour suivre le projet ; cela aide les autres à le trouver.
 
+</div>
+
+<div align="center">
+  <img src="../images/Model.png" alt="AHA / Ayni — the full model" width="920" />
 </div>
