@@ -394,25 +394,35 @@ impl MessagingKey {
     pub const SPACE: usize = 8 + 32 + 32 + 1;
 }
 
-/// An end-to-end encrypted 1:1 message. The ciphertext is a NaCl box openable
-/// only by `recipient` (with the sender's `sender_box` pubkey + `nonce`). May
-/// carry an `expires_at` after which clients hide it and anyone may close it.
-/// PDA: ["msg", recipient, sender, &id.to_le_bytes()].
+/// An end-to-end encrypted 1:1 message with a SEALED SENDER: neither the program
+/// nor the public chain stores who sent it. `eph_pubkey` is a fresh, single-use
+/// x25519 key — it leaks no identity and gives the sender forward secrecy (its
+/// secret half is destroyed right after send). The real sender is named AND
+/// signed *inside* the ciphertext, and the recipient verifies that signature
+/// after decrypting. The ciphertext is always exactly `CT_LEN` bytes (the
+/// plaintext is padded before sealing), so every message looks identical
+/// on-chain — no message-length leak. `expires_at` (0 = never) lets clients hide
+/// it and anyone close it afterwards. PDA: ["msg", recipient, &id.to_le_bytes()].
+///
+/// NOTE (documented limitation): the *recipient* and *timing* are unavoidably
+/// public (the recipient finds their mail by querying their own address), and
+/// the transaction fee-payer still links a message to whoever paid for it. True
+/// sender anonymity would need a relayer/mixnet — out of scope here.
 #[account]
 pub struct Message {
-    pub sender: Pubkey,
     pub recipient: Pubkey,
-    pub sender_box: [u8; 32], // sender's x25519 pubkey
+    pub eph_pubkey: [u8; 32], // single-use x25519 pubkey (sealed sender)
     pub nonce: [u8; 24],
     pub id: u64,
     pub created_at: i64,
     pub expires_at: i64, // 0 = never
-    pub ciphertext: Vec<u8>,
+    pub ciphertext: Vec<u8>, // always CT_LEN bytes (padded then sealed)
     pub bump: u8,
 }
 impl Message {
-    pub const MAX_CT: usize = 512;
-    pub const SPACE: usize = 8 + 32 + 32 + 32 + 24 + 8 + 8 + 8 + 4 + Self::MAX_CT + 1;
+    /// Fixed sealed length: 1024-byte padded plaintext + 16-byte NaCl box MAC.
+    pub const CT_LEN: usize = 1040;
+    pub const SPACE: usize = 8 + 32 + 32 + 24 + 8 + 8 + 8 + 4 + Self::CT_LEN + 1;
 }
 
 /// A foundation-led vote to rotate a CHILD Circle's Council seats. The World

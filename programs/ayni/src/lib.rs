@@ -317,17 +317,17 @@ pub mod ayni {
         instructions::register_messaging_key(ctx, box_pubkey)
     }
 
-    /// Store an end-to-end encrypted message to any wallet.
+    /// Store an end-to-end encrypted, sealed-sender message to any wallet.
     pub fn send_message(
         ctx: Context<SendMessage>,
         id: u64,
         recipient: Pubkey,
-        sender_box: [u8; 32],
+        eph_pubkey: [u8; 32],
         nonce: [u8; 24],
         expires_at: i64,
         ciphertext: Vec<u8>,
     ) -> Result<()> {
-        instructions::send_message(ctx, id, recipient, sender_box, nonce, expires_at, ciphertext)
+        instructions::send_message(ctx, id, recipient, eph_pubkey, nonce, expires_at, ciphertext)
     }
 
     /// Delete a message (sender/recipient anytime; anyone once expired).

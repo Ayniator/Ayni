@@ -2339,7 +2339,7 @@
     {
       "name": "send_message",
       "docs": [
-        "Store an end-to-end encrypted message to any wallet."
+        "Store an end-to-end encrypted, sealed-sender message to any wallet."
       ],
       "discriminator": [
         57,
@@ -2370,10 +2370,6 @@
                 "path": "recipient"
               },
               {
-                "kind": "account",
-                "path": "sender"
-              },
-              {
                 "kind": "arg",
                 "path": "id"
               }
@@ -2381,7 +2377,11 @@
           }
         },
         {
-          "name": "sender",
+          "name": "payer",
+          "docs": [
+            "Pays rent + signs the tx. Their key is NOT stored on the message; note",
+            "the fee-payer is still observable in the transaction itself."
+          ],
           "writable": true,
           "signer": true
         },
@@ -2400,7 +2400,7 @@
           "type": "pubkey"
         },
         {
-          "name": "sender_box",
+          "name": "eph_pubkey",
           "type": {
             "array": [
               "u8",
@@ -4420,24 +4420,30 @@
     {
       "name": "Message",
       "docs": [
-        "An end-to-end encrypted 1:1 message. The ciphertext is a NaCl box openable",
-        "only by `recipient` (with the sender's `sender_box` pubkey + `nonce`). May",
-        "carry an `expires_at` after which clients hide it and anyone may close it.",
-        "PDA: [\"msg\", recipient, sender, &id.to_le_bytes()]."
+        "An end-to-end encrypted 1:1 message with a SEALED SENDER: neither the program",
+        "nor the public chain stores who sent it. `eph_pubkey` is a fresh, single-use",
+        "x25519 key — it leaks no identity and gives the sender forward secrecy (its",
+        "secret half is destroyed right after send). The real sender is named AND",
+        "signed *inside* the ciphertext, and the recipient verifies that signature",
+        "after decrypting. The ciphertext is always exactly `CT_LEN` bytes (the",
+        "plaintext is padded before sealing), so every message looks identical",
+        "on-chain — no message-length leak. `expires_at` (0 = never) lets clients hide",
+        "it and anyone close it afterwards. PDA: [\"msg\", recipient, &id.to_le_bytes()].",
+        "",
+        "NOTE (documented limitation): the *recipient* and *timing* are unavoidably",
+        "public (the recipient finds their mail by querying their own address), and",
+        "the transaction fee-payer still links a message to whoever paid for it. True",
+        "sender anonymity would need a relayer/mixnet — out of scope here."
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "sender",
-            "type": "pubkey"
-          },
-          {
             "name": "recipient",
             "type": "pubkey"
           },
           {
-            "name": "sender_box",
+            "name": "eph_pubkey",
             "type": {
               "array": [
                 "u8",

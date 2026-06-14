@@ -11,10 +11,13 @@ import Identicon from "../../components/Identicon";
 import { explorerTx } from "../../lib/member";
 import { formatTime } from "../../lib/profile";
 import {
+  DecryptedMessage,
   InboxMessage,
+  MAX_PLAINTEXT,
+  SentRecord,
   decryptMessage,
   deleteMessage,
-  deriveBoxKeypair,
+  getSent,
   isRegistered,
   listInbox,
   markRead,
@@ -36,7 +39,8 @@ export default function Inbox() {
 
   const [registered, setRegistered] = useState<boolean | null>(null);
   const [msgs, setMsgs] = useState<InboxMessage[] | null>(null);
-  const [open, setOpen] = useState<Record<string, string>>({}); // pubkey -> decrypted text
+  const [open, setOpen] = useState<Record<string, DecryptedMessage>>({}); // pubkey -> decrypted
+  const [sent, setSent] = useState<(SentRecord & { expired: boolean })[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<Note>(null);
 
@@ -51,6 +55,7 @@ export default function Inbox() {
     if (!me) return;
     isRegistered(me).then(setRegistered).catch(() => setRegistered(false));
     listInbox(me).then(setMsgs).catch((e) => setNote({ kind: "err", text: String(e?.message || e) }));
+    setSent(getSent());
   }, [me]);
   useEffect(refresh, [refresh]);
 
@@ -78,8 +83,8 @@ export default function Inbox() {
     if (!publicKey || !sign) return;
     setBusy(m.pubkey); setNote(null);
     try {
-      const txt = await decryptMessage(m, publicKey, sign);
-      setOpen((o) => ({ ...o, [m.pubkey]: txt }));
+      const res = await decryptMessage(m, publicKey, sign);
+      setOpen((o) => ({ ...o, [m.pubkey]: res }));
       markRead(m.pubkey);
       window.dispatchEvent(new Event("aha:inbox-read"));
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
@@ -95,8 +100,9 @@ export default function Inbox() {
     try {
       const expiresAt = expiryDays ? Math.floor(Date.now() / 1000) + expiryDays * 86400 : 0;
       const sig = await sendMessage(wallet, sign, r, text.trim(), expiresAt);
-      setNote({ kind: "ok", text: "Encrypted message sent.", sig });
+      setNote({ kind: "ok", text: "Encrypted message sent — sealed sender (your address isn’t stored on it).", sig });
       setText(""); setTo("");
+      setSent(getSent());
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(null); }
   }
@@ -130,7 +136,8 @@ export default function Inbox() {
             <div className="form-row col"><label>To (any wallet address)</label>
               <input className="mono" value={to} onChange={(e) => setTo(e.target.value)} placeholder="recipient wallet — they must have enabled messaging" /></div>
             <div className="form-row col"><label>Message</label>
-              <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} maxLength={480} placeholder="Encrypted to the recipient only…" /></div>
+              <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} maxLength={MAX_PLAINTEXT} placeholder="Encrypted to the recipient only — sealed sender…" />
+              <span className="muted sm">{text.length}/{MAX_PLAINTEXT} · sealed sender (your address is signed inside, not exposed on-chain) · padded to a fixed size</span></div>
             <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
               <label className="sm muted">Expires
                 <select value={expiryDays} onChange={(e) => setExpiryDays(Number(e.target.value))} style={{ marginLeft: 6 }}>
@@ -147,24 +154,57 @@ export default function Inbox() {
           {msgs === null && <p className="muted">Loading…</p>}
           {msgs !== null && visible.length === 0 && <p className="muted">No messages.</p>}
           <div className="members">
-            {visible.map((m) => (
-              <div className="member" key={m.pubkey} style={{ alignItems: "flex-start" }}>
-                <Identicon seed={m.sender} size={34} />
-                <div className="meta" style={{ flex: 1, minWidth: 0 }}>
-                  <div className="name mono">{short(m.sender)}</div>
-                  <div className="sub">{when(m.createdAt)}{m.expiresAt ? ` · expires ${when(m.expiresAt)}` : ""}</div>
-                  {open[m.pubkey] !== undefined ? (
-                    <p style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{open[m.pubkey]}</p>
-                  ) : (
-                    <button className="btn btn-sm" style={{ marginTop: 6 }} disabled={busy === m.pubkey} onClick={() => reveal(m)}>
-                      {busy === m.pubkey ? "Decrypting…" : "🔒 Decrypt"}
-                    </button>
-                  )}
+            {visible.map((m) => {
+              const dec = open[m.pubkey];
+              return (
+                <div className="member" key={m.pubkey} style={{ alignItems: "flex-start" }}>
+                  <Identicon seed={dec?.from ?? m.pubkey} size={34} />
+                  <div className="meta" style={{ flex: 1, minWidth: 0 }}>
+                    <div className="name mono">
+                      {dec
+                        ? (dec.from
+                            ? <>{short(dec.from)} <span className="badge badge-alt" title="Sender signature verified">✓ verified</span></>
+                            : <span className="badge" title="Could not verify the sender signature">⚠ unverified sender</span>)
+                        : <span className="muted">🔒 Sealed sender</span>}
+                    </div>
+                    <div className="sub">{when(m.createdAt)}{m.expiresAt ? ` · expires ${when(m.expiresAt)}` : ""}</div>
+                    {dec ? (
+                      <>
+                        <p style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{dec.text}</p>
+                        {dec.from && (
+                          <button className="btn btn-sm btn-ghost" style={{ marginTop: 6 }} onClick={() => { setTo(dec.from!); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Reply</button>
+                        )}
+                      </>
+                    ) : (
+                      <button className="btn btn-sm" style={{ marginTop: 6 }} disabled={busy === m.pubkey} onClick={() => reveal(m)}>
+                        {busy === m.pubkey ? "Decrypting…" : "🔒 Decrypt"}
+                      </button>
+                    )}
+                  </div>
+                  <button className="btn btn-sm btn-ghost" disabled={busy === "del" + m.pubkey} onClick={() => remove(m)}>Delete</button>
                 </div>
-                <button className="btn btn-sm btn-ghost" disabled={busy === "del" + m.pubkey} onClick={() => remove(m)}>Delete</button>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
+          {sent.filter((s) => !s.expired).length > 0 && (
+            <>
+              <h3 style={{ margin: "18px 0 6px" }}>Sent <span className="muted sm">(this device only)</span></h3>
+              <div className="members">
+                {sent.filter((s) => !s.expired).map((s) => (
+                  <div className="member" key={s.pubkey} style={{ alignItems: "flex-start" }}>
+                    <Identicon seed={s.to} size={34} />
+                    <div className="meta" style={{ flex: 1, minWidth: 0 }}>
+                      <div className="name mono">→ {short(s.to)}</div>
+                      <div className="sub">{when(s.ts)}{s.expiresAt ? ` · expires ${when(s.expiresAt)}` : ""}</div>
+                      <p style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{s.text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="muted sm">Sent copies live only in this browser — the chain stores no sender, so they can’t be recovered elsewhere.</p>
+            </>
+          )}
         </>
       )}
     </>
