@@ -7,7 +7,28 @@ cd frontend
 docker compose up --build
 ```
 
-Then open **http://localhost:3000**.
+Access points (Caddy reverse proxy with automatic Let's Encrypt):
+- **https://$DOMAIN** — HTTPS on port 443.
+- **https://$DOMAIN:9999** — HTTPS on port 9999 (same Let's Encrypt cert).
+- **http://localhost:3000** — the Next.js app directly, bypassing the proxy.
+
+## HTTPS / domain (Let's Encrypt)
+
+`DOMAIN` defaults to **aha.a13z.org**. Override it (and set the ACME email) in the
+`.env` next to `docker-compose.yml`:
+
+```ini
+DOMAIN=aha.a13z.org            # public domain (A/AAAA record → this host)
+ACME_EMAIL=admin@a13z.org      # Let's Encrypt account email (recommended)
+```
+
+Then `docker compose up --build`. Caddy auto-provisions + renews the TLS cert and
+serves `https://aha.a13z.org` **and** `https://aha.a13z.org:9999` → the app.
+Certificates persist in the `caddy_data` volume across restarts.
+
+**Requirements:** the domain must resolve to this host, and **ports 80 and 443
+must be reachable from the internet** for the ACME challenge (port 9999 reuses the
+issued cert; the cert itself is obtained over 80/443).
 
 - `--build` builds the image the first time (and after code changes). On later
   runs you can drop it: `docker compose up`.

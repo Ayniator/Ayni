@@ -1,0 +1,16 @@
+# Caddy reverse proxy for the AHA · Ayni frontend.
+# Serves the site over HTTPS with an automatic Let's Encrypt certificate on both
+# the standard port 443 and on port 9999, proxying to the Next.js container.
+#
+# $DOMAIN defaults to aha.a13z.org. The cert is issued automatically once the
+# domain's DNS points at this host and ports 80 + 443 are reachable.
+
+{
+	# Let's Encrypt account email (recommended). Set ACME_EMAIL in .env.
+	email {$ACME_EMAIL}
+}
+
+# Same domain + cert on 443 (default) and on 9999, both HTTPS.
+{$DOMAIN:aha.a13z.org}, {$DOMAIN:aha.a13z.org}:9999 {
+	reverse_proxy frontend:3000
+}

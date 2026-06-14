@@ -1,10 +1,16 @@
-# One command to launch the AHA · Ayni frontend:
+# Launch the AHA · Ayni frontend:
 #
 #     docker compose up --build
 #
-# Then open http://localhost:3000
+# Access (Caddy + automatic Let's Encrypt for $DOMAIN, default aha.a13z.org):
+#   • https://$DOMAIN              (HTTPS, port 443)
+#   • https://$DOMAIN:9999         (HTTPS, port 9999 — same Let's Encrypt cert)
+#   • http://localhost:3000        (the app directly, bypassing the proxy)
+# Requires the domain's DNS → this host with ports 80 + 443 reachable for ACME.
 #
-# Override any value with a .env file next to this file (or shell env), e.g.
+# Configure via a .env file next to this one (or shell env), e.g.
+#     DOMAIN=aha.a13z.org
+#     ACME_EMAIL=admin@a13z.org
 #     NEXT_PUBLIC_RPC_URL=https://devnet.helius-rpc.com/?api-key=KEY
 #     NEXT_PUBLIC_FOUNDATION_CIRCLE=DH6uDzb77mZuF8TP2ucdHUkwyW6wyZkJj8nm3i79EAUo
 
@@ -19,11 +25,12 @@ services:
         NEXT_PUBLIC_FOUNDATION_CIRCLE: ${NEXT_PUBLIC_FOUNDATION_CIRCLE:-DH6uDzb77mZuF8TP2ucdHUkwyW6wyZkJj8nm3i79EAUo}
         NEXT_PUBLIC_AHA_EMAIL_DOMAIN: ${NEXT_PUBLIC_AHA_EMAIL_DOMAIN:-aha.community}
     image: aha-frontend
+    expose:
+      - "3000"
     ports:
-      - "3000:3000"
+      - "3000:3000" # direct access (optional — remove to keep it proxy-only)
     environment:
-      # Server-side only (the /api/circle-email route). Optional — without
-      # SMTP_HOST the address is still assigned, just no mail is sent.
+      # Server-side only (the /api/circle-email route). Optional.
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
@@ -32,3 +39,25 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       AHA_EMAIL_DOMAIN: ${AHA_EMAIL_DOMAIN:-aha.community}
     restart: unless-stopped
+
+  # Reverse proxy: HTTPS on $DOMAIN (auto Let's Encrypt) + plain HTTP on :9999.
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - frontend
+    environment:
+      DOMAIN: ${DOMAIN:-aha.a13z.org}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    ports:
+      - "9999:9999" # HTTPS on the domain (Let's Encrypt), alternate port
+      - "443:443"   # HTTPS on the domain (Let's Encrypt)
+      - "80:80"     # ACME HTTP-01 challenge + HTTP→HTTPS redirect
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data     # persisted certificates (survives restarts)
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
