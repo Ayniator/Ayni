@@ -10,7 +10,10 @@ import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import Identicon from "../../components/Identicon";
 import RoleIcon from "../../components/RoleIcon";
-import { CircleInfo, cachedCircleInfos, explorerTx, foundationOf, listCircles } from "../../lib/member";
+import { CircleInfo, cachedCircleInfos, connection, explorerTx, foundationOf, listCircles } from "../../lib/member";
+import { listPosts } from "../../lib/posts";
+import { listCircleCountries, setCircleCountry } from "../../lib/country";
+import { COUNTRIES, CONTINENT_ORDER, countryByCode } from "../../lib/countries";
 import {
   CouncilProposal,
   SEAT_ROLES,
@@ -101,6 +104,7 @@ export default function Foundation() {
           </div>
 
           <SeatsPanel foundation={foundation} wallet={wallet ?? null} me={me!} />
+          <AllCirclesPanel foundation={foundation} circles={circles} wallet={wallet ?? null} me={me!} onChanged={() => listCircles().then(setCircles)} />
           <ProfilePanel foundation={foundation} wallet={wallet ?? null} />
           <ReflectionsPanel foundation={foundation} />
           <ChildRotationPanel foundation={foundation} circles={circles} wallet={wallet ?? null} me={me!} />
@@ -528,6 +532,7 @@ function ChildClosePanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<Note>(null);
   const [votes, setVotes] = useState<ChildVote[] | null>(null);
+  const [execTimes, setExecTimes] = useState<Record<string, number>>({});
   const mySeats = mySeatIndices(foundation.seats, me);
   // Live name → remembered name (for already-deleted Circles) → truncated pubkey.
   const childName = (p: string) => circles.find((c) => c.pubkey === p)?.name ?? recallName(p) ?? p.slice(0, 8) + "…";
@@ -537,6 +542,23 @@ function ChildClosePanel({
   useEffect(() => { if (!sel && children.length) setSel(children[0].pubkey); }, [children, sel]);
   const load = useCallback(() => { listChildCloseVotes(foundation.pubkey).then(setVotes).catch(() => setVotes([])); }, [foundation.pubkey]);
   useEffect(load, [load]);
+
+  // The deletion date: the locally-stamped time, else the execute tx's on-chain
+  // blockTime (the vote PDA survives the close, so its latest signature dates it).
+  useEffect(() => {
+    if (!votes) return;
+    let cancelled = false;
+    (async () => {
+      const conn = connection();
+      const need = votes.filter((v) => v.status === "executed" && !recallDeleted(v.child) && !execTimes[v.pubkey]);
+      const got = await Promise.all(need.map(async (v) => {
+        try { const s = await conn.getSignaturesForAddress(new PublicKey(v.pubkey), { limit: 1 }); return [v.pubkey, s[0]?.blockTime ?? 0] as const; }
+        catch { return [v.pubkey, 0] as const; }
+      }));
+      if (!cancelled) setExecTimes((p) => { const n = { ...p }; for (const [k, t] of got) if (t) n[k] = t; return n; });
+    })();
+    return () => { cancelled = true; };
+  }, [votes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function vote() {
     if (!sel || !wallet) return;
@@ -591,7 +613,7 @@ function ChildClosePanel({
                     <div className="name">Delete {childName(v.child)}</div>
                     <div className="sub">
                       {v.approvals}/4 · {v.status}
-                      {v.status === "executed" && recallDeleted(v.child) && ` · deleted ${fmtDate(recallDeleted(v.child)!)}`}
+                      {v.status === "executed" && (recallDeleted(v.child) ?? execTimes[v.pubkey]) && ` · deleted ${fmtDate((recallDeleted(v.child) ?? execTimes[v.pubkey])!)}`}
                       {iApproved && " · you approved"}
                     </div>
                   </div>
@@ -614,6 +636,161 @@ function ChildClosePanel({
           })}
         </div>
       )}
+    </section>
+  );
+}
+
+// ===========================================================================
+// All Circles — the full federation directory, grouped continent → country.
+// Per Circle: members, last post, last on-chain change; set country, show on
+// the map (/?circle=…), message the 7 seats, or open a 4-of-7 delete vote.
+// ===========================================================================
+
+type CircleStats = { lastPost: number | null; lastChange: number | null };
+
+function AllCirclesPanel({
+  foundation, circles, wallet, me, onChanged,
+}: { foundation: CircleInfo; circles: CircleInfo[]; wallet: any; me: string; onChanged: () => void }) {
+  const [countries, setCountries] = useState<Record<string, string>>({});
+  const [stats, setStats] = useState<Record<string, CircleStats>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<Note>(null);
+  const [openSeats, setOpenSeats] = useState<string | null>(null);
+  const mySeats = mySeatIndices(foundation.seats, me);
+
+  // A Circle the foundation governs (so it may open a delete vote over it).
+  const isFederation = (c: CircleInfo) =>
+    c.pubkey !== foundation.pubkey && (c.parent === foundation.pubkey || c.parent === foundation.parent);
+
+  const loadCountries = useCallback(() => { listCircleCountries().then(setCountries).catch(() => {}); }, []);
+  useEffect(loadCountries, [loadCountries]);
+
+  // Last board post + last on-chain activity per Circle (best-effort, parallel).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const conn = connection();
+      const entries = await Promise.all(circles.map(async (c) => {
+        let lastPost: number | null = null, lastChange: number | null = null;
+        try { const posts = await listPosts(c.pubkey); lastPost = posts.length ? posts[0].createdAt : null; } catch {}
+        try { const sigs = await conn.getSignaturesForAddress(new PublicKey(c.pubkey), { limit: 1 }); lastChange = sigs[0]?.blockTime ?? null; } catch {}
+        return [c.pubkey, { lastPost, lastChange }] as const;
+      }));
+      if (!cancelled) setStats(Object.fromEntries(entries));
+    })();
+    return () => { cancelled = true; };
+  }, [circles]);
+
+  async function setCountry(c: CircleInfo, code: string) {
+    if (!wallet || !code) return;
+    setBusy("c" + c.pubkey); setNote(null);
+    try {
+      const sig = await setCircleCountry(wallet, new PublicKey(c.pubkey), code);
+      setNote({ kind: "ok", text: `Set ${c.name}'s country to ${countryByCode(code)?.name ?? code}.`, sig });
+      setCountries((p) => ({ ...p, [c.pubkey]: code.toUpperCase() }));
+    } catch (e: any) { setNote({ kind: "err", text: `${c.name}: ${e?.message || e} (a seat of that Circle must sign).` }); }
+    finally { setBusy(null); }
+  }
+
+  async function del(c: CircleInfo) {
+    if (!wallet) return;
+    if (!confirm(`Open a 4-of-7 vote to DELETE "${c.name}"? If it passes, the Circle is closed.`)) return;
+    setBusy("d" + c.pubkey); setNote(null);
+    try {
+      const sig = await proposeChildClose(wallet, new PublicKey(foundation.pubkey), new PublicKey(c.pubkey), 7);
+      setNote({ kind: "ok", text: `Delete vote opened for ${c.name} (4-of-7). Approve & execute it under “Delete a Circle” below.`, sig });
+      onChanged();
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
+
+  // Group continent → country → circles. Circles with no country fall into an
+  // "Unknown" continent bucket, shown last.
+  const groups = useMemo(() => {
+    const byContinent = new Map<string, Map<string, { country: ReturnType<typeof countryByCode>; list: CircleInfo[] }>>();
+    for (const c of circles) {
+      const country = countryByCode(countries[c.pubkey]);
+      const continent = country?.continent ?? "Unknown";
+      const key = country?.code ?? "??";
+      if (!byContinent.has(continent)) byContinent.set(continent, new Map());
+      const m = byContinent.get(continent)!;
+      if (!m.has(key)) m.set(key, { country, list: [] });
+      m.get(key)!.list.push(c);
+    }
+    const order: string[] = [...CONTINENT_ORDER.filter((x) => byContinent.has(x)), ...(byContinent.has("Unknown") ? ["Unknown"] : [])];
+    return order.map((cont) => {
+      const m = byContinent.get(cont)!;
+      const list = [...m.values()].sort((a, b) => (a.country?.name ?? "ZZ").localeCompare(b.country?.name ?? "ZZ"));
+      for (const g of list) g.list.sort((a, b) => a.name.localeCompare(b.name));
+      return { continent: cont, countries: list };
+    });
+  }, [circles, countries]);
+
+  return (
+    <section className="card">
+      <div className="section-head">
+        <h2>All Circles</h2>
+        <p className="muted sm">Every Circle in the federation, grouped by continent and country. Set a Circle&apos;s country, show it on <a href="/">the map</a>, message its 7 seats, or open a delete vote.</p>
+      </div>
+
+      {circles.length === 0 ? (
+        <p className="muted sm">No Circles found on this cluster.</p>
+      ) : groups.map((g) => (
+        <div key={g.continent} style={{ marginTop: 10 }}>
+          <h3 style={{ margin: "10px 0 2px", fontSize: 15 }}>{g.continent}</h3>
+          {g.countries.map((cg) => (
+            <div key={cg.country?.code ?? "??"} style={{ marginBottom: 6 }}>
+              <div className="muted sm" style={{ fontWeight: 600, margin: "6px 0 2px" }}>
+                {cg.country ? cg.country.name : "Country not set"}
+              </div>
+              {cg.list.map((c) => {
+                const st = stats[c.pubkey];
+                const isFound = c.pubkey === foundation.pubkey;
+                return (
+                  <div className="member" key={c.pubkey} style={{ alignItems: "flex-start" }}>
+                    <Identicon seed={c.pubkey} size={30} />
+                    <div className="meta" style={{ flex: 1, minWidth: 0 }}>
+                      <div className="name">{c.name}{isFound && <span className="badge badge-alt" style={{ marginLeft: 6 }}>foundation</span>}</div>
+                      <div className="sub">
+                        {c.memberCount} member{c.memberCount === 1 ? "" : "s"}
+                        {" · last post "}{st ? (st.lastPost ? fmtDate(st.lastPost) : "—") : "…"}
+                        {" · last change "}{st ? (st.lastChange ? fmtDate(st.lastChange) : "—") : "…"}
+                      </div>
+                      {openSeats === c.pubkey && (
+                        <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                          {SEAT_ROLES.map((role, i) =>
+                            c.seats[i] && c.seats[i] !== PublicKey.default.toBase58() ? (
+                              <Link key={i} href={`/inbox?to=${c.seats[i]}`} className="btn btn-sm btn-ghost" title={`Message ${role} (${short(c.seats[i])})`}>✉ {role}</Link>
+                            ) : null
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="row" style={{ gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <select
+                        value={countries[c.pubkey] ?? ""}
+                        disabled={busy === "c" + c.pubkey || mySeats.length === 0}
+                        onChange={(e) => setCountry(c, e.target.value)}
+                        title="Set this Circle's country (a seat of that Circle must sign)"
+                        style={{ maxWidth: 150 }}
+                      >
+                        <option value="">— country —</option>
+                        {COUNTRIES.map((co) => <option key={co.code} value={co.code}>{co.name}</option>)}
+                      </select>
+                      <Link href={`/?circle=${c.pubkey}`} className="btn btn-sm btn-ghost" title="Show this Circle on the map">Show on map</Link>
+                      <button className="btn btn-sm btn-ghost" onClick={() => setOpenSeats(openSeats === c.pubkey ? null : c.pubkey)}>✉ seats</button>
+                      {isFederation(c) && mySeats.length > 0 && (
+                        <button className="btn btn-sm btn-ghost" disabled={busy === "d" + c.pubkey} onClick={() => del(c)}>{busy === "d" + c.pubkey ? "…" : "Delete"}</button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      ))}
+      <TxNote note={note} />
     </section>
   );
 }

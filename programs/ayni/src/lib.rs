@@ -219,6 +219,14 @@ pub mod ayni {
         instructions::set_open_membership(ctx, open)
     }
 
+    /// Set a Circle's country (ISO-3166-1 alpha-2 code, e.g. "FR") for the
+    /// foundation directory's continent → country grouping. Any Council seat may
+    /// set it; a separate PDA, so existing Circles need no migration.
+    /// PDA: ["country", circle].
+    pub fn set_circle_country(ctx: Context<SetCircleCountry>, code: String) -> Result<()> {
+        instructions::set_circle_country(ctx, code)
+    }
+
     // --- Sybil resistance: anonymous proof-of-personhood (see docs/sybil.md) ---
 
     /// Configure the Circle's sybil gate (on/off + the unique-human Merkle root).

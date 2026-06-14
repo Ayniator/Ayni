@@ -2428,6 +2428,72 @@
       ]
     },
     {
+      "name": "set_circle_country",
+      "docs": [
+        "Set a Circle's country (ISO-3166-1 alpha-2 code, e.g. \"FR\") for the",
+        "foundation directory's continent → country grouping. Any Council seat may",
+        "set it; a separate PDA, so existing Circles need no migration.",
+        "PDA: [\"country\", circle]."
+      ],
+      "discriminator": [
+        201,
+        71,
+        33,
+        49,
+        6,
+        0,
+        186,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "country",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (signs + pays the marker rent on first set)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "code",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "set_meetings",
       "docs": [
         "Publish/replace a Circle's meeting calendar (recurring + sessions JSON)."
@@ -3186,6 +3252,19 @@
       ]
     },
     {
+      "name": "CircleCountry",
+      "discriminator": [
+        35,
+        104,
+        68,
+        139,
+        214,
+        107,
+        216,
+        6
+      ]
+    },
+    {
       "name": "CircleMeetings",
       "discriminator": [
         246,
@@ -3832,6 +3911,33 @@
             "docs": [
               "Human-readable Circle name (also a PDA seed, so <= MAX_NAME bytes)."
             ],
+            "type": "string"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CircleCountry",
+      "docs": [
+        "A Circle's country — an ISO-3166-1 alpha-2 code (e.g. \"FR\"), set by any",
+        "Council seat. Powers the foundation directory's continent → country grouping",
+        "(the continent is derived client-side from the code). A separate PDA, so the",
+        "`Circle`/`CircleProfile` layouts are untouched and existing Circles need no",
+        "migration. PDA: [\"country\", circle]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "code",
             "type": "string"
           },
           {

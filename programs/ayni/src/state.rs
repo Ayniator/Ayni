@@ -329,6 +329,23 @@ impl OpenMembership {
     pub const SPACE: usize = 8 + 32 + 1 + 1;
 }
 
+/// A Circle's country — an ISO-3166-1 alpha-2 code (e.g. "FR"), set by any
+/// Council seat. Powers the foundation directory's continent → country grouping
+/// (the continent is derived client-side from the code). A separate PDA, so the
+/// `Circle`/`CircleProfile` layouts are untouched and existing Circles need no
+/// migration. PDA: ["country", circle].
+#[account]
+pub struct CircleCountry {
+    pub circle: Pubkey,
+    pub code: String, // ISO-3166-1 alpha-2, uppercase (e.g. "FR")
+    pub bump: u8,
+}
+
+impl CircleCountry {
+    pub const MAX_CODE: usize = 8;
+    pub const SPACE: usize = 8 + 32 + 4 + Self::MAX_CODE + 1;
+}
+
 /// A Circle's meeting calendar — recurring patterns + exceptional sessions —
 /// as a compact JSON string every member (and visitor) can read. Set by any
 /// Council seat. Separate PDA so the `Circle`/`CircleProfile` layouts are

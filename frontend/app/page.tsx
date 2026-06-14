@@ -54,6 +54,19 @@ export default function Home() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Deep link from the foundation directory: /?circle=<Circle pubkey> centers
+  // the map on that Circle and opens its detail card.
+  useEffect(() => {
+    if (!circles.length) return;
+    const want = new URLSearchParams(window.location.search).get("circle");
+    if (!want) return;
+    const match = circles.find((c) => c.circle === want);
+    if (match) {
+      setCenter({ lat: match.lat, lon: match.lon });
+      setSelected({ ...match, distanceKm: 0 });
+    }
+  }, [circles]);
+
   // Coarse IP-based location — works without permission and over plain http
   // (e.g. when the app is opened via a LAN IP, where the browser geolocation
   // API is disabled as a non-secure context).

@@ -12,16 +12,19 @@ export const metadata: Metadata = {
     "Ancestral Humanity Anonymous — find a fellowship Circle near you, read the Daily Reflection, and browse shared documents. Anonymous, owner-less, on Solana.",
   manifest: "/site.webmanifest",
   icons: {
-    // 192 first so wallets (Phantom/Solflare) that grab the first/largest icon
-    // when a dApp connects show the crisp logo, not the old favicon.
+    // favicon.ico FIRST: it's the conventional icon wallets (Solflare) and
+    // browsers fetch for the small site/trust badge — a 192px PNG in that slot
+    // renders blank. The large PNGs stay listed (and in the manifest +
+    // apple-touch-icon) so the wallet connect modal still gets the crisp logo.
     icon: [
-      { url: "/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
-      { url: "/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon.ico" },
+      { url: "/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: "/android-chrome-192x192.png",
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
 };
 
