@@ -3,6 +3,7 @@
 import Link from "next/link";
 import WalletButton from "./WalletButton";
 import FoundationNavLink from "./FoundationNavLink";
+import InboxNavLink from "./InboxNavLink";
 import SettingsControls from "./SettingsControls";
 import NetworkSelector from "./NetworkSelector";
 import { useT } from "./SettingsProvider";
@@ -23,6 +24,7 @@ export default function Nav() {
         <Link href="/board">{t("nav.board")}</Link>
         <Link href="/create">{t("nav.create")}</Link>
         <Link href="/me">{t("nav.me")}</Link>
+        <InboxNavLink />
         <FoundationNavLink />
       </nav>
       <div className="nav-right">

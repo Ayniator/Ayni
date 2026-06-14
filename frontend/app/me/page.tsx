@@ -34,6 +34,7 @@ import {
 } from "../../lib/member";
 import { emailNote, notifyCircleEmail } from "../../lib/circleEmail";
 import CircleAdmin from "../admin/CircleAdmin";
+import { fileToAvatarDataUrl, getUserProfile, listTimezones, setUserProfile } from "../../lib/profile";
 
 const sol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(4).replace(/\.?0+$/, "") || "0";
 const day = (unix: number) => new Date(unix * 1000).toLocaleDateString();
@@ -108,6 +109,7 @@ export default function Me() {
         <div className="grid two" style={{ alignItems: "start" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <WalletCard publicKey={publicKey} balance={balance} memberships={memberships} byPubkey={byPubkey} home={home} />
+            <ProfileCard />
             <JoinCard
               circles={circles}
               wallet={wallet ?? null}
@@ -155,10 +157,20 @@ function WalletCard({
   home: string | null;
 }) {
   const addr = publicKey.toBase58();
+  const [avatar, setAvatar] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    const sync = () => setAvatar(getUserProfile().avatar);
+    sync();
+    window.addEventListener("aha:profile", sync);
+    return () => window.removeEventListener("aha:profile", sync);
+  }, []);
   return (
     <div className="card">
       <div className="row">
-        <Identicon seed={addr} size={46} />
+        {avatar
+          ? /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={avatar} alt="" width={46} height={46} style={{ borderRadius: "50%", objectFit: "cover" }} />
+          : <Identicon seed={addr} size={46} />}
         <div className="meta" style={{ flex: 1, minWidth: 0 }}>
           <div className="name addr" title={addr}>
             {addr.slice(0, 4)}…{addr.slice(-4)}
@@ -197,6 +209,67 @@ function WalletCard({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function ProfileCard() {
+  const [profile, setProfile] = useState(() => getUserProfile());
+  const [busy, setBusy] = useState(false);
+  const tzs = useMemo(() => listTimezones(), []);
+
+  async function onFile(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const avatar = await fileToAvatarDataUrl(file);
+      const next = { ...profile, avatar };
+      setProfile(next);
+      setUserProfile(next);
+    } catch {
+      /* ignore non-images */
+    } finally {
+      setBusy(false);
+    }
+  }
+  function setTz(timezone: string) {
+    const next = { ...profile, timezone: timezone || undefined };
+    setProfile(next);
+    setUserProfile(next);
+  }
+  function clearAvatar() {
+    const next = { ...profile, avatar: undefined };
+    setProfile(next);
+    setUserProfile(next);
+  }
+
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>My profile</h3>
+      <div className="row" style={{ gap: 12 }}>
+        {profile.avatar ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={profile.avatar} alt="" width={48} height={48} style={{ borderRadius: "50%", objectFit: "cover" }} />
+        ) : (
+          <div className="muted sm" style={{ width: 48, height: 48, borderRadius: "50%", border: "1px dashed var(--border-strong)", display: "flex", alignItems: "center", justifyContent: "center" }}>—</div>
+        )}
+        <div className="meta" style={{ flex: 1 }}>
+          <label className="sm">Avatar{" "}
+            <input type="file" accept="image/*" disabled={busy} onChange={(e) => onFile(e.target.files?.[0])} />
+          </label>
+          {profile.avatar && <button className="btn btn-sm btn-ghost" style={{ marginTop: 4 }} onClick={clearAvatar}>Remove</button>}
+        </div>
+      </div>
+      <div className="form-row col" style={{ marginTop: 10 }}>
+        <label>Timezone</label>
+        <select value={profile.timezone ?? ""} onChange={(e) => setTz(e.target.value)}>
+          <option value="">Device default</option>
+          {tzs.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+        </select>
+      </div>
+      <p className="muted sm" style={{ marginBottom: 0 }}>Stored on this device. The avatar replaces your Jazzicon here; the timezone localises message times.</p>
     </div>
   );
 }

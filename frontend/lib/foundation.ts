@@ -200,3 +200,60 @@ export async function executeChildRotation(
     .accounts({ foundation, vote, child, executor: wallet.publicKey })
     .rpc();
 }
+
+// --- Delete a federation Circle (foundation 4-of-7) ---
+
+export const childCloseVotePda = (child: PublicKey, nonce: anchor.BN) =>
+  PublicKey.findProgramAddressSync(
+    [seed("childclose"), child.toBytes(), nonce.toArrayLike(Buffer, "le", 8)],
+    PROGRAM_ID
+  )[0];
+
+export async function listChildCloseVotes(foundation: string, threshold = 4): Promise<ChildVote[]> {
+  const program = readOnlyProgram();
+  const rows = await (program.account as any).childCloseVote.all([{ memcmp: { offset: 8, bytes: foundation } }]);
+  const now = Date.now() / 1000;
+  return rows
+    .map((r: any): ChildVote => {
+      const a = r.account;
+      const approvals = popcount(a.approvals);
+      const expiresAt = Number(a.expiresAt);
+      const status: ChildVote["status"] = a.executed ? "executed" : now >= expiresAt ? "expired" : approvals >= threshold ? "passed" : "open";
+      return {
+        pubkey: r.publicKey.toBase58(), foundation: a.foundation.toBase58(), child: a.child.toBase58(),
+        nonce: a.nonce.toString(), newSeats: [], approvals, approvedSeats: bitsOf(a.approvals),
+        createdAt: Number(a.createdAt), expiresAt, executed: a.executed, status,
+      };
+    })
+    .sort((x: ChildVote, y: ChildVote) => y.createdAt - x.createdAt);
+}
+
+export async function proposeChildClose(
+  wallet: SigningWallet, foundation: PublicKey, child: PublicKey, validityDays: number
+): Promise<string> {
+  const nonce = anchorBN(Date.now());
+  const validitySecs = Math.round(Math.min(90, Math.max(1, validityDays)) * 24 * 60 * 60);
+  return programWith(wallet)
+    .methods.proposeChildClose(nonce, anchorBN(validitySecs))
+    .accounts({ foundation, child, vote: childCloseVotePda(child, nonce), proposer: wallet.publicKey })
+    .rpc();
+}
+
+export async function approveChildClose(wallet: SigningWallet, foundation: PublicKey, vote: PublicKey): Promise<string> {
+  return programWith(wallet).methods.approveChildClose().accounts({ foundation, vote, seat: wallet.publicKey }).rpc();
+}
+
+/** Apply a passed delete vote — closes the child Circle (and its profile if any). */
+export async function executeChildClose(
+  wallet: SigningWallet, foundation: PublicKey, child: PublicKey, vote: PublicKey, hasProfile: boolean
+): Promise<string> {
+  return programWith(wallet)
+    .methods.executeChildClose()
+    .accounts({
+      foundation, vote, child,
+      profile: hasProfile ? circleProfilePda(child) : null,
+      recipient: wallet.publicKey,
+      executor: wallet.publicKey,
+    } as any)
+    .rpc();
+}

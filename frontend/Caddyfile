@@ -10,7 +10,7 @@
 	email {$ACME_EMAIL}
 }
 
-# Same domain + cert on 443 (default) and on 9999, both HTTPS.
-{$DOMAIN:aha.a13z.org}, {$DOMAIN:aha.a13z.org}:9999 {
+# Same domain + Let's Encrypt cert on 443 (default), 8443, and 9999 — all HTTPS.
+{$DOMAIN:aha.a13z.org}, {$DOMAIN:aha.a13z.org}:8443, {$DOMAIN:aha.a13z.org}:9999 {
 	reverse_proxy frontend:3000
 }

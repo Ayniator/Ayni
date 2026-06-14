@@ -33,6 +33,7 @@ import {
   mySeatIndices,
   propose,
   renewMembership,
+  revokeMembership,
   setOpenMembership,
 } from "../../lib/admin";
 import { emailNote, notifyCircleEmail } from "../../lib/circleEmail";
@@ -609,6 +610,21 @@ function MembersSection({ circle, wallet, amSecretary }: { circle: CircleInfo; w
     }
   }
 
+  async function revoke(m: CircleMember) {
+    if (!confirm("Delete this membership? This closes the membership account (the Scribe-Secretary acts).")) return;
+    setBusy("revoke-" + m.pubkey);
+    setNote(null);
+    try {
+      const sig = await revokeMembership(wallet, new PublicKey(circle.pubkey), new PublicKey(m.pubkey));
+      setNote({ kind: "ok", text: "Membership deleted.", sig });
+      load();
+    } catch (e: any) {
+      setNote({ kind: "err", text: String(e?.message || e) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <section className="card">
       <SectionHead
@@ -668,22 +684,27 @@ function MembersSection({ circle, wallet, amSecretary }: { circle: CircleInfo; w
             </div>
             <span className={`pill ${m.active ? "" : "pill-dim"}`}>{m.active ? "active" : "expired"}</span>
             <div className="member-actions">
-              <button className="btn btn-sm btn-ghost" disabled={busy === m.pubkey} onClick={() => renew(m)}>
+              <button className="btn btn-sm btn-ghost" disabled={!!busy} onClick={() => renew(m)}>
                 {busy === m.pubkey ? "…" : "Renew"}
               </button>
-              <button className="btn btn-sm btn-disabled" disabled title="The protocol has no revoke/suspend instruction yet — see BACKLOG F24.">
-                Suspend
-              </button>
-              <button className="btn btn-sm btn-disabled" disabled title="The protocol has no revoke/delete instruction yet — see BACKLOG F24.">
-                Delete
-              </button>
+              {amSecretary ? (
+                <button className="btn btn-sm btn-ghost" disabled={!!busy} onClick={() => revoke(m)}>
+                  {busy === "revoke-" + m.pubkey ? "…" : "Delete"}
+                </button>
+              ) : (
+                <button className="btn btn-sm btn-disabled" disabled title="Only the Scribe-Secretary can delete a membership.">
+                  Delete
+                </button>
+              )}
             </div>
           </div>
         ))}
       </div>
       <p className="muted sm" style={{ marginTop: 10 }}>
-        <strong>Suspend / Delete</strong> are disabled: memberships are soulbound and the program
-        has no revoke instruction yet. Tracked in the backlog (F24) as a needed protocol change.
+        <strong>Delete</strong> (Scribe-Secretary only) closes the membership account. Note: the
+        member's anonymous commitment stays in the append-only member tree until it is rebuilt, so
+        revocation prevents renewal but doesn't retroactively remove them from the votable set.
+        There is no separate <strong>Suspend</strong> (no on-chain active flag) — use Delete.
       </p>
     </section>
   );

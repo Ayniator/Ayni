@@ -26,11 +26,15 @@ import {
   ProfileFields,
   ReflectionMap,
   approveChildRotation,
+  approveChildClose,
   executeChildRotation,
+  executeChildClose,
   getLocalReflections,
   getProfile,
   listChildVotes,
+  listChildCloseVotes,
   proposeChildRotation,
+  proposeChildClose,
   saveLocalReflections,
   upsertCircleProfile,
 } from "../../lib/foundation";
@@ -88,6 +92,7 @@ export default function Foundation() {
           <ProfilePanel foundation={foundation} wallet={wallet ?? null} />
           <ReflectionsPanel foundation={foundation} />
           <ChildRotationPanel foundation={foundation} circles={circles} wallet={wallet ?? null} me={me!} />
+          <ChildClosePanel foundation={foundation} circles={circles} wallet={wallet ?? null} me={me!} onChanged={() => listCircles().then(setCircles)} />
         </>
       )}
     </>
@@ -478,6 +483,103 @@ function ChildRotationPanel({
             })}
           </div>
         </>
+      )}
+    </section>
+  );
+}
+
+// ===========================================================================
+// Delete a Circle — foundation 4-of-7 over a federation circle
+// ===========================================================================
+
+function ChildClosePanel({
+  foundation, circles, wallet, me, onChanged,
+}: { foundation: CircleInfo; circles: CircleInfo[]; wallet: any; me: string; onChanged: () => void }) {
+  const children = useMemo(
+    () => circles.filter((c) => c.pubkey !== foundation.pubkey && (c.parent === foundation.pubkey || c.parent === foundation.parent)),
+    [circles, foundation.pubkey, foundation.parent]
+  );
+  const [sel, setSel] = useState("");
+  const [days, setDays] = useState(7);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<Note>(null);
+  const [votes, setVotes] = useState<ChildVote[] | null>(null);
+  const mySeats = mySeatIndices(foundation.seats, me);
+  const childName = (p: string) => circles.find((c) => c.pubkey === p)?.name ?? p.slice(0, 8) + "…";
+
+  useEffect(() => { if (!sel && children.length) setSel(children[0].pubkey); }, [children, sel]);
+  const load = useCallback(() => { listChildCloseVotes(foundation.pubkey).then(setVotes).catch(() => setVotes([])); }, [foundation.pubkey]);
+  useEffect(load, [load]);
+
+  async function vote() {
+    if (!sel || !wallet) return;
+    if (!confirm(`Open a 4-of-7 vote to DELETE "${childName(sel)}"? If it passes, the Circle is closed.`)) return;
+    setBusy("vote"); setNote(null);
+    try {
+      const sig = await proposeChildClose(wallet, new PublicKey(foundation.pubkey), new PublicKey(sel), days);
+      setNote({ kind: "ok", text: `Delete vote opened for ${childName(sel)} (4-of-7, valid ${days}d).`, sig });
+      load();
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
+
+  async function act(label: string, run: () => Promise<string>) {
+    setBusy(label); setNote(null);
+    try { const sig = await run(); setNote({ kind: "ok", text: "Done.", sig }); load(); onChanged(); }
+    catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
+
+  return (
+    <section className="card">
+      <div className="section-head">
+        <h2>Delete a Circle</h2>
+        <p className="muted sm">A 4-of-7 foundation vote to permanently close a federation Circle (and delist it). Irreversible once executed.</p>
+      </div>
+      {children.length === 0 ? (
+        <p className="muted sm">No federation Circle to delete.</p>
+      ) : (
+        <div className="form-row" style={{ flexWrap: "wrap", gap: 8 }}>
+          <select value={sel} onChange={(e) => setSel(e.target.value)} style={{ flex: 1, minWidth: 160 }}>
+            {children.map((c) => <option key={c.pubkey} value={c.pubkey}>{c.name}</option>)}
+          </select>
+          <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
+            {[1, 7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d} day{d === 1 ? "" : "s"}</option>)}
+          </select>
+          <button className="btn btn-sm" onClick={vote} disabled={busy === "vote" || mySeats.length === 0}>
+            {busy === "vote" ? "Opening…" : "Vote to delete (4-of-7)"}
+          </button>
+        </div>
+      )}
+      <TxNote note={note} />
+      {votes && votes.length > 0 && (
+        <div className="votes" style={{ marginTop: 8 }}>
+          {votes.map((v) => {
+            const iApproved = v.approvedSeats.some((s) => mySeats.includes(s));
+            return (
+              <div className="vote" key={v.pubkey}>
+                <div className="vote-main">
+                  <StatusDot status={v.status === "open" ? "running" : v.status} />
+                  <div>
+                    <div className="name">Delete {childName(v.child)}</div>
+                    <div className="sub">{v.approvals}/4 · {v.status}{iApproved && " · you approved"}</div>
+                  </div>
+                </div>
+                <div className="vote-actions">
+                  {mySeats.length > 0 && !iApproved && v.status === "open" && (
+                    <button className="btn btn-sm" disabled={!!busy} onClick={() => act("a" + v.pubkey, () => approveChildClose(wallet, new PublicKey(foundation.pubkey), new PublicKey(v.pubkey)))}>Approve</button>
+                  )}
+                  {v.status === "passed" && (
+                    <button className="btn btn-sm" disabled={!!busy} onClick={() => act("e" + v.pubkey, async () => {
+                      const prof = await getProfile(v.child);
+                      return executeChildClose(wallet, new PublicKey(foundation.pubkey), new PublicKey(v.child), new PublicKey(v.pubkey), prof !== null);
+                    })}>Apply (delete)</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </section>
   );

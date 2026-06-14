@@ -4,6 +4,7 @@
 #
 # Access (Caddy + automatic Let's Encrypt for $DOMAIN, default aha.a13z.org):
 #   • https://$DOMAIN              (HTTPS, port 443)
+#   • https://$DOMAIN:8443         (HTTPS, port 8443 — same Let's Encrypt cert)
 #   • https://$DOMAIN:9999         (HTTPS, port 9999 — same Let's Encrypt cert)
 #   • http://localhost:3000        (the app directly, bypassing the proxy)
 # Requires the domain's DNS → this host with ports 80 + 443 reachable for ACME.
@@ -49,6 +50,7 @@ services:
       DOMAIN: ${DOMAIN:-aha.a13z.org}
       ACME_EMAIL: ${ACME_EMAIL:-}
     ports:
+      - "8443:8443" # HTTPS on the domain (Let's Encrypt), alternate port
       - "9999:9999" # HTTPS on the domain (Let's Encrypt), alternate port
       - "443:443"   # HTTPS on the domain (Let's Encrypt)
       - "80:80"     # ACME HTTP-01 challenge + HTTP→HTTPS redirect

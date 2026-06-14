@@ -423,6 +423,20 @@ export async function renewMembership(
     .rpc();
 }
 
+/** Revoke (delete) a membership — Scribe-Secretary seat only. Closes the account. */
+export async function revokeMembership(
+  wallet: SigningWallet,
+  circle: PublicKey,
+  membership: PublicKey
+): Promise<string> {
+  const sig = await programWith(wallet)
+    .methods.revokeMembership()
+    .accounts({ circle, membership, secretary: wallet.publicKey })
+    .rpc();
+  invalidateCircles(); // member_count changed
+  return sig;
+}
+
 // ---------------------------------------------------------------------------
 // Membership-admission policy (permissionless vs Scribe-Secretary-gated)
 // ---------------------------------------------------------------------------

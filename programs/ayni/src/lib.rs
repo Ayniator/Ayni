@@ -61,6 +61,11 @@ pub mod ayni {
         instructions::renew_membership(ctx)
     }
 
+    /// Revoke (delete) a membership — Scribe-Secretary seat; closes the account.
+    pub fn revoke_membership(ctx: Context<RevokeMembership>) -> Result<()> {
+        instructions::revoke_membership(ctx)
+    }
+
     // --- Treasury (self-supporting) & soulbound token (see docs/treasury.md) ---
 
     /// Donate SOL to a Circle's treasury (anyone may contribute).

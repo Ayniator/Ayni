@@ -260,6 +260,14 @@ pre.doc { white-space: pre-wrap; word-break: break-word; background: var(--bg-2)
 .cal-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
 .cal-dot.session { background: #e0a23a; }
 
+/* Inbox nav link + unread badge */
+.inbox-link { position: relative; }
+.inbox-badge {
+  display: inline-block; margin-left: 5px; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px; background: #e0354f; color: #fff; font-size: 11px; font-weight: 800;
+  line-height: 17px; text-align: center; vertical-align: middle;
+}
+
 /* Wallet-adapter button, restyled to the light theme. */
 .wallet-adapter-button {
   background: linear-gradient(135deg, var(--accent), var(--accent-ink)) !important;

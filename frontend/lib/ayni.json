@@ -41,6 +41,39 @@
       "args": []
     },
     {
+      "name": "approve_child_close",
+      "docs": [
+        "Another foundation seat approves a pending delete-Circle vote."
+      ],
+      "discriminator": [
+        96,
+        74,
+        144,
+        83,
+        151,
+        34,
+        61,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "foundation",
+          "relations": [
+            "vote"
+          ]
+        },
+        {
+          "name": "vote",
+          "writable": true
+        },
+        {
+          "name": "seat",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "approve_child_rotation",
       "docs": [
         "Another foundation seat approves a pending child-rotation vote."
@@ -474,6 +507,37 @@
       ]
     },
     {
+      "name": "delete_message",
+      "docs": [
+        "Delete a message (sender/recipient anytime; anyone once expired)."
+      ],
+      "discriminator": [
+        198,
+        99,
+        22,
+        204,
+        200,
+        165,
+        54,
+        138
+      ],
+      "accounts": [
+        {
+          "name": "message",
+          "writable": true
+        },
+        {
+          "name": "rent_to",
+          "writable": true
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "delete_post",
       "docs": [
         "Any of the 7 Council seats deletes a post (moderation by group conscience)."
@@ -648,6 +712,58 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "execute_child_close",
+      "docs": [
+        "Apply a passed delete-Circle vote: close the child (and its profile)."
+      ],
+      "discriminator": [
+        6,
+        179,
+        175,
+        1,
+        143,
+        114,
+        16,
+        222
+      ],
+      "accounts": [
+        {
+          "name": "foundation",
+          "relations": [
+            "vote"
+          ]
+        },
+        {
+          "name": "vote",
+          "writable": true
+        },
+        {
+          "name": "child",
+          "writable": true,
+          "relations": [
+            "vote"
+          ]
+        },
+        {
+          "name": "profile",
+          "docs": [
+            "Optional: the child's directory profile, closed so it leaves the map."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "executor",
+          "signer": true
+        }
+      ],
+      "args": []
     },
     {
       "name": "execute_child_rotation",
@@ -1697,6 +1813,80 @@
       ]
     },
     {
+      "name": "propose_child_close",
+      "docs": [
+        "A foundation seat opens a 4-of-7 vote to DELETE a federation Circle."
+      ],
+      "discriminator": [
+        230,
+        36,
+        75,
+        9,
+        206,
+        141,
+        149,
+        227
+      ],
+      "accounts": [
+        {
+          "name": "foundation"
+        },
+        {
+          "name": "child"
+        },
+        {
+          "name": "vote",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  105,
+                  108,
+                  100,
+                  99,
+                  108,
+                  111,
+                  115,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "child"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "validity_secs",
+          "type": "i64"
+        }
+      ]
+    },
+    {
       "name": "propose_child_rotation",
       "docs": [
         "A foundation seat opens a 4-of-7 vote to rotate a child Circle's 7 seats,",
@@ -1933,6 +2123,67 @@
       "args": []
     },
     {
+      "name": "register_messaging_key",
+      "docs": [
+        "Publish the caller's x25519 messaging public key."
+      ],
+      "discriminator": [
+        179,
+        49,
+        133,
+        11,
+        214,
+        58,
+        145,
+        113
+      ],
+      "accounts": [
+        {
+          "name": "key",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  115,
+                  103,
+                  107,
+                  101,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "box_pubkey",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "renew_membership",
       "docs": [
         "Renew (extend) a membership for another term on donation."
@@ -1996,6 +2247,132 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "revoke_membership",
+      "docs": [
+        "Revoke (delete) a membership — Scribe-Secretary seat; closes the account."
+      ],
+      "discriminator": [
+        109,
+        67,
+        109,
+        170,
+        189,
+        213,
+        233,
+        204
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "writable": true,
+          "relations": [
+            "membership"
+          ]
+        },
+        {
+          "name": "membership",
+          "writable": true
+        },
+        {
+          "name": "secretary",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "send_message",
+      "docs": [
+        "Store an end-to-end encrypted message to any wallet."
+      ],
+      "discriminator": [
+        57,
+        40,
+        34,
+        178,
+        189,
+        10,
+        65,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "message",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  115,
+                  103
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "recipient"
+              },
+              {
+                "kind": "account",
+                "path": "sender"
+              },
+              {
+                "kind": "arg",
+                "path": "id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "sender",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u64"
+        },
+        {
+          "name": "recipient",
+          "type": "pubkey"
+        },
+        {
+          "name": "sender_box",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": {
+            "array": [
+              "u8",
+              24
+            ]
+          }
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        },
+        {
+          "name": "ciphertext",
+          "type": "bytes"
+        }
+      ]
     },
     {
       "name": "set_meetings",
@@ -2709,6 +3086,19 @@
       ]
     },
     {
+      "name": "ChildCloseVote",
+      "discriminator": [
+        77,
+        157,
+        38,
+        86,
+        164,
+        91,
+        91,
+        9
+      ]
+    },
+    {
       "name": "ChildSeatVote",
       "discriminator": [
         251,
@@ -2823,6 +3213,32 @@
         168,
         175,
         166
+      ]
+    },
+    {
+      "name": "Message",
+      "discriminator": [
+        110,
+        151,
+        23,
+        110,
+        198,
+        6,
+        125,
+        181
+      ]
+    },
+    {
+      "name": "MessagingKey",
+      "discriminator": [
+        204,
+        124,
+        3,
+        111,
+        187,
+        190,
+        224,
+        171
       ]
     },
     {
@@ -3154,6 +3570,50 @@
           },
           {
             "name": "issuer_attested",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ChildCloseVote",
+      "docs": [
+        "A foundation-led 4-of-7 vote to DELETE (close) a federation Circle, valid",
+        "for a chosen window. PDA: [\"childclose\", child, &nonce.to_le_bytes()]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "foundation",
+            "type": "pubkey"
+          },
+          {
+            "name": "child",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "approvals",
+            "type": "u8"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "executed",
             "type": "bool"
           },
           {
@@ -3772,6 +4232,95 @@
               "membership is unrecoverable if every key is lost."
             ],
             "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Message",
+      "docs": [
+        "An end-to-end encrypted 1:1 message. The ciphertext is a NaCl box openable",
+        "only by `recipient` (with the sender's `sender_box` pubkey + `nonce`). May",
+        "carry an `expires_at` after which clients hide it and anyone may close it.",
+        "PDA: [\"msg\", recipient, sender, &id.to_le_bytes()]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sender",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "sender_box",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "nonce",
+            "type": {
+              "array": [
+                "u8",
+                24
+              ]
+            }
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "ciphertext",
+            "type": "bytes"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MessagingKey",
+      "docs": [
+        "A wallet's published x25519 messaging public key (signature-derived), so",
+        "others can encrypt private messages to it. PDA: [\"msgkey\", owner]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "box_pubkey",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           },
           {
             "name": "bump",
