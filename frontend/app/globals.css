@@ -283,3 +283,13 @@ pre.doc { white-space: pre-wrap; word-break: break-word; background: var(--bg-2)
 .wallet-adapter-dropdown-list { background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow); }
 .wallet-adapter-dropdown-list-item { color: var(--text); }
 .wallet-adapter-dropdown-list-item:not([disabled]):hover { background: var(--bg-2) !important; }
+
+/* Seat-holder messaging gate — persistent banner until messaging is enabled. */
+.seat-msg-gate { background: var(--accent); color: #fff; }
+.seat-msg-gate-inner {
+  max-width: 980px; margin: 0 auto; padding: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 14px; flex-wrap: wrap;
+}
+.seat-msg-gate .btn { background: #fff; color: var(--accent-ink); border: none; }
+.seat-msg-gate-err { opacity: .9; }

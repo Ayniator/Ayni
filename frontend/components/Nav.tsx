@@ -19,12 +19,12 @@ export default function Nav() {
       </Link>
       <nav>
         <Link href="/">{t("nav.find")}</Link>
+        <Link href="/me">{t("nav.me")}</Link>
+        <InboxNavLink />
         <Link href="/reflections">{t("nav.reflections")}</Link>
         <Link href="/documents">{t("nav.documents")}</Link>
         <Link href="/board">{t("nav.board")}</Link>
         <Link href="/create">{t("nav.create")}</Link>
-        <Link href="/me">{t("nav.me")}</Link>
-        <InboxNavLink />
         <FoundationNavLink />
       </nav>
       <div className="nav-right">

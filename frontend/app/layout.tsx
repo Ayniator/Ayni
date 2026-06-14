@@ -3,6 +3,7 @@ import "./globals.css";
 import Nav from "../components/Nav";
 import WalletProviders from "../components/WalletProviders";
 import SettingsProvider from "../components/SettingsProvider";
+import SeatMessagingGate from "../components/SeatMessagingGate";
 import Footer from "../components/Footer";
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SettingsProvider>
           <WalletProviders>
             <Nav />
+            <SeatMessagingGate />
             <main className="container">{children}</main>
             <Footer />
           </WalletProviders>
