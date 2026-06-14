@@ -9,7 +9,7 @@ export default function Footer() {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/aha.png" alt="" className="footer-emblem" />
       <div>{t("footer.line")}</div>
-      <div><a href="/docs.html">How it works ↗</a></div>
+      <div><a href="/docs.html" target="_blank" rel="noopener noreferrer">How it works ↗</a></div>
     </footer>
   );
 }

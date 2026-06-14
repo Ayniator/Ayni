@@ -12,14 +12,16 @@ export const metadata: Metadata = {
     "Ancestral Humanity Anonymous — find a fellowship Circle near you, read the Daily Reflection, and browse shared documents. Anonymous, owner-less, on Solana.",
   manifest: "/site.webmanifest",
   icons: {
+    // 192 first so wallets (Phantom/Solflare) that grab the first/largest icon
+    // when a dApp connects show the crisp logo, not the old favicon.
     icon: [
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
       { url: "/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
       { url: "/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
       { url: "/favicon.ico" },
     ],
-    apple: "/apple-touch-icon.png",
+    apple: "/android-chrome-192x192.png",
   },
 };
 

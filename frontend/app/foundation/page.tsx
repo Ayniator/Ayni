@@ -47,6 +47,17 @@ function pk(s: string): PublicKey | null {
 }
 type Note = { kind: "ok" | "err"; text: string; sig?: string } | null;
 
+// A deleted Circle's account is closed on-chain and the vote keeps neither its
+// name nor an executed-at time, so we remember the name (for every Circle we see)
+// and stamp the deletion date locally — best-effort, per-browser.
+const NAME_KEY = (p: string) => `aha:cname:${p}`;
+const DEL_KEY = (p: string) => `aha:cdel:${p}`;
+function rememberName(p: string, name: string) { try { if (name && name !== p) localStorage.setItem(NAME_KEY(p), name); } catch {} }
+function recallName(p: string): string | null { try { return localStorage.getItem(NAME_KEY(p)); } catch { return null; } }
+function stampDeleted(p: string) { try { localStorage.setItem(DEL_KEY(p), String(Math.floor(Date.now() / 1000))); } catch {} }
+function recallDeleted(p: string): number | null { try { const v = localStorage.getItem(DEL_KEY(p)); return v ? Number(v) : null; } catch { return null; } }
+const fmtDate = (u: number) => new Date(u * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+
 export default function Foundation() {
   const { publicKey, connected } = useWallet();
   const wallet = useAnchorWallet();
@@ -518,8 +529,11 @@ function ChildClosePanel({
   const [note, setNote] = useState<Note>(null);
   const [votes, setVotes] = useState<ChildVote[] | null>(null);
   const mySeats = mySeatIndices(foundation.seats, me);
-  const childName = (p: string) => circles.find((c) => c.pubkey === p)?.name ?? p.slice(0, 8) + "…";
+  // Live name → remembered name (for already-deleted Circles) → truncated pubkey.
+  const childName = (p: string) => circles.find((c) => c.pubkey === p)?.name ?? recallName(p) ?? p.slice(0, 8) + "…";
 
+  // Remember every Circle's name while it still exists, so deletions can show it later.
+  useEffect(() => { for (const c of circles) rememberName(c.pubkey, c.name); }, [circles]);
   useEffect(() => { if (!sel && children.length) setSel(children[0].pubkey); }, [children, sel]);
   const load = useCallback(() => { listChildCloseVotes(foundation.pubkey).then(setVotes).catch(() => setVotes([])); }, [foundation.pubkey]);
   useEffect(load, [load]);
@@ -575,7 +589,11 @@ function ChildClosePanel({
                   <StatusDot status={v.status === "open" ? "running" : v.status} />
                   <div>
                     <div className="name">Delete {childName(v.child)}</div>
-                    <div className="sub">{v.approvals}/4 · {v.status}{iApproved && " · you approved"}</div>
+                    <div className="sub">
+                      {v.approvals}/4 · {v.status}
+                      {v.status === "executed" && recallDeleted(v.child) && ` · deleted ${fmtDate(recallDeleted(v.child)!)}`}
+                      {iApproved && " · you approved"}
+                    </div>
                   </div>
                 </div>
                 <div className="vote-actions">
@@ -585,7 +603,9 @@ function ChildClosePanel({
                   {v.status === "passed" && (
                     <button className="btn btn-sm" disabled={!!busy} onClick={() => act("e" + v.pubkey, async () => {
                       const prof = await getProfile(v.child);
-                      return executeChildClose(wallet, new PublicKey(foundation.pubkey), new PublicKey(v.child), new PublicKey(v.pubkey), prof !== null);
+                      const sig = await executeChildClose(wallet, new PublicKey(foundation.pubkey), new PublicKey(v.child), new PublicKey(v.pubkey), prof !== null);
+                      stampDeleted(v.child); // record the deletion date locally
+                      return sig;
                     })}>Apply (delete)</button>
                   )}
                 </div>
