@@ -1,0 +1,15 @@
+{
+  "name": "aha-email-indexer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "F25 send-worker: emails Circle provision/join events that don't pass through the web UI.",
+  "type": "commonjs",
+  "main": "email-indexer.js",
+  "scripts": {
+    "start": "node email-indexer.js"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/web3.js": "^1.95.0"
+  }
+}

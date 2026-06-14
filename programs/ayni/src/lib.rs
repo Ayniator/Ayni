@@ -120,6 +120,12 @@ pub mod ayni {
         instructions::set_membership_mint(ctx, mint)
     }
 
+    /// Create the Circle's soulbound Token-2022 NonTransferable membership mint
+    /// (authority = Circle PDA) and register it — no external setup step (F3).
+    pub fn create_membership_mint(ctx: Context<CreateMembershipMint>) -> Result<()> {
+        instructions::create_membership_mint(ctx)
+    }
+
     /// Create/update a Circle's public directory profile (geo + IPFS doc CIDs)
     /// that powers "Find a Circle Near You". Any Council seat may set it.
     pub fn upsert_circle_profile(

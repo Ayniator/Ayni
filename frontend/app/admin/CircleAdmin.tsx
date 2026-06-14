@@ -23,6 +23,8 @@ import {
   actionSetTreasuryWallet,
   applyTreasuryWallet,
   getTreasuryWallet,
+  createMembershipMint,
+  getMembershipMint,
   approveProposal,
   cancelProposal,
   createMemberProposal,
@@ -194,13 +196,16 @@ function CouncilSection({ circle, wallet, me }: { circle: CircleInfo; wallet: an
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<TxNote>(null);
   const [treasuryWallet, setTreasuryWallet] = useState<string | null>(null);
+  const [membershipMint, setMembershipMint] = useState<string | null>(null);
   const mySeats = mySeatIndices(circle.seats, me);
+  const isTreasurer = mySeats.includes(0); // SEAT_TREASURER
 
   const load = useCallback(() => {
     listCouncilProposals(circle.pubkey, 4)
       .then(setItems)
       .catch((e) => setNote({ kind: "err", text: String(e?.message || e) }));
     getTreasuryWallet(circle.pubkey).then(setTreasuryWallet).catch(() => setTreasuryWallet(null));
+    getMembershipMint(circle.pubkey).then(setMembershipMint).catch(() => setMembershipMint(null));
   }, [circle.pubkey]);
   useEffect(load, [load]);
 
@@ -230,6 +235,28 @@ function CouncilSection({ circle, wallet, me }: { circle: CircleInfo; wallet: an
       <p className="muted sm" style={{ marginTop: -6 }}>
         Treasury steward wallet:{" "}
         {treasuryWallet ? <span className="mono">{short(treasuryWallet)}</span> : "none set (treasury PDA only)"}
+      </p>
+
+      <p className="muted sm" style={{ marginTop: -2 }}>
+        Soulbound membership mint:{" "}
+        {membershipMint ? (
+          <span className="mono">{short(membershipMint)}</span>
+        ) : isTreasurer ? (
+          <button
+            className="btn btn-sm"
+            disabled={busy === "mint"}
+            onClick={() =>
+              act("mint", async () => {
+                const { sig } = await createMembershipMint(wallet, new PublicKey(circle.pubkey));
+                return sig;
+              })
+            }
+          >
+            {busy === "mint" ? "Creating…" : "Create soulbound mint (Token-2022)"}
+          </button>
+        ) : (
+          "none yet (Treasurer can create it)"
+        )}
       </p>
 
       <NewCouncilProposal circle={circle} wallet={wallet} disabled={!!busy} onDone={load} setNote={setNote} />

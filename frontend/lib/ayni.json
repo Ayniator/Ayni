@@ -415,6 +415,59 @@
       ]
     },
     {
+      "name": "create_membership_mint",
+      "docs": [
+        "Create the Circle's soulbound Token-2022 NonTransferable membership mint",
+        "(authority = Circle PDA) and register it — no external setup step (F3)."
+      ],
+      "discriminator": [
+        41,
+        223,
+        102,
+        201,
+        38,
+        24,
+        46,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The new mint — a fresh keypair the client generates and co-signs. Created",
+            "and initialized here as a Token-2022 NonTransferable mint."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasurer",
+          "docs": [
+            "Must be the Council's Treasurer seat (authorizes the mint)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "create_post",
       "docs": [
         "A member publishes a time-boxed post (text and/or IPFS image)."
@@ -3483,6 +3536,11 @@
       "code": 6030,
       "name": "TreasuryNotMultisig",
       "msg": "Treasury steward wallet must be an initialized SPL multisig (m-of-n, m >= 2)"
+    },
+    {
+      "code": 6031,
+      "name": "MintInitFailed",
+      "msg": "Failed to initialize the membership mint"
     }
   ],
   "types": [

@@ -64,4 +64,6 @@ pub enum AyniError {
     InvalidVotingPeriod,
     #[msg("Treasury steward wallet must be an initialized SPL multisig (m-of-n, m >= 2)")]
     TreasuryNotMultisig,
+    #[msg("Failed to initialize the membership mint")]
+    MintInitFailed,
 }

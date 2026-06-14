@@ -10,7 +10,7 @@
 // soulbound and anonymous); the console surfaces that honestly. See BACKLOG F24.
 
 import * as anchor from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import {
   PROGRAM_ID,
   SigningWallet,
@@ -20,6 +20,7 @@ import {
   programWith,
   readOnlyProgram,
 } from "./member";
+import { TOKEN_2022_PROGRAM_ID } from "./multisig";
 
 // ---------------------------------------------------------------------------
 // Council seats / roles
@@ -229,6 +230,44 @@ export async function applyTreasuryWallet(
       payer: wallet.publicKey,
     } as any)
     .rpc();
+}
+
+/** The Circle's soulbound membership mint, or null if none created yet. */
+export async function getMembershipMint(circle: string): Promise<string | null> {
+  const program = readOnlyProgram();
+  try {
+    const c: any = await (program.account as any).circle.fetch(new PublicKey(circle));
+    const m = c.membershipMint?.toBase58?.();
+    return !m || m === PublicKey.default.toBase58() ? null : m;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Create the Circle's soulbound (Token-2022 NonTransferable) membership mint and
+ * register it — one instruction (F3). Treasurer-gated on-chain. The connected
+ * wallet pays + signs as Treasurer; a fresh mint keypair co-signs its creation.
+ * Returns the new mint address.
+ */
+export async function createMembershipMint(
+  wallet: SigningWallet,
+  circle: PublicKey
+): Promise<{ sig: string; mint: string }> {
+  const mint = Keypair.generate();
+  const sig = await programWith(wallet)
+    .methods.createMembershipMint()
+    .accounts({
+      circle,
+      mint: mint.publicKey,
+      treasurer: wallet.publicKey,
+      payer: wallet.publicKey,
+      tokenProgram: TOKEN_2022_PROGRAM_ID,
+      systemProgram: anchor.web3.SystemProgram.programId,
+    } as any)
+    .signers([mint])
+    .rpc();
+  return { sig, mint: mint.publicKey.toBase58() };
 }
 
 export async function approveProposal(

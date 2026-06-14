@@ -32,7 +32,7 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
 |---|---------|--------|----------------------|-------|
 | F1 | Soulbound yearly membership (ZK-commitment keyed) | ✅ | `issue_membership`, `renew_membership` | anonymous; renews term |
 | F2 | Selective-disclosure identity (optional `owner` wallet) | ✅ | `Membership.owner` | default = fully anonymous |
-| F3 | Soulbound Token-2022 membership token | 🟡 | `set_membership_mint`, `mint_membership_token` | mints from a pre-created NonTransferable mint; **mint creation is an external setup step**, not yet an instruction |
+| F3 | Soulbound Token-2022 membership token | ✅ | `create_membership_mint`, `set_membership_mint`, `mint_membership_token`; `frontend/lib/admin.ts`, `/admin` Treasurer control | `create_membership_mint` now creates the Token-2022 **NonTransferable** mint (authority = Circle PDA, 0 decimals, no freeze) and registers it in one Treasurer-gated instruction — no external setup step. `set_membership_mint` still allows registering an externally-created mint. Deployed to devnet (upgrade `fCbGbo33…`); verified end-to-end via `scripts/test-membership-mint.js` (mint owned by Token-2022, NonTransferable extension present, authority = Circle PDA, `circle.membership_mint` set). |
 
 ### Sybil resistance
 | # | Feature | Status | Instructions / files | Notes |
@@ -95,7 +95,7 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
 ### Off-chain infrastructure
 | # | Feature | Status | Instructions / files | Notes |
 |---|---------|--------|----------------------|-------|
-| F25 | Mandatory per-Circle email on the AHA domain (auto-provisioned at registration) | 🟡 | `frontend/lib/circleEmail.ts`, `frontend/app/api/circle-email/route.ts`; wired into `/create`, `/me`, `/admin` | Every Circle gets a **deterministic** `@aha`-domain address (`slug-<pda6>@DOMAIN`) the moment it is created — mandatory, derived, no opt-out. A Node route sends a *provision* email on creation and a *registration* email (with the new member's wallet) on each `issue_membership`. **Send path is complete and degrades honestly when SMTP is unset**; what remains for ✅ is real mailbox **provisioning** on the live `@aha` domain (mail-admin API) + moving the send hook server-side (indexer/webhook) so it fires for registrations that don't pass through this UI. |
+| F25 | Mandatory per-Circle email on the AHA domain (auto-provisioned at registration) | 🟡 | `frontend/lib/circleEmail.ts`, `frontend/app/api/circle-email/route.ts`; wired into `/create`, `/me`, `/admin`; `indexer/email-indexer.js` | Every Circle gets a **deterministic** `@aha`-domain address (`slug-<pda6>@DOMAIN`) the moment it is created — mandatory, derived, no opt-out. A Node route sends a *provision* email on creation and a *registration* email (with the new member's wallet) on each `issue_membership`. **Send path live** (Mailgun SMTP wired on the deployed host) and **the server-side hook is built**: `indexer/email-indexer.js` polls the program for new `Circle`/`Membership` accounts and POSTs to `/api/circle-email`, covering registrations outside this UI (baseline-safe — never re-sends the back-catalog; verified end-to-end on devnet). The **only** remaining piece for ✅ is mailbox **receive** on the live domain — an MX + Mailgun inbound *Route* (DNS/dashboard task, see `indexer/README.md`), so the derived addresses can accept replies, not just send. |
 
 ---
 
@@ -115,14 +115,14 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
 ### Build & cryptography
 - ✅ **Builds + no-ZK tests pass** on **Anchor 0.31.1 / Agave 2.3.13**. `anchor build` → `.so` + IDL (`ayni.json`) + types; `anchor test` → **7/7** (membership, co-signature/2-guardian, self-recovery, Council 4-of-7, time-lock, contest). Migrated 0.30.1→0.31 (the 0.30.1 IDL builder is incompatible with 2025+ Rust); poseidon now from the `solana-poseidon` crate (moved out of solana-program in 2.x); groth16-solana 0.2.0 (same API).
 - First real compile fixed **4 bugs**: 2 borrow-checker (disjoint borrow through `Account` Deref) + 2 BPF stack-overflow (`Box` the large accounts in `GrantLevel`/`IssueAcknowledgment`). Cargo.lock pins keep edition2024/MSRV crates off the platform-tools cargo (rust 1.79).
-- 🟡 **ZK keys generated; end-to-end on-chain proof tests still to write.** The circuits are compiled and a single-contributor ceremony produced real `verifying_key*.rs` for `lineage_grant`, `ack_disclose`, and `member_vote` (deployed). What remains is to actually generate a proof with `app/**/prove.ts` (+ snarkjs) and confirm the deployed verifier accepts it for `cast_vote` / `grant_level` / `issue_acknowledgment` / `verify_disclosure` / `prove_personhood` — i.e. validate the Poseidon/circom ↔ on-chain match and the snarkjs→groth16-solana byte encodings. (Mainnet additionally needs a multi-party ceremony.)
+- 🟡 **ZK end-to-end proof test exists** (`tests/vote.ts`): builds a member commitment `Poseidon(secret)`, generates a real proof via `app/voting/prove.ts` (+ snarkjs), casts it through `cast_vote`, asserts the on-chain verifier accepts it, and rejects a double-vote — validating the Poseidon/circom ↔ solana-poseidon match and the snarkjs→groth16-solana byte encodings. (Not re-run in the WSL dev env this session — local `anchor test` validator startup is slow; the deployed devnet program already verifies the real VKs.) Still 🟡 only for the **other** circuits (`grant_level` / `issue_acknowledgment` / `verify_disclosure` / `prove_personhood`) lacking an equivalent e2e test, and mainnet's multi-party ceremony.
 
 ### Feature completions
 - ✅ **Membership revocation** — `revoke_membership` (Scribe-Secretary) closes the membership account; wired into the admin "Delete". (No separate *suspend* toggle; and the commitment leaf remains in the append-only member tree until rebuilt — noted in-UI.)
 - ✅ **"Create a Circle" wizard** (F23) — `initialize_circle` + `initialize_member_tree` behind a guided web flow (seat picker, foundation as parent, depth = circuit depth).
-- 🟡 **Per-Circle email provisioning** (F25) — address derivation + provision/registration send path done (`/api/circle-email`); SMTP now live (Mailgun) on the deployed host so provision/join mails actually send; still needs a real `@aha` mailbox provisioner and a server-side (indexer/webhook) send hook so it covers registrations outside this UI.
+- 🟡 **Per-Circle email provisioning** (F25) — address derivation + provision/registration send path done (`/api/circle-email`); SMTP live (Mailgun) on the deployed host; server-side send hook **built** (`indexer/email-indexer.js`, baseline-safe, verified on devnet). Only mailbox **receive** (MX + Mailgun inbound route) remains — a DNS task, see `indexer/README.md`.
 - ✅ **Solana multisig: docs + helper + treasury enforcement** — `docs/multisig.md` (and a docs.html card) explain SPL Token m-of-n multisigs and how to make one (`spl-token create-multisig`, `scripts/create-multisig.js`, or the in-browser `lib/multisig.ts` `createMultisigWithWallet`). `lib/multisig.ts` also exposes `isMultisig`. The program now **requires** the treasury steward wallet to be a multisig (see F29).
-- 🟡 Token-2022 **NonTransferable mint creation** as a program instruction (currently external setup) — finishes F3.
+- ✅ Token-2022 **NonTransferable mint creation** as a program instruction (`create_membership_mint`) — finishes F3. Deployed + verified on devnet.
 - ⬜ Enforce **donation-on-renew** (`renew_membership` currently extends term without requiring a transfer).
 - ⬜ **MACI / coercion-resistant** member voting (today `choice` is public per ballot).
 - ⬜ Per-Circle **quorum/threshold config** for member voting (currently fixed ⅓ + majority).
@@ -147,7 +147,7 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
 `initialize_circle` · `issue_membership` · `renew_membership` ·
 `initialize_member_tree` · `create_member_proposal` · `cast_vote` ·
 `finalize_member_proposal` · `set_personhood` · `prove_personhood` · `donate` ·
-`withdraw_treasury` · `set_membership_mint` · `mint_membership_token` ·
+`withdraw_treasury` · `set_membership_mint` · `create_membership_mint` · `mint_membership_token` ·
 `appoint_seat` · `propose` · `approve` · `execute_proposal` · `cancel_proposal` ·
 `recover_membership` · `set_recovery` · `member_migrate` · `initialize_lineage` ·
 `grant_level` · `issue_acknowledgment` · `verify_disclosure`
