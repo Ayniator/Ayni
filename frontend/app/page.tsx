@@ -118,11 +118,12 @@ export default function Home() {
 
   return (
     <>
+      <h1 className="home-title">Ancestral Humanity Anonymous</h1>
       <section className="hero">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/circle.png" alt="A fellowship Circle gathered in rhythm" className="hero-img" />
         <div className="hero-overlay">
-          <h1>{t("home.title")}</h1>
+          <h2 className="hero-h2">{t("home.title")}</h2>
           <p className="hero-sub">{t("home.sub")}</p>
         </div>
       </section>

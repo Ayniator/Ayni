@@ -2,11 +2,10 @@
 //   Treasurer       → a gold coin
 //   Scribe-Secretary→ a pyramid
 //   Rhythm Keeper   → a feathered chief's headdress
-//   Elders (N/E/S/W)→ a medicine-wheel direction marker
+//   Elders (N/E/S/W)→ the four Direction artworks (/public/directions/{N,E,S,W}.png)
 // Self-contained (no icon dependency); colored to fit the light theme.
 
 const DIR = ["N", "E", "S", "W"]; // Elder of the North/East/South/West
-const WHEEL = ["#cfd3df", "#e7b53b", "#d8604f", "#3a3f55"]; // N white, E yellow, S red, W black
 
 export default function RoleIcon({ seat, size = 18 }: { seat: number; size?: number }) {
   const common = {
@@ -67,19 +66,17 @@ export default function RoleIcon({ seat, size = 18 }: { seat: number; size?: num
       </svg>
     );
 
-  // 3..6 — Elders of the four directions: a quartered medicine wheel + letter
+  // 3..6 — Elders of the four directions: the supplied Direction artworks.
   const dir = seat - 3;
+  const D = ["North", "East", "South", "West"];
   return (
-    <svg {...common}>
-      <circle cx="12" cy="12" r="9" fill="#fff" stroke="#b9bed0" strokeWidth="1.2" />
-      <path d="M12 3 A9 9 0 0 1 21 12 L12 12 Z" fill={WHEEL[(dir + 0) % 4]} opacity="0.85" />
-      <path d="M21 12 A9 9 0 0 1 12 21 L12 12 Z" fill={WHEEL[(dir + 1) % 4]} opacity="0.85" />
-      <path d="M12 21 A9 9 0 0 1 3 12 L12 12 Z" fill={WHEEL[(dir + 2) % 4]} opacity="0.85" />
-      <path d="M3 12 A9 9 0 0 1 12 3 L12 12 Z" fill={WHEEL[(dir + 3) % 4]} opacity="0.85" />
-      <circle cx="12" cy="12" r="3.4" fill="#fff" stroke="#b9bed0" strokeWidth="1" />
-      <text x="12" y="14.6" textAnchor="middle" fontSize="5.4" fontWeight="800" fill="#2a2f45">
-        {DIR[dir] ?? ""}
-      </text>
-    </svg>
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={`/directions/${DIR[dir] ?? "N"}.png`}
+      alt={`Elder of the ${D[dir] ?? ""}`}
+      width={size}
+      height={size}
+      style={{ flexShrink: 0, verticalAlign: "-3px", borderRadius: "50%", objectFit: "cover" }}
+    />
   );
 }

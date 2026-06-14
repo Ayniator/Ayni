@@ -71,10 +71,10 @@ a:hover { text-decoration: underline; }
 }
 /* Brand wordmark: "AHA  powered by  Ayni" — AHA large, "powered by" tiny, Ayni
    smaller than AHA and explained on hover. */
-.nav .brand-wrap { display: flex; align-items: baseline; gap: 6px; flex-shrink: 0; min-width: 0; }
+.nav .brand-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; min-width: 0; }
 .nav .brand-aha { font-size: 18px; line-height: 1; }
-.nav .brand-powered { font-size: 9px; font-weight: 500; letter-spacing: .02em; color: var(--muted); text-transform: lowercase; }
-.ayni-wrap { position: relative; font-size: 13px; font-weight: 700; color: var(--text); cursor: help; outline: none; }
+.nav .brand-powered { font-size: 9px; font-weight: 500; letter-spacing: .02em; color: var(--muted); text-transform: lowercase; line-height: 1; }
+.ayni-wrap { position: relative; display: inline-flex; align-items: center; font-size: 13px; line-height: 1; font-weight: 700; color: var(--text); cursor: help; outline: none; }
 .ayni-name { border-bottom: 1px dotted var(--muted); }
 .ayni-card {
   position: absolute; top: 100%; left: 0; z-index: 60; margin-top: 8px;
@@ -151,8 +151,16 @@ a:hover { text-decoration: underline; }
   padding: 20px 22px;
   background: linear-gradient(180deg, rgba(13, 12, 28, 0) 28%, rgba(13, 12, 28, 0.30) 55%, rgba(13, 12, 28, 0.74) 100%);
 }
-.hero-overlay h1 { color: #fff; margin: 0; text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45); }
+.hero-overlay h1, .hero-overlay .hero-h2 { color: #fff; margin: 0; text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45); font-size: 19px; letter-spacing: -0.01em; }
 .hero-sub { color: rgba(255, 255, 255, 0.92); margin: 6px 0 0; font-size: 15px; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5); max-width: 60ch; }
+
+/* Home: elegant fellowship title above the Circle hero image. */
+.home-title {
+  text-align: center; margin: 6px 0 14px; font-size: clamp(26px, 4.6vw, 40px);
+  font-weight: 800; letter-spacing: -0.015em; line-height: 1.1;
+  background: linear-gradient(90deg, var(--accent, #6d4cff), var(--accent-2, #18b69a));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
 
 h1 { font-size: 30px; line-height: 1.15; margin: 6px 0 6px; letter-spacing: -0.02em; }
 h2 { font-size: 19px; margin: 0 0 2px; letter-spacing: -0.01em; }
