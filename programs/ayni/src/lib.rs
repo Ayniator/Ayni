@@ -80,6 +80,36 @@ pub mod ayni {
         instructions::withdraw_treasury(ctx)
     }
 
+    /// Write the Circle's treasury steward wallet, authorized by an executed
+    /// 4-of-7 `SetTreasuryWallet` proposal.
+    pub fn set_treasury_wallet(ctx: Context<SetTreasuryWallet>) -> Result<()> {
+        instructions::set_treasury_wallet(ctx)
+    }
+
+    /// Publish/replace a Circle's meeting calendar (recurring + sessions JSON).
+    pub fn set_meetings(ctx: Context<SetMeetings>, data: String) -> Result<()> {
+        instructions::set_meetings(ctx, data)
+    }
+
+    // --- Member posts / bulletins (F30) ---
+
+    /// A member publishes a time-boxed post (text and/or IPFS image).
+    pub fn create_post(
+        ctx: Context<CreatePost>,
+        nonce: u64,
+        text: String,
+        image_cid: String,
+        start_date: i64,
+        end_date: i64,
+    ) -> Result<()> {
+        instructions::create_post(ctx, nonce, text, image_cid, start_date, end_date)
+    }
+
+    /// Any of the 7 Council seats deletes a post (moderation by group conscience).
+    pub fn delete_post(ctx: Context<DeletePost>) -> Result<()> {
+        instructions::delete_post(ctx)
+    }
+
     /// Register the Circle's Token-2022 NonTransferable (soulbound) membership mint.
     pub fn set_membership_mint(ctx: Context<SetMembershipMint>, mint: Pubkey) -> Result<()> {
         instructions::set_membership_mint(ctx, mint)
@@ -170,6 +200,14 @@ pub mod ayni {
         instructions::finalize_member_proposal(ctx)
     }
 
+    /// Set the Circle's membership-admission policy: `open = true` makes joining
+    /// permissionless (anyone self-admits); `open = false` restores Scribe-Secretary
+    /// validation. Any Council seat may toggle it. Uses a separate marker PDA, so
+    /// the `Circle` account (and every existing Circle) is untouched.
+    pub fn set_open_membership(ctx: Context<SetOpenMembership>, open: bool) -> Result<()> {
+        instructions::set_open_membership(ctx, open)
+    }
+
     // --- Sybil resistance: anonymous proof-of-personhood (see docs/sybil.md) ---
 
     /// Configure the Circle's sybil gate (on/off + the unique-human Merkle root).
@@ -213,6 +251,69 @@ pub mod ayni {
     /// Any single Council seat cancels a pending proposal (the contest tripwire).
     pub fn cancel_proposal(ctx: Context<CancelProposal>) -> Result<()> {
         instructions::cancel_proposal(ctx)
+    }
+
+    // --- Foundation-led child-Circle seat rotation (the parent helps a child) ---
+
+    /// A foundation seat opens a 4-of-7 vote to rotate a child Circle's 7 seats,
+    /// valid for `validity_secs` (1–90 days).
+    pub fn propose_child_rotation(
+        ctx: Context<ProposeChildRotation>,
+        nonce: u64,
+        new_seats: [Pubkey; crate::council::COUNCIL_SEATS],
+        validity_secs: i64,
+    ) -> Result<()> {
+        instructions::propose_child_rotation(ctx, nonce, new_seats, validity_secs)
+    }
+
+    /// Another foundation seat approves a pending child-rotation vote.
+    pub fn approve_child_rotation(ctx: Context<ApproveChildRotation>) -> Result<()> {
+        instructions::approve_child_rotation(ctx)
+    }
+
+    /// Apply a passed child-rotation vote into the child Circle's Council.
+    pub fn execute_child_rotation(ctx: Context<ExecuteChildRotation>) -> Result<()> {
+        instructions::execute_child_rotation(ctx)
+    }
+
+    /// A foundation seat opens a 4-of-7 vote to DELETE a federation Circle.
+    pub fn propose_child_close(ctx: Context<ProposeChildClose>, nonce: u64, validity_secs: i64) -> Result<()> {
+        instructions::propose_child_close(ctx, nonce, validity_secs)
+    }
+
+    /// Another foundation seat approves a pending delete-Circle vote.
+    pub fn approve_child_close(ctx: Context<ApproveChildClose>) -> Result<()> {
+        instructions::approve_child_close(ctx)
+    }
+
+    /// Apply a passed delete-Circle vote: close the child (and its profile).
+    pub fn execute_child_close(ctx: Context<ExecuteChildClose>) -> Result<()> {
+        instructions::execute_child_close(ctx)
+    }
+
+    // --- Encrypted 1:1 messaging (F32) ---
+
+    /// Publish the caller's x25519 messaging public key.
+    pub fn register_messaging_key(ctx: Context<RegisterMessagingKey>, box_pubkey: [u8; 32]) -> Result<()> {
+        instructions::register_messaging_key(ctx, box_pubkey)
+    }
+
+    /// Store an end-to-end encrypted message to any wallet.
+    pub fn send_message(
+        ctx: Context<SendMessage>,
+        id: u64,
+        recipient: Pubkey,
+        sender_box: [u8; 32],
+        nonce: [u8; 24],
+        expires_at: i64,
+        ciphertext: Vec<u8>,
+    ) -> Result<()> {
+        instructions::send_message(ctx, id, recipient, sender_box, nonce, expires_at, ciphertext)
+    }
+
+    /// Delete a message (sender/recipient anytime; anyone once expired).
+    pub fn delete_message(ctx: Context<DeleteMessage>) -> Result<()> {
+        instructions::delete_message(ctx)
     }
 
     /// Member configures their own recovery: set/rotate the guardian key and the

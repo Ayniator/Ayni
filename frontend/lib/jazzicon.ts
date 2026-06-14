@@ -128,14 +128,26 @@ const f2 = (n: number) => n.toFixed(2); // 2 decimals
 export function generateJazziconSvg(address: string, size = 64): string {
   const h = sha256Bytes(address.toLowerCase());
 
+  // Addresses starting with "AHA" render in the PURPLE/VIOLET family (the AHA
+  // accent) instead of the full hue wheel — and this constrains the ENTIRE
+  // palette (background AND every shape), so the whole coin reads purple and
+  // never orange/yellow. Case-insensitive (like the hashed seed). (Regression:
+  // see tests/jazzicon.ts.)
+  const isAha = address.toUpperCase().startsWith("AHA");
+
   // 1. Palette of 8 vivid colors.
   const colors: string[] = [];
   for (let i = 0; i < 8; i++) {
-    const hue = (h[i] * 360) / 255;
+    // Non-AHA: full 0–360 hue wheel. AHA: 255–305 (violet → purple → magenta).
+    const hue = isAha ? 255 + (h[i] / 255) * 50 : (h[i] * 360) / 255;
     const sat = 0.7 + (h[i + 8] / 255) * 0.3;
     const light = 0.45 + (h[i + 16] / 255) * 0.2;
     colors.push(hslToRgb(hue, sat, light));
   }
+
+  // Background gradient stops (already purple for AHA via the palette above).
+  const bg0 = colors[0];
+  const bg1 = colors[1];
 
   // 2. Gradients: 4 diagonal linear + 1 radial background.
   let defs = `<clipPath id="circleClip"><circle cx="50" cy="50" r="50"/></clipPath>`;
@@ -150,8 +162,8 @@ export function generateJazziconSvg(address: string, size = 64): string {
   }
   defs +=
     `<radialGradient id="bgGrad" cx="50%" cy="50%" r="75%">` +
-    `<stop offset="0%" stop-color="${colors[0]}" stop-opacity="1"/>` +
-    `<stop offset="100%" stop-color="${colors[1]}" stop-opacity="1"/>` +
+    `<stop offset="0%" stop-color="${bg0}" stop-opacity="1"/>` +
+    `<stop offset="100%" stop-color="${bg1}" stop-opacity="1"/>` +
     `</radialGradient>`;
 
   // 3. Shape layers (4..6).

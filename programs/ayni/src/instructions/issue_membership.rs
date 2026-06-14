@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 use crate::council::SEAT_SECRETARY;
 use crate::errors::AyniError;
 use crate::merkle;
-use crate::state::{Circle, Membership, MemberTree, PersonhoodCredential};
+use crate::state::{Circle, Membership, MemberTree, OpenMembership, PersonhoodCredential};
 
 pub fn issue_membership(
     ctx: Context<IssueMembership>,
@@ -15,11 +15,24 @@ pub fn issue_membership(
     let clock = Clock::get()?;
     let circle = &mut ctx.accounts.circle;
 
-    // The Secretary admits members (records the rolls) — group conscience
-    // delegates routine issuance to that seat, revocable by Council rotation.
-    circle
-        .council
-        .require_seat(&ctx.accounts.secretary.key(), SEAT_SECRETARY)?;
+    // Admission policy. By default the Scribe-Secretary seat admits members
+    // (records the rolls) — group conscience delegates routine issuance to that
+    // seat, revocable by Council rotation. A Circle MAY instead be permissionless:
+    // when an `OpenMembership` marker for this Circle is present with `open == true`
+    // (toggled by any seat via `set_open_membership`), anyone may self-admit and
+    // the Scribe-Secretary check is skipped. The marker's `has_one = circle`
+    // constraint binds it to this Circle, so it cannot be forged.
+    let is_open = ctx
+        .accounts
+        .open_membership
+        .as_ref()
+        .map(|m| m.open)
+        .unwrap_or(false);
+    if !is_open {
+        circle
+            .council
+            .require_seat(&ctx.accounts.secretary.key(), SEAT_SECRETARY)?;
+    }
 
     // Sybil gate: one human → one membership. Consume a (one-per-human)
     // PersonhoodCredential proven via `prove_personhood`.
@@ -92,7 +105,18 @@ pub struct IssueMembership<'info> {
     #[account(mut)]
     pub personhood: Option<Account<'info, PersonhoodCredential>>,
 
-    /// Must be the Council's Secretary seat (signs + pays).
+    /// Optional admission-policy marker. Pass it (the ["openjoin", circle] PDA)
+    /// to self-admit in a permissionless Circle; omit it for Scribe-Secretary
+    /// admission. `has_one = circle` binds it to this Circle.
+    #[account(
+        seeds = [b"openjoin", circle.key().as_ref()],
+        bump = open_membership.bump,
+        has_one = circle,
+    )]
+    pub open_membership: Option<Account<'info, OpenMembership>>,
+
+    /// Signs + pays. Must be the Scribe-Secretary seat for a gated Circle; in a
+    /// permissionless Circle (open marker present) it may be any wallet.
     #[account(mut)]
     pub secretary: Signer<'info>,
 

@@ -97,6 +97,10 @@ pub enum ProposalAction {
     /// Spend from the Circle treasury — group conscience over funds (Tradition 7).
     /// High-stakes ⇒ time-locked + contestable, then drawn by `withdraw_treasury`.
     WithdrawTreasury { amount: u64, recipient: Pubkey },
+    /// Designate/rotate the Circle's treasury steward wallet (the governed payout
+    /// destination shown in the directory/console). High-stakes ⇒ time-locked +
+    /// contestable, then written by `set_treasury_wallet` into `TreasuryConfig`.
+    SetTreasuryWallet { new_wallet: Pubkey },
 }
 
 impl ProposalAction {

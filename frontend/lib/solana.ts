@@ -38,11 +38,33 @@ function readOnlyProgram(): anchor.Program {
   return new anchor.Program(idl as anchor.Idl, provider);
 }
 
-/** Every Circle with a published directory profile. One RPC round-trip. */
-export async function listAllCircles(): Promise<Circle[]> {
+const PROFILE_CACHE_KEY = "aha:profiles:v1";
+
+/** Last-known circles from localStorage (instant render before the RPC returns). */
+export function cachedCircles(): Circle[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(PROFILE_CACHE_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+// Dedup + short TTL (see member.ts) to avoid hammering the public RPC (429).
+const PROFILE_TTL_MS = 15_000;
+let profileMemo: { data: Circle[]; ts: number } | null = null;
+let profileInflight: Promise<Circle[]> | null = null;
+
+/** Drop the in-memory profile cache (call after a profile upsert). */
+export function invalidateProfiles() {
+  profileMemo = null;
+  profileInflight = null;
+}
+
+async function fetchAllCircles(): Promise<Circle[]> {
   const program = readOnlyProgram();
   const rows = await (program.account as any).circleProfile.all();
-  return rows.map((r: any) => ({
+  const result: Circle[] = rows.map((r: any) => ({
     pubkey: r.publicKey.toBase58(),
     circle: r.account.circle.toBase58(),
     lat: r.account.latMicrodeg / 1e6,
@@ -54,6 +76,24 @@ export async function listAllCircles(): Promise<Circle[]> {
     preambleCid: r.account.preambleCid,
     dailyReflectionsCid: r.account.dailyReflectionsCid,
   }));
+  if (typeof window !== "undefined") {
+    try { localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(result)); } catch {}
+  }
+  return result;
+}
+
+/** Every Circle with a published directory profile. One RPC round-trip; cached + deduped. */
+export async function listAllCircles(force = false): Promise<Circle[]> {
+  const now = Date.now();
+  if (!force) {
+    if (profileMemo && now - profileMemo.ts < PROFILE_TTL_MS) return profileMemo.data;
+    if (profileInflight) return profileInflight;
+  }
+  const p = fetchAllCircles()
+    .then((d) => { profileMemo = { data: d, ts: Date.now() }; profileInflight = null; return d; })
+    .catch((e) => { profileInflight = null; throw e; });
+  if (!force) profileInflight = p;
+  return p;
 }
 
 /** Great-circle distance in kilometres (haversine). */

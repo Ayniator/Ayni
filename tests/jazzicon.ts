@@ -44,4 +44,33 @@ describe("jazzicon identicon (deterministic)", () => {
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     );
   });
+
+  // Regression guard (do not remove): addresses starting with "AHA" MUST render
+  // entirely in the purple/violet family — background AND every shape — so the
+  // coin never reads orange. Purple-family = R > G and B > G for each stop.
+  const stopColors = (svg: string): [number, number, number][] =>
+    [...svg.matchAll(/stop-color="rgb\((\d+),(\d+),(\d+)\)"/g)].map(
+      (m) => [Number(m[1]), Number(m[2]), Number(m[3])] as [number, number, number]
+    );
+  const isPurple = ([r, g, b]: [number, number, number]) => r > g && b > g;
+
+  it("renders AHA-prefixed addresses entirely in the purple family (no orange)", () => {
+    for (const a of [
+      "AHAYZpbUKPWjsCvwyqn5Y6dhV1MFcYWSVGYuNoU17MBV",
+      "AHAQjDz6KbRvJcju2Wa7FLceEEgSZ9Yaq3KiFGFFaXT8",
+      "AHAzEk8yWyMyLCzZYRTpbeeWHtw7qstg5uyt2Xti4wjC",
+      "aha-lowercase-also-counts",
+    ]) {
+      const stops = stopColors(generateJazziconSvg(a, 64));
+      assert.isAtLeast(stops.length, 6, `expected gradient stops for ${a}`);
+      const offenders = stops.filter((c) => !isPurple(c));
+      assert.lengthOf(offenders, 0, `non-purple stop(s) for ${a}: ${JSON.stringify(offenders)}`);
+    }
+  });
+
+  it("leaves non-AHA addresses on the full hue wheel (not forced purple)", () => {
+    // A pubkey that does not start with AHA should still vary in hue.
+    const stops = stopColors(generateJazziconSvg("DH6uDzb77mZuF8TP2ucdHUkwyW6wyZkJj8nm3i79EAUo", 64));
+    assert.isBelow(stops.filter(isPurple).length, stops.length, "non-AHA should not be all-purple");
+  });
 });

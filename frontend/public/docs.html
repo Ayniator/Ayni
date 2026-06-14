@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AHA · Ayni — How it works</title>
+<link rel="icon" href="/favicon.png" />
+<style>
+  :root{
+    --bg:#f6f7fb;--bg2:#eef1f8;--panel:#fff;--ink:#161a27;--muted:#6b7280;
+    --violet:#6d4cff;--violet-ink:#5733e6;--green:#0fae73;--gold:#f4c43a;--red:#d8604f;
+    --border:#e6e8f0;--shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.07);
+    --grad-a:#efeaff;--grad-b:#e3fff4;
+  }
+  [data-theme="dark"]{
+    --bg:#0f1020;--bg2:#23254a;--panel:#1a1b33;--ink:#e9e9f5;--muted:#a3a3c2;
+    --violet:#7c5cff;--violet-ink:#9a82ff;--green:#14f195;--border:#2c2e57;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.4);--grad-a:#1c1d3a;--grad-b:#14233a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:
+    radial-gradient(900px 480px at 88% -8%,var(--grad-a) 0%,transparent 60%),
+    radial-gradient(800px 420px at 4% -6%,var(--grad-b) 0%,transparent 55%),var(--bg);
+    color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.6}
+  .wrap{max-width:960px;margin:0 auto;padding:0 22px 90px}
+  header.top{display:flex;align-items:center;gap:12px;padding:18px 0;position:sticky;top:0;
+    background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(10px);z-index:9;border-bottom:1px solid var(--border)}
+  header.top img{width:38px;height:38px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px var(--border)}
+  header.top b{font-size:18px}
+  header.top .sp{flex:1}
+  a{color:var(--violet-ink);text-decoration:none}a:hover{text-decoration:underline}
+  .toggle{cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--violet-ink);
+    width:36px;height:36px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center}
+  .hero{margin:26px 0;border-radius:16px;overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow);position:relative}
+  .hero img{width:100%;height:230px;object-fit:cover;display:block}
+  .hero .ov{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:22px;
+    background:linear-gradient(180deg,transparent 30%,rgba(13,12,28,.72))}
+  .hero h1{color:#fff;margin:0;font-size:30px;text-shadow:0 2px 14px rgba(0,0,0,.5)}
+  .hero p{color:#fff;opacity:.92;margin:6px 0 0;text-shadow:0 1px 10px rgba(0,0,0,.5)}
+  h2{font-size:23px;margin:38px 0 8px;letter-spacing:-.01em}
+  h3{font-size:17px;margin:22px 0 6px}
+  p.lede{color:var(--muted);max-width:70ch}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow);margin:14px 0}
+  .grid2{display:grid;gap:14px}@media(min-width:720px){.grid2{grid-template-columns:1fr 1fr}}
+  .pill{display:inline-block;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;
+    background:color-mix(in srgb,var(--violet) 14%,transparent);color:var(--violet-ink);border:1px solid color-mix(in srgb,var(--violet) 30%,transparent)}
+  .muted{color:var(--muted)}
+  ul{padding-left:18px}li{margin:4px 0}
+  figure{margin:10px 0;text-align:center}figcaption{color:var(--muted);font-size:13px;margin-top:6px}
+  .seat{display:flex;gap:10px;align-items:flex-start;margin:8px 0}
+  .seat b{display:block}
+  code{background:var(--bg2);padding:1px 6px;border-radius:6px;font-size:13px}
+  .foot{color:var(--muted);text-align:center;border-top:1px solid var(--border);margin-top:40px;padding-top:22px;font-size:13px}
+</style>
+</head>
+<body>
+<header class="top">
+  <img src="/logo.png" alt="AHA" />
+  <b>AHA · Ayni</b>
+  <span class="sp"></span>
+  <a href="/" style="margin-right:14px">← App</a>
+  <button class="toggle" id="tg" title="Toggle theme" aria-label="Toggle theme"></button>
+</header>
+
+<div class="wrap">
+  <div class="hero">
+    <img src="/circle.png" alt="A fellowship Circle in rhythm" />
+    <div class="ov"><h1>How AHA · Ayni works</h1><p>Anonymous, owner-less fellowship — on Solana.</p></div>
+  </div>
+
+  <p class="lede"><b>Ancestral Humanity Anonymous (AHA)</b> is a worldwide fellowship modelled on the
+  12-step traditions. <b>Ayni</b> is its Solana implementation: a Circle admits members, holds a treasury,
+  decides by group conscience, and recovers from lost keys — with <b>no owner and no admin key</b>, and
+  every member <b>anonymous by default</b> through zero-knowledge proofs.</p>
+
+  <!-- ===================== COUNCIL WHEEL ===================== -->
+  <h2>The Circle &amp; its 7-seat Council</h2>
+  <p class="lede">A Circle is governed by a <b>Council of 7 seats</b> — the authority is the Council acting
+  <b>4-of-7</b>, never a single owner. Three named servants and four elders of the directions.</p>
+
+  <div class="card">
+    <figure>
+      <svg width="340" height="340" viewBox="0 0 340 340" role="img" aria-label="The seven Council seats around a circle">
+        <circle cx="170" cy="170" r="150" fill="none" stroke="var(--border)" stroke-width="2"/>
+        <circle cx="170" cy="170" r="44" fill="color-mix(in srgb,var(--violet) 14%,transparent)" stroke="var(--violet)" stroke-width="1.5"/>
+        <text x="170" y="166" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">Council</text>
+        <text x="170" y="183" text-anchor="middle" font-size="11" fill="var(--muted)">4-of-7</text>
+        <!-- 7 nodes -->
+        <g id="nodes"></g>
+      </svg>
+      <figcaption>Tap a seat's symbol below. Seats are filled at creation and changed only by a 4-of-7 vote.</figcaption>
+    </figure>
+
+    <div class="seat"><span id="ic-tre"></span><span><b>Treasurer</b><span class="muted"> Stewards the treasury &amp; the soulbound membership mint.</span></span></div>
+    <div class="seat"><span id="ic-sec"></span><span><b>Scribe-Secretary</b><span class="muted"> Keeps the rolls; admits members in a validated Circle.</span></span></div>
+    <div class="seat"><span id="ic-rhy"></span><span><b>Rhythm Keeper</b><span class="muted"> Holds the cadence; bootstraps the member tree.</span></span></div>
+    <div class="seat"><span id="ic-eld"></span><span><b>Four Elders — North · East · South · West</b><span class="muted"> The medicine-wheel directions; the deliberative quorum.</span></span></div>
+  </div>
+
+  <!-- ===================== MEMBERSHIP ===================== -->
+  <h2>Membership</h2>
+  <div class="grid2">
+    <div class="card">
+      <span class="pill">Soulbound · yearly · anonymous</span>
+      <p>A membership is a <b>ZK commitment</b> (a hash of a secret), not a wallet — so on-chain reads never
+      reveal who a member is. It is non-transferable and renews each term. A wallet may optionally be bound
+      for <b>selective disclosure</b> and key recovery.</p>
+    </div>
+    <div class="card">
+      <span class="pill">Two ways to join</span>
+      <figure>
+        <svg width="100%" height="150" viewBox="0 0 420 150" role="img" aria-label="Join paths">
+          <rect x="8" y="58" width="120" height="36" rx="9" fill="var(--panel)" stroke="var(--border)"/>
+          <text x="68" y="81" text-anchor="middle" font-size="12" fill="var(--ink)">Newcomer</text>
+          <!-- gated -->
+          <path d="M128 70 H210" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#a)"/>
+          <rect x="210" y="14" width="200" height="44" rx="10" fill="color-mix(in srgb,var(--violet) 12%,transparent)" stroke="var(--violet)"/>
+          <text x="310" y="33" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">Validated Circle</text>
+          <text x="310" y="49" text-anchor="middle" font-size="11" fill="var(--muted)">Scribe-Secretary admits</text>
+          <!-- open -->
+          <path d="M128 82 H210" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#a)"/>
+          <rect x="210" y="92" width="200" height="44" rx="10" fill="color-mix(in srgb,var(--green) 14%,transparent)" stroke="var(--green)"/>
+          <text x="310" y="111" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">Open Circle</text>
+          <text x="310" y="127" text-anchor="middle" font-size="11" fill="var(--muted)">anyone self-admits</text>
+          <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="var(--muted)"/></marker></defs>
+        </svg>
+      </figure>
+      <p class="muted" style="font-size:13px;margin:0">Each Circle chooses its policy — and can switch anytime from the admin console.</p>
+    </div>
+  </div>
+
+  <!-- ===================== GOVERNANCE ===================== -->
+  <h2>Decisions by group conscience</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3 style="margin-top:0">Council votes (4-of-7)</h3>
+      <p class="muted" style="margin-top:0">High-stakes, time-locked, and contestable — any one seat can cancel during the window.</p>
+      <ul>
+        <li><b>Rotate a seat</b> — replace a seat holder.</li>
+        <li><b>Migrate a wallet</b> — recover a lost/compromised key across every artifact.</li>
+        <li><b>Withdraw treasury</b> — spend, Tradition 7.</li>
+        <li><b>Change treasury wallet</b> — designate the steward wallet.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Group-conscience votes</h3>
+      <p class="muted" style="margin-top:0">One member, one <b>anonymous</b> ballot (zero-knowledge), with a per-proposal nullifier preventing double-votes; passes on a ⅓ quorum + majority.</p>
+      <p>The Council opens the question and records the outcome; members cast ZK ballots from their own client.</p>
+    </div>
+  </div>
+
+  <!-- ===================== TREASURY / EMAIL / BOARD ===================== -->
+  <h2>Treasury, contact &amp; the Board</h2>
+  <div class="grid2">
+    <div class="card"><h3 style="margin-top:0">7th Tradition treasury</h3>
+      <p class="muted" style="margin:0">Each Circle is self-supporting. Anyone may donate SOL (or any SPL/Token-2022) into the Circle's treasury PDA; funds move only by a 4-of-7 vote.</p></div>
+    <div class="card"><h3 style="margin-top:0">A mandatory Circle address</h3>
+      <p class="muted" style="margin:0">Every Circle is automatically assigned an <code>@aha</code>-domain email at creation. Each new registration notifies that address.</p></div>
+    <div class="card"><h3 style="margin-top:0">The Board</h3>
+      <p class="muted" style="margin:0">Any member may post a notice (text and/or image) valid for a date range. Any of the 7 seats may remove any post at any time.</p></div>
+    <div class="card"><h3 style="margin-top:0">Forkable Circles</h3>
+      <p class="muted" style="margin:0">Anyone can open a new Circle, nested under the World Service (foundation) Circle, with identical governance.</p></div>
+  </div>
+
+  <h2>The web app</h2>
+  <div class="card">
+    <ul>
+      <li><b>Find a Circle</b> — a map + distance-ranked list of every published Circle.</li>
+      <li><b>Daily Reflections / Documents</b> — shared material, pinned on IPFS.</li>
+      <li><b>Board</b> — the Circle's notices.</li>
+      <li><b>Create a Circle</b> — seat the 7-member Council and open a Circle.</li>
+      <li><b>My Circle</b> — your memberships, joining, and the 7th-Tradition donation.</li>
+      <li><b>Administration</b> — shown only to seat holders: votes, members, and policy.</li>
+    </ul>
+    <p class="muted" style="font-size:13px">Two themes (☀︎ / ☾) and many languages — switch them from the top bar of the app.</p>
+  </div>
+
+  <div class="foot">AHA — Ancestral Humanity Anonymous · governed by group conscience, not by an owner.</div>
+</div>
+
+<script>
+  // Theme: follow the app's saved choice; allow toggling here too.
+  (function(){
+    var el=document.documentElement, btn=document.getElementById('tg');
+    function paint(){var t=el.dataset.theme||'light';btn.textContent=(t==='light')?'☾':'☀';}
+    try{el.dataset.theme=localStorage.getItem('aha:theme')||'light';}catch(e){}
+    paint();
+    btn.onclick=function(){var n=(el.dataset.theme==='light')?'dark':'light';el.dataset.theme=n;try{localStorage.setItem('aha:theme',n)}catch(e){}paint();};
+  })();
+
+  // Role symbols (match the app's RoleIcon) + place the 7 seats around the wheel.
+  function tre(){return '<svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#f4c43a" stroke="#c9971a" stroke-width="1.3"/><circle cx="12" cy="12" r="6" fill="none" stroke="#c9971a" opacity=".7"/><text x="12" y="16" text-anchor="middle" font-size="9" font-weight="700" fill="#9a6f12">◎</text></svg>';}
+  function sec(){return '<svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 3 L21 20 H3 Z" fill="#b79bf6" stroke="#6d4cff" stroke-width="1.2" stroke-linejoin="round"/><path d="M12 3 L12 20" stroke="#6d4cff" opacity=".65"/><path d="M7.5 11.5 H16.5" stroke="#6d4cff" opacity=".5"/><path d="M5.2 16 H18.8" stroke="#6d4cff" opacity=".5"/></svg>';}
+  function rhy(){var s='<svg width="26" height="26" viewBox="0 0 24 24">';for(var i=-2;i<=2;i++){var x=12+i*3.1,t=i*9;s+='<path d="M12 13 Q'+x+' '+(3-Math.abs(i))+' '+(x+(t>0?.4:-.4))+' '+(2-Math.abs(i))+'" transform="rotate('+t+' 12 13)" stroke="'+(Math.abs(i)%2?'#d8604f':'#e7b53b')+'" stroke-width="1.8" stroke-linecap="round" fill="none"/>';}s+='<path d="M6 13.5 Q12 16 18 13.5" stroke="#8a5a2b" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="12" cy="14.4" r="1.1" fill="#d8604f"/></svg>';return s;}
+  var WHEEL=["#cfd3df","#e7b53b","#d8604f","#3a3f55"];
+  function eld(d){var s='<svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#fff" stroke="#b9bed0" stroke-width="1.2"/>';
+    var arcs=[[12,3,21,12],[21,12,12,21],[12,21,3,12],[3,12,12,3]];
+    for(var k=0;k<4;k++){var a=arcs[k];s+='<path d="M'+a[0]+' '+a[1]+' A9 9 0 0 1 '+a[2]+' '+a[3]+' L12 12 Z" fill="'+WHEEL[(d+k)%4]+'" opacity=".85"/>';}
+    s+='<circle cx="12" cy="12" r="3.4" fill="#fff" stroke="#b9bed0"/><text x="12" y="14.6" text-anchor="middle" font-size="5.4" font-weight="800" fill="#2a2f45">'+["N","E","S","W"][d]+'</text></svg>';return s;}
+  document.getElementById('ic-tre').innerHTML=tre();
+  document.getElementById('ic-sec').innerHTML=sec();
+  document.getElementById('ic-rhy').innerHTML=rhy();
+  document.getElementById('ic-eld').innerHTML=eld(0);
+
+  // place the 7 seats on the wheel
+  var labels=[tre(),sec(),rhy(),eld(0),eld(1),eld(2),eld(3)];
+  var g=document.getElementById('nodes'),cx=170,cy=170,r=150,NS="http://www.w3.org/2000/svg";
+  for(var i=0;i<7;i++){var ang=-Math.PI/2+i*2*Math.PI/7;var x=cx+Math.cos(ang)*r,y=cy+Math.sin(ang)*r;
+    var fo=document.createElementNS(NS,'foreignObject');fo.setAttribute('x',x-15);fo.setAttribute('y',y-15);fo.setAttribute('width',30);fo.setAttribute('height',30);
+    fo.innerHTML='<div xmlns="http://www.w3.org/1999/xhtml" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--border);border-radius:50%">'+labels[i]+'</div>';
+    g.appendChild(fo);}
+</script>
+</body>
+</html>

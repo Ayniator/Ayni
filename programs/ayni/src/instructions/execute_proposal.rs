@@ -50,6 +50,10 @@ pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
             // Authorization only — the lamports move in `withdraw_treasury`,
             // gated on this executed proposal (so the treasury PDA can sign).
         }
+        ProposalAction::SetTreasuryWallet { .. } => {
+            // Authorization only — the wallet is written in `set_treasury_wallet`,
+            // gated on this executed proposal (which carries the new wallet).
+        }
     }
 
     proposal.executed = true;

@@ -1,22 +1,34 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Nav from "../components/Nav";
+import WalletProviders from "../components/WalletProviders";
+import SettingsProvider from "../components/SettingsProvider";
+import Footer from "../components/Footer";
 
 export const metadata: Metadata = {
   title: "AHA · Ayni — Find a Circle Near You",
   description:
     "Ancestral Humanity Anonymous — find a fellowship Circle near you, read the Daily Reflection, and browse shared documents. Anonymous, owner-less, on Solana.",
+  icons: { icon: "/favicon.png", apple: "/favicon.png" },
 };
+
+// Set theme + language on <html> before paint (no flash, correct dir for RTL).
+const noFlash = `(function(){try{var t=localStorage.getItem('aha:theme')||'light';var l=localStorage.getItem('aha:lang')||'en';var e=document.documentElement;e.dataset.theme=t;e.lang=l;e.dir=(l==='ar')?'rtl':'ltr';}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="light">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: noFlash }} />
+      </head>
       <body>
-        <Nav />
-        <main className="container">{children}</main>
-        <footer className="footer">
-          AHA — Ancestral Humanity Anonymous · governed by group conscience, not by an owner.
-        </footer>
+        <SettingsProvider>
+          <WalletProviders>
+            <Nav />
+            <main className="container">{children}</main>
+            <Footer />
+          </WalletProviders>
+        </SettingsProvider>
       </body>
     </html>
   );

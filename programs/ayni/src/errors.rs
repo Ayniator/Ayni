@@ -60,4 +60,6 @@ pub enum AyniError {
     ProfileFieldTooLong,
     #[msg("Geographic coordinate out of range")]
     InvalidCoordinate,
+    #[msg("Voting period must be between 1 and 90 days")]
+    InvalidVotingPeriod,
 }

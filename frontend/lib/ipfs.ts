@@ -10,12 +10,36 @@ export function ipfsUrl(cid: string, path = ""): string {
   return `${IPFS_GATEWAY}${clean}${path ? "/" + path.replace(/^\//, "") : ""}`;
 }
 
+// IPFS content is immutable (content-addressed), so caching by CID is safe and
+// permanent — repeat displays of the same document/reflection are instant.
+const IPFS_CACHE_PREFIX = "aha:ipfs:";
+
+function ipfsCacheGet(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(IPFS_CACHE_PREFIX + key);
+  } catch {
+    return null;
+  }
+}
+function ipfsCacheSet(key: string, val: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(IPFS_CACHE_PREFIX + key, val);
+  } catch {}
+}
+
 export async function fetchIpfsText(cid: string, path = ""): Promise<string> {
   const url = ipfsUrl(cid, path);
   if (!url) throw new Error("empty CID");
+  const key = cid + (path ? "/" + path : "");
+  const cached = ipfsCacheGet(key);
+  if (cached !== null) return cached;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`IPFS ${res.status}`);
-  return res.text();
+  const txt = await res.text();
+  ipfsCacheSet(key, txt);
+  return txt;
 }
 
 export async function fetchIpfsJson<T = any>(cid: string, path = ""): Promise<T> {

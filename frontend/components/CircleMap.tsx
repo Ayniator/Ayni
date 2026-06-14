@@ -22,20 +22,35 @@ function icon(seed: string) {
   });
 }
 
-function Recenter({ lat, lon }: { lat: number; lon: number }) {
+// Leaflet ≥1.9 prepends a Ukrainian flag to the "Leaflet" attribution link.
+// AHA neither supports nor opposes any cause, so replace the prefix with a
+// plain Leaflet link (no flag).
+function PlainAttribution() {
   const map = useMap();
   useEffect(() => {
-    map.setView([lat, lon], map.getZoom());
-  }, [lat, lon, map]);
+    map.attributionControl?.setPrefix(
+      '<a href="https://leafletjs.com" target="_blank" rel="noreferrer">Leaflet</a>'
+    );
+  }, [map]);
+  return null;
+}
+
+function Recenter({ lat, lon, zoom }: { lat: number; lon: number; zoom?: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.flyTo([lat, lon], zoom ?? map.getZoom(), { duration: 0.6 });
+  }, [lat, lon, zoom, map]);
   return null;
 }
 
 export default function CircleMap({
   center,
   circles,
+  focus,
 }: {
   center: { lat: number; lon: number };
   circles: CircleWithDistance[];
+  focus?: { lat: number; lon: number } | null;
 }) {
   return (
     <MapContainer center={[center.lat, center.lon]} zoom={6} className="map" scrollWheelZoom>
@@ -43,7 +58,9 @@ export default function CircleMap({
         attribution='&copy; OpenStreetMap contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <Recenter lat={center.lat} lon={center.lon} />
+      <PlainAttribution />
+      {/* Fly to a clicked circle when one is focused, else follow the user's center. */}
+      <Recenter lat={focus?.lat ?? center.lat} lon={focus?.lon ?? center.lon} zoom={focus ? 13 : undefined} />
       <Marker position={[center.lat, center.lon]} icon={icon("__you__")}>
         <Popup>You are here</Popup>
       </Marker>

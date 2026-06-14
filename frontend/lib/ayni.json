@@ -41,6 +41,39 @@
       "args": []
     },
     {
+      "name": "approve_child_rotation",
+      "docs": [
+        "Another foundation seat approves a pending child-rotation vote."
+      ],
+      "discriminator": [
+        5,
+        239,
+        43,
+        226,
+        150,
+        160,
+        166,
+        57
+      ],
+      "accounts": [
+        {
+          "name": "foundation",
+          "relations": [
+            "vote"
+          ]
+        },
+        {
+          "name": "vote",
+          "writable": true
+        },
+        {
+          "name": "seat",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "cancel_proposal",
       "docs": [
         "Any single Council seat cancels a pending proposal (the contest tripwire)."
@@ -349,6 +382,132 @@
       ]
     },
     {
+      "name": "create_post",
+      "docs": [
+        "A member publishes a time-boxed post (text and/or IPFS image)."
+      ],
+      "discriminator": [
+        123,
+        92,
+        184,
+        29,
+        231,
+        24,
+        15,
+        202
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "membership"
+          ]
+        },
+        {
+          "name": "membership",
+          "docs": [
+            "The author's membership in this Circle — proves membership and ties the",
+            "post to a wallet-bound member (anonymous, owner-less memberships cannot",
+            "post; a Council seat can post via its own membership if it holds one)."
+          ]
+        },
+        {
+          "name": "post",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "author"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "author",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "text",
+          "type": "string"
+        },
+        {
+          "name": "image_cid",
+          "type": "string"
+        },
+        {
+          "name": "start_date",
+          "type": "i64"
+        },
+        {
+          "name": "end_date",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "delete_post",
+      "docs": [
+        "Any of the 7 Council seats deletes a post (moderation by group conscience)."
+      ],
+      "discriminator": [
+        208,
+        39,
+        67,
+        161,
+        55,
+        13,
+        153,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "post"
+          ]
+        },
+        {
+          "name": "post",
+          "writable": true
+        },
+        {
+          "name": "seat",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "donate",
       "docs": [
         "Donate SOL to a Circle's treasury (anyone may contribute)."
@@ -489,6 +648,46 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "execute_child_rotation",
+      "docs": [
+        "Apply a passed child-rotation vote into the child Circle's Council."
+      ],
+      "discriminator": [
+        64,
+        193,
+        176,
+        215,
+        45,
+        19,
+        29,
+        183
+      ],
+      "accounts": [
+        {
+          "name": "foundation",
+          "relations": [
+            "vote"
+          ]
+        },
+        {
+          "name": "vote",
+          "writable": true
+        },
+        {
+          "name": "child",
+          "writable": true,
+          "relations": [
+            "vote"
+          ]
+        },
+        {
+          "name": "executor",
+          "signer": true
+        }
+      ],
+      "args": []
     },
     {
       "name": "execute_proposal",
@@ -1204,7 +1403,8 @@
           "name": "circle",
           "writable": true,
           "relations": [
-            "member_tree"
+            "member_tree",
+            "open_membership"
           ]
         },
         {
@@ -1272,9 +1472,40 @@
           "optional": true
         },
         {
+          "name": "open_membership",
+          "docs": [
+            "Optional admission-policy marker. Pass it (the [\"openjoin\", circle] PDA)",
+            "to self-admit in a permissionless Circle; omit it for Scribe-Secretary",
+            "admission. `has_one = circle` binds it to this Circle."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  110,
+                  106,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
           "name": "secretary",
           "docs": [
-            "Must be the Council's Secretary seat (signs + pays)."
+            "Signs + pays. Must be the Scribe-Secretary seat for a gated Circle; in a",
+            "permissionless Circle (open marker present) it may be any wallet."
           ],
           "writable": true,
           "signer": true
@@ -1462,6 +1693,92 @@
               "name": "ProposalAction"
             }
           }
+        }
+      ]
+    },
+    {
+      "name": "propose_child_rotation",
+      "docs": [
+        "A foundation seat opens a 4-of-7 vote to rotate a child Circle's 7 seats,",
+        "valid for `validity_secs` (1–90 days)."
+      ],
+      "discriminator": [
+        15,
+        89,
+        177,
+        127,
+        1,
+        192,
+        87,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "foundation"
+        },
+        {
+          "name": "child",
+          "docs": [
+            "The target Circle (must have `parent == foundation`)."
+          ]
+        },
+        {
+          "name": "vote",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  105,
+                  108,
+                  100,
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "child"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "new_seats",
+          "type": {
+            "array": [
+              "pubkey",
+              7
+            ]
+          }
+        },
+        {
+          "name": "validity_secs",
+          "type": "i64"
         }
       ]
     },
@@ -1681,6 +1998,67 @@
       "args": []
     },
     {
+      "name": "set_meetings",
+      "docs": [
+        "Publish/replace a Circle's meeting calendar (recurring + sessions JSON)."
+      ],
+      "discriminator": [
+        164,
+        187,
+        141,
+        163,
+        243,
+        78,
+        32,
+        148
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "meetings",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  101,
+                  116,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "data",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "set_membership_mint",
       "docs": [
         "Register the Circle's Token-2022 NonTransferable (soulbound) membership mint."
@@ -1712,6 +2090,73 @@
         {
           "name": "mint",
           "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_open_membership",
+      "docs": [
+        "Set the Circle's membership-admission policy: `open = true` makes joining",
+        "permissionless (anyone self-admits); `open = false` restores Scribe-Secretary",
+        "validation. Any Council seat may toggle it. Uses a separate marker PDA, so",
+        "the `Circle` account (and every existing Circle) is untouched."
+      ],
+      "discriminator": [
+        92,
+        132,
+        82,
+        161,
+        103,
+        10,
+        1,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "open_membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  110,
+                  106,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (signs + pays the marker rent on first toggle)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "open",
+          "type": "bool"
         }
       ]
     },
@@ -1803,6 +2248,73 @@
           "type": "bool"
         }
       ]
+    },
+    {
+      "name": "set_treasury_wallet",
+      "docs": [
+        "Write the Circle's treasury steward wallet, authorized by an executed",
+        "4-of-7 `SetTreasuryWallet` proposal."
+      ],
+      "discriminator": [
+        48,
+        205,
+        2,
+        69,
+        219,
+        132,
+        176,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "treasury_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121,
+                  99,
+                  102,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "update_circle_location",
@@ -2197,6 +2709,19 @@
       ]
     },
     {
+      "name": "ChildSeatVote",
+      "discriminator": [
+        251,
+        114,
+        184,
+        242,
+        156,
+        62,
+        43,
+        94
+      ]
+    },
+    {
       "name": "Circle",
       "discriminator": [
         27,
@@ -2207,6 +2732,19 @@
         199,
         222,
         252
+      ]
+    },
+    {
+      "name": "CircleMeetings",
+      "discriminator": [
+        246,
+        221,
+        12,
+        6,
+        246,
+        254,
+        196,
+        126
       ]
     },
     {
@@ -2301,6 +2839,19 @@
       ]
     },
     {
+      "name": "OpenMembership",
+      "discriminator": [
+        113,
+        194,
+        245,
+        32,
+        35,
+        131,
+        23,
+        138
+      ]
+    },
+    {
       "name": "PersonhoodCredential",
       "discriminator": [
         99,
@@ -2314,6 +2865,19 @@
       ]
     },
     {
+      "name": "Post",
+      "discriminator": [
+        8,
+        147,
+        90,
+        186,
+        185,
+        56,
+        192,
+        150
+      ]
+    },
+    {
       "name": "Proposal",
       "discriminator": [
         26,
@@ -2324,6 +2888,19 @@
         136,
         53,
         33
+      ]
+    },
+    {
+      "name": "TreasuryConfig",
+      "discriminator": [
+        124,
+        54,
+        212,
+        227,
+        213,
+        189,
+        168,
+        41
       ]
     }
   ],
@@ -2472,6 +3049,11 @@
       "code": 6028,
       "name": "InvalidCoordinate",
       "msg": "Geographic coordinate out of range"
+    },
+    {
+      "code": 6029,
+      "name": "InvalidVotingPeriod",
+      "msg": "Voting period must be between 1 and 90 days"
     }
   ],
   "types": [
@@ -2582,6 +3164,65 @@
       }
     },
     {
+      "name": "ChildSeatVote",
+      "docs": [
+        "A foundation-led vote to rotate a CHILD Circle's Council seats. The World",
+        "Service / foundation Circle (the child's `parent`) may help a member Circle",
+        "rotate its 7 seats: a 4-of-7 vote among the FOUNDATION's seats, valid for a",
+        "chosen window (1–90 days), that — once it reaches threshold before expiry —",
+        "writes the new seat set into the child's Council via `execute_child_rotation`.",
+        "",
+        "This is the one cross-Circle authority: the parent can rotate a direct",
+        "child's seats. PDA: [\"childvote\", child, &nonce.to_le_bytes()]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "foundation",
+            "type": "pubkey"
+          },
+          {
+            "name": "child",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "new_seats",
+            "type": {
+              "array": [
+                "pubkey",
+                7
+              ]
+            }
+          },
+          {
+            "name": "approvals",
+            "type": "u8"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "executed",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "Circle",
       "docs": [
         "A Circle — a local AHA group, forked under the World Service Circle.",
@@ -2660,6 +3301,32 @@
             "docs": [
               "Human-readable Circle name (also a PDA seed, so <= MAX_NAME bytes)."
             ],
+            "type": "string"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CircleMeetings",
+      "docs": [
+        "A Circle's meeting calendar — recurring patterns + exceptional sessions —",
+        "as a compact JSON string every member (and visitor) can read. Set by any",
+        "Council seat. Separate PDA so the `Circle`/`CircleProfile` layouts are",
+        "untouched. PDA: [\"meetings\", circle]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "data",
             "type": "string"
           },
           {
@@ -3125,6 +3792,37 @@
       }
     },
     {
+      "name": "OpenMembership",
+      "docs": [
+        "Per-Circle membership-admission policy, kept in its own PDA so the `Circle`",
+        "layout is untouched and every existing Circle keeps deserializing.",
+        "",
+        "Absent (the default for every Circle) ⇒ the **Scribe-Secretary** seat admits",
+        "members — validation required. Present with `open == true` ⇒ **permissionless**:",
+        "anyone may self-admit a membership. Toggled by any Council seat via",
+        "`set_open_membership`; consulted (optionally) by `issue_membership`.",
+        "",
+        "PDA: [\"openjoin\", circle]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "open",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "PersonhoodCredential",
       "docs": [
         "Proof that a unique human is eligible for one membership in a Circle, minted",
@@ -3143,6 +3841,56 @@
           {
             "name": "used",
             "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Post",
+      "docs": [
+        "A member-authored post / bulletin for a Circle (F30). Text and/or an IPFS",
+        "image, shown only within [start_date, end_date]. Authored by a member (a",
+        "wallet that owns a live membership in the Circle); deletable by ANY of the 7",
+        "Council seats at any time. PDA: [\"post\", circle, author, &nonce.to_le_bytes()]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "author",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "start_date",
+            "type": "i64"
+          },
+          {
+            "name": "end_date",
+            "type": "i64"
+          },
+          {
+            "name": "image_cid",
+            "type": "string"
+          },
+          {
+            "name": "text",
+            "type": "string"
           },
           {
             "name": "bump",
@@ -3262,6 +4010,41 @@
                 "type": "pubkey"
               }
             ]
+          },
+          {
+            "name": "SetTreasuryWallet",
+            "fields": [
+              {
+                "name": "new_wallet",
+                "type": "pubkey"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreasuryConfig",
+      "docs": [
+        "The Circle's designated treasury steward wallet (governed by a 4-of-7",
+        "`SetTreasuryWallet` vote, applied by `set_treasury_wallet`). Separate PDA so",
+        "the `Circle` layout is untouched. Absent ⇒ none set (the treasury PDA itself",
+        "remains the only custodian). PDA: [\"treasurycfg\", circle]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

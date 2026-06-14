@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::council::Council;
+use crate::council::{Council, COUNCIL_SEATS};
 
 /// A Circle — a local AHA group, forked under the World Service Circle.
 /// Governance (proposals/voting) lives in a Realms Realm; the treasury in a
@@ -307,4 +307,168 @@ impl CircleProfile {
             && preamble_cid.len() <= Self::MAX_CID
             && daily_reflections_cid.len() <= Self::MAX_CID
     }
+}
+
+/// Per-Circle membership-admission policy, kept in its own PDA so the `Circle`
+/// layout is untouched and every existing Circle keeps deserializing.
+///
+/// Absent (the default for every Circle) ⇒ the **Scribe-Secretary** seat admits
+/// members — validation required. Present with `open == true` ⇒ **permissionless**:
+/// anyone may self-admit a membership. Toggled by any Council seat via
+/// `set_open_membership`; consulted (optionally) by `issue_membership`.
+///
+/// PDA: ["openjoin", circle].
+#[account]
+pub struct OpenMembership {
+    pub circle: Pubkey,
+    pub open: bool,
+    pub bump: u8,
+}
+
+impl OpenMembership {
+    pub const SPACE: usize = 8 + 32 + 1 + 1;
+}
+
+/// A Circle's meeting calendar — recurring patterns + exceptional sessions —
+/// as a compact JSON string every member (and visitor) can read. Set by any
+/// Council seat. Separate PDA so the `Circle`/`CircleProfile` layouts are
+/// untouched. PDA: ["meetings", circle].
+#[account]
+pub struct CircleMeetings {
+    pub circle: Pubkey,
+    pub data: String, // JSON: { recurring: [...], sessions: [...] }
+    pub bump: u8,
+}
+
+impl CircleMeetings {
+    pub const MAX_DATA: usize = 900;
+    pub const SPACE: usize = 8 + 32 + 4 + Self::MAX_DATA + 1;
+}
+
+/// A foundation-led 4-of-7 vote to DELETE (close) a federation Circle, valid
+/// for a chosen window. PDA: ["childclose", child, &nonce.to_le_bytes()].
+#[account]
+pub struct ChildCloseVote {
+    pub foundation: Pubkey,
+    pub child: Pubkey,
+    pub nonce: u64,
+    pub approvals: u8,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub executed: bool,
+    pub bump: u8,
+}
+impl ChildCloseVote {
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 1 + 8 + 8 + 1 + 1;
+    pub fn approval_count(&self) -> u8 {
+        self.approvals.count_ones() as u8
+    }
+}
+
+/// A wallet's published x25519 messaging public key (signature-derived), so
+/// others can encrypt private messages to it. PDA: ["msgkey", owner].
+#[account]
+pub struct MessagingKey {
+    pub owner: Pubkey,
+    pub box_pubkey: [u8; 32],
+    pub bump: u8,
+}
+impl MessagingKey {
+    pub const SPACE: usize = 8 + 32 + 32 + 1;
+}
+
+/// An end-to-end encrypted 1:1 message. The ciphertext is a NaCl box openable
+/// only by `recipient` (with the sender's `sender_box` pubkey + `nonce`). May
+/// carry an `expires_at` after which clients hide it and anyone may close it.
+/// PDA: ["msg", recipient, sender, &id.to_le_bytes()].
+#[account]
+pub struct Message {
+    pub sender: Pubkey,
+    pub recipient: Pubkey,
+    pub sender_box: [u8; 32], // sender's x25519 pubkey
+    pub nonce: [u8; 24],
+    pub id: u64,
+    pub created_at: i64,
+    pub expires_at: i64, // 0 = never
+    pub ciphertext: Vec<u8>,
+    pub bump: u8,
+}
+impl Message {
+    pub const MAX_CT: usize = 512;
+    pub const SPACE: usize = 8 + 32 + 32 + 32 + 24 + 8 + 8 + 8 + 4 + Self::MAX_CT + 1;
+}
+
+/// A foundation-led vote to rotate a CHILD Circle's Council seats. The World
+/// Service / foundation Circle (the child's `parent`) may help a member Circle
+/// rotate its 7 seats: a 4-of-7 vote among the FOUNDATION's seats, valid for a
+/// chosen window (1–90 days), that — once it reaches threshold before expiry —
+/// writes the new seat set into the child's Council via `execute_child_rotation`.
+///
+/// This is the one cross-Circle authority: the parent can rotate a direct
+/// child's seats. PDA: ["childvote", child, &nonce.to_le_bytes()].
+#[account]
+pub struct ChildSeatVote {
+    pub foundation: Pubkey,                 // the parent Circle whose seats vote
+    pub child: Pubkey,                      // the target Circle
+    pub nonce: u64,
+    pub new_seats: [Pubkey; COUNCIL_SEATS], // the proposed seat set
+    pub approvals: u8,                      // bitmask over the foundation's seats
+    pub created_at: i64,
+    pub expires_at: i64,                    // vote validity deadline (1–90 days out)
+    pub executed: bool,
+    pub bump: u8,
+}
+
+impl ChildSeatVote {
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 32 * COUNCIL_SEATS + 1 + 8 + 8 + 1 + 1;
+    pub fn approval_count(&self) -> u8 {
+        self.approvals.count_ones() as u8
+    }
+}
+
+/// The Circle's designated treasury steward wallet (governed by a 4-of-7
+/// `SetTreasuryWallet` vote, applied by `set_treasury_wallet`). Separate PDA so
+/// the `Circle` layout is untouched. Absent ⇒ none set (the treasury PDA itself
+/// remains the only custodian). PDA: ["treasurycfg", circle].
+#[account]
+pub struct TreasuryConfig {
+    pub circle: Pubkey,
+    pub wallet: Pubkey,
+    pub bump: u8,
+}
+
+impl TreasuryConfig {
+    pub const SPACE: usize = 8 + 32 + 32 + 1;
+}
+
+/// A member-authored post / bulletin for a Circle (F30). Text and/or an IPFS
+/// image, shown only within [start_date, end_date]. Authored by a member (a
+/// wallet that owns a live membership in the Circle); deletable by ANY of the 7
+/// Council seats at any time. PDA: ["post", circle, author, &nonce.to_le_bytes()].
+#[account]
+pub struct Post {
+    pub circle: Pubkey,
+    pub author: Pubkey,
+    pub nonce: u64,
+    pub created_at: i64,
+    pub start_date: i64,
+    pub end_date: i64,
+    pub image_cid: String, // IPFS CID of an optional image ("" = none)
+    pub text: String,
+    pub bump: u8,
+}
+
+impl Post {
+    pub const MAX_TEXT: usize = 500;
+    pub const MAX_CID: usize = 64;
+    pub const SPACE: usize = 8        // discriminator
+        + 32                           // circle
+        + 32                           // author
+        + 8                            // nonce
+        + 8                            // created_at
+        + 8                            // start_date
+        + 8                            // end_date
+        + 4 + Self::MAX_CID            // image_cid
+        + 4 + Self::MAX_TEXT           // text
+        + 1; // bump
 }

@@ -193,6 +193,7 @@ Full backlog: [BACKLOG.md](BACKLOG.md).
 | `circuits/` | Circom circuits: member voting, lineage grants, acknowledgments. |
 | `docs/` | Deep dives: resilience, treasury, voting, sybil, ZK lineage, acknowledgments. |
 | `app/` | TypeScript proving helpers (Merkle trees, proof generation). |
+| `frontend/` | Next.js web app — Find a Circle, Reflections, Documents, and **My Circle** (wallet connect, join a home circle, 7th Tradition donations). |
 | `SECURITY_REVIEW.md` | Latest concept + security review and the fixes applied. |
 
 ---
