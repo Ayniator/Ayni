@@ -155,6 +155,8 @@
   <div class="grid2">
     <div class="card"><h3 style="margin-top:0">7th Tradition treasury</h3>
       <p class="muted" style="margin:0">Each Circle is self-supporting. Anyone may donate SOL (or any SPL/Token-2022) into the Circle's treasury PDA; funds move only by a 4-of-7 vote.</p></div>
+    <div class="card"><h3 style="margin-top:0">A multisig holds the money</h3>
+      <p class="muted" style="margin:0">The money is held <em>in common</em>, never by one person, so a Circle's treasury steward wallet <b>must be a multisig</b> (m-of-n, at least 2 signers). The program enforces this on-chain. Make one with <code>spl-token create-multisig 2 …</code> or the in-app helper — see <code>docs/multisig.md</code>.</p></div>
     <div class="card"><h3 style="margin-top:0">A mandatory Circle address</h3>
       <p class="muted" style="margin:0">Every Circle is automatically assigned an <code>@aha</code>-domain email at creation. Each new registration notifies that address.</p></div>
     <div class="card"><h3 style="margin-top:0">The Board</h3>

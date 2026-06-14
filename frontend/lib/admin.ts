@@ -207,20 +207,27 @@ export async function getTreasuryWallet(circle: string): Promise<string | null> 
   }
 }
 
-/** Apply an executed SetTreasuryWallet proposal (writes TreasuryConfig). */
+/** Apply an executed SetTreasuryWallet proposal (writes TreasuryConfig). The
+ * voted wallet is read from the proposal and passed as the `multisig` account so
+ * the program can verify it really is an m-of-n multisig (else TreasuryNotMultisig). */
 export async function applyTreasuryWallet(
   wallet: SigningWallet,
   circle: PublicKey,
   proposal: PublicKey
 ): Promise<string> {
-  return programWith(wallet)
+  const program = programWith(wallet);
+  const p: any = await (program.account as any).proposal.fetch(proposal);
+  const newWallet: PublicKey = p.action?.setTreasuryWallet?.newWallet;
+  if (!newWallet) throw new Error("proposal is not a SetTreasuryWallet action");
+  return program
     .methods.setTreasuryWallet()
     .accounts({
       circle,
       proposal,
+      multisig: newWallet,
       treasuryConfig: treasuryConfigPda(circle),
       payer: wallet.publicKey,
-    })
+    } as any)
     .rpc();
 }
 

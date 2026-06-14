@@ -9,7 +9,8 @@ import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import Identicon from "../../components/Identicon";
 import RoleIcon from "../../components/RoleIcon";
-import { CircleInfo, explorerTx, listCircles, newCommitment, issueMembership } from "../../lib/member";
+import { CircleInfo, explorerTx, listCircles, newCommitment, issueMembership, connection } from "../../lib/member";
+import { isMultisig } from "../../lib/multisig";
 import {
   CircleMember,
   CouncilProposal,
@@ -316,6 +317,15 @@ function NewCouncilProposal({
     } else if (kind === "setTreasuryWallet") {
       const w = pk(a);
       if (!w) return setNote({ kind: "err", text: "Treasury wallet is not a valid address." });
+      // The program requires a multisig steward (m ≥ 2). Check before proposing
+      // so the Council doesn't waste a vote on an address that will be rejected.
+      const ms = await isMultisig(connection(), w);
+      if (!ms.ok) {
+        return setNote({
+          kind: "err",
+          text: `Treasury wallet must be a multisig (m-of-n, ≥2 signers): ${ms.reason || "not a multisig"}. Create one with "spl-token create-multisig 2 …" or scripts/create-multisig.js — see docs/multisig.md.`,
+        });
+      }
       action = actionSetTreasuryWallet(w);
     } else {
       const rcpt = pk(a);
@@ -361,7 +371,10 @@ function NewCouncilProposal({
       {kind === "setTreasuryWallet" && (
         <div className="form-row">
           <label>New treasury wallet</label>
-          <input value={a} onChange={(e) => setA(e.target.value)} placeholder="steward wallet address" />
+          <input value={a} onChange={(e) => setA(e.target.value)} placeholder="multisig steward address (m-of-n)" />
+          <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
+            Must be a multisig (≥2 signers) — the money is held in common. Create one with <code>spl-token create-multisig 2 …</code> or <code>scripts/create-multisig.js</code>.
+          </p>
         </div>
       )}
 

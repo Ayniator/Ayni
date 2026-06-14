@@ -69,7 +69,7 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
 | # | Feature | Status | Instructions / files | Notes |
 |---|---------|--------|----------------------|-------|
 | F17 | Self-supporting donation treasury | ✅ | `donate`, `donate_token` (any SPL/Token-2022), `withdraw_treasury` (treasury PDA) | `app/treasury/fund.ts` (`fundFoundation`); `docs/treasury.md` |
-| F29 | **Change the Circle treasury wallet (4-of-7)** | ✅ | `ProposalAction::SetTreasuryWallet`, `propose`/`execute_proposal`/`set_treasury_wallet`, `TreasuryConfig` PDA; admin console "Council votes" + "Apply" | Council **4-of-7** designates/rotates the treasury steward wallet. New time-locked, contestable proposal action (same machinery as `WithdrawTreasury`): `execute_proposal` authorizes, `set_treasury_wallet` writes the wallet into a separate `TreasuryConfig` PDA (`["treasurycfg", circle]` — migration-safe, no `Circle` layout change). Deployed to devnet; verified via propose + cancel (4-of-7 execute/apply needs a full Council). |
+| F29 | **Change the Circle treasury wallet (4-of-7) — must be a multisig** | ✅ | `ProposalAction::SetTreasuryWallet`, `propose`/`execute_proposal`/`set_treasury_wallet`, `TreasuryConfig` PDA; admin console "Council votes" + "Apply"; `frontend/lib/multisig.ts`, `scripts/create-multisig.js`, `docs/multisig.md` | Council **4-of-7** designates/rotates the treasury steward wallet. New time-locked, contestable proposal action (same machinery as `WithdrawTreasury`): `execute_proposal` authorizes, `set_treasury_wallet` writes the wallet into a separate `TreasuryConfig` PDA (`["treasurycfg", circle]` — migration-safe, no `Circle` layout change). **The steward wallet MUST be a multisig** (Tradition 7 — money held in common, never by one key): `set_treasury_wallet` re-checks on-chain that the passed account is an initialized SPL Token / Token-2022 `Multisig` with `m ≥ 2` (`TreasuryNotMultisig` otherwise); the admin console validates the same before proposing, and ships a create-a-multisig helper. Deployed to devnet (upgrade `cDX8sWiJ…`); helper verified against a real 2-of-3 multisig (`AHvaueFp…`). |
 
 ### Directory & frontend
 | # | Feature | Status | Instructions / files | Notes |
@@ -107,6 +107,7 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
 - ✅ Council seat uniqueness (no wallet in two seats) — S3.
 - ✅ Pin tree depth to the circuit depth — S4.
 - ⬜ Operational gates before mainnet: real VKs (fail-closed), `authority` = multisig, genesis key in MPC, rent-exempt treasury.
+  - 🟡 **Treasury steward = multisig** is now *enforced on-chain* (`set_treasury_wallet` requires an SPL/Token-2022 `Multisig`, `m ≥ 2`; helper + `docs/multisig.md`). Still ⬜ for the *program upgrade* `authority` and per-Circle `Council` authority to be a multisig/MPC.
 - ⬜ **Deeper audit pass once the toolchain is up** (needs a compiled build):
   - ⬜ Real **fuzz / property tests** of Council vote accounting (approvals bitmask, threshold, time-lock/contest, quorum + majority) and nullifier logic (no replay across the `nullifier` / `ack_nullifier` / `vote_nullifier` / `personhood` namespaces).
   - ⬜ Run **`/security-review`** against the compiled build to catch anything static analysis surfaces.
@@ -119,7 +120,8 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
 ### Feature completions
 - ✅ **Membership revocation** — `revoke_membership` (Scribe-Secretary) closes the membership account; wired into the admin "Delete". (No separate *suspend* toggle; and the commitment leaf remains in the append-only member tree until rebuilt — noted in-UI.)
 - ✅ **"Create a Circle" wizard** (F23) — `initialize_circle` + `initialize_member_tree` behind a guided web flow (seat picker, foundation as parent, depth = circuit depth).
-- 🟡 **Per-Circle email provisioning** (F25) — address derivation + provision/registration send path done (`/api/circle-email`); still needs a real `@aha` mailbox provisioner and a server-side (indexer/webhook) send hook so it covers registrations outside this UI.
+- 🟡 **Per-Circle email provisioning** (F25) — address derivation + provision/registration send path done (`/api/circle-email`); SMTP now live (Mailgun) on the deployed host so provision/join mails actually send; still needs a real `@aha` mailbox provisioner and a server-side (indexer/webhook) send hook so it covers registrations outside this UI.
+- ✅ **Solana multisig: docs + helper + treasury enforcement** — `docs/multisig.md` (and a docs.html card) explain SPL Token m-of-n multisigs and how to make one (`spl-token create-multisig`, `scripts/create-multisig.js`, or the in-browser `lib/multisig.ts` `createMultisigWithWallet`). `lib/multisig.ts` also exposes `isMultisig`. The program now **requires** the treasury steward wallet to be a multisig (see F29).
 - 🟡 Token-2022 **NonTransferable mint creation** as a program instruction (currently external setup) — finishes F3.
 - ⬜ Enforce **donation-on-renew** (`renew_membership` currently extends term without requiring a transfer).
 - ⬜ **MACI / coercion-resistant** member voting (today `choice` is public per ballot).

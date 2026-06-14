@@ -62,4 +62,6 @@ pub enum AyniError {
     InvalidCoordinate,
     #[msg("Voting period must be between 1 and 90 days")]
     InvalidVotingPeriod,
+    #[msg("Treasury steward wallet must be an initialized SPL multisig (m-of-n, m >= 2)")]
+    TreasuryNotMultisig,
 }

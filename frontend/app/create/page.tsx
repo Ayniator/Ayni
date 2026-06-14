@@ -277,7 +277,11 @@ export default function Create() {
 
       {!connected && (
         <div className="card">
-          <p className="muted" style={{ margin: 0 }}>Connect a wallet to create a Circle.</p>
+          <p className="muted" style={{ margin: 0 }}>
+            Connect a Solana wallet to create a Circle — use the <b>“Select Wallet”</b> button at the top right.
+            Don’t have one yet? Get <a href="https://www.solflare.com/" target="_blank" rel="noreferrer">Solflare</a> or{" "}
+            <a href="https://phantom.com/" target="_blank" rel="noreferrer">Phantom</a>.
+          </p>
         </div>
       )}
 

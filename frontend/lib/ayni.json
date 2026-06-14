@@ -2654,6 +2654,14 @@
           "writable": true
         },
         {
+          "name": "multisig",
+          "docs": [
+            "the exact pubkey the Council voted for AND an initialized SPL Token / Token-2022",
+            "multisig (m ≥ 2). Not deserialized as a typed account so either token program's",
+            "multisig is accepted."
+          ]
+        },
+        {
           "name": "treasury_config",
           "writable": true,
           "pda": {
@@ -3470,6 +3478,11 @@
       "code": 6029,
       "name": "InvalidVotingPeriod",
       "msg": "Voting period must be between 1 and 90 days"
+    },
+    {
+      "code": 6030,
+      "name": "TreasuryNotMultisig",
+      "msg": "Treasury steward wallet must be an initialized SPL multisig (m-of-n, m >= 2)"
     }
   ],
   "types": [
