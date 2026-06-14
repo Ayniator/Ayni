@@ -5,6 +5,7 @@
 // What the protocol does NOT support is shown disabled, not faked.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import Identicon from "../../components/Identicon";
@@ -128,6 +129,7 @@ export default function CircleAdmin() {
         </div>
       </div>
 
+      <SeatsSection circle={circle} wallet={wallet ?? null} me={me!} />
       <PolicySection circle={circle} wallet={wallet ?? null} onChanged={refresh} />
       <CouncilSection circle={circle} wallet={wallet ?? null} me={me!} />
       <MemberVotesSection circle={circle} wallet={wallet ?? null} />
@@ -181,6 +183,75 @@ function PolicySection({ circle, wallet, onChanged }: { circle: CircleInfo; wall
         <button className="btn btn-sm" disabled={busy} onClick={() => toggle(!circle.open)}>
           {busy ? "…" : circle.open ? "Require validation" : "Make open"}
         </button>
+      </div>
+      <TxNoteView note={note} />
+    </section>
+  );
+}
+
+// ===========================================================================
+// The 7 seats — view, message (✉), and change (opens a 4-of-7 RotateSeat vote)
+// ===========================================================================
+
+function SeatsSection({ circle, wallet, me }: { circle: CircleInfo; wallet: any; me: string }) {
+  const mySeats = mySeatIndices(circle.seats, me);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [newHolder, setNewHolder] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<TxNote>(null);
+
+  async function proposeRotate(i: number) {
+    let holder: PublicKey | null = null;
+    try { holder = new PublicKey(newHolder.trim()); } catch { holder = null; }
+    if (!holder) return setNote({ kind: "err", text: "New holder is not a valid address." });
+    setBusy(true); setNote(null);
+    try {
+      const sig = await propose(wallet, new PublicKey(circle.pubkey), actionRotateSeat(i, holder));
+      setNote({ kind: "ok", text: "Seat-change vote opened (your seat approved it).", sig });
+      setEditing(null); setNewHolder("");
+    } catch (e: any) {
+      setNote({ kind: "err", text: String(e?.message || e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card">
+      <SectionHead title="The 7 seats" sub="Changing a seat is a 4-of-7 Council vote (time-locked, contestable)." />
+      <div className="members">
+        {SEAT_ROLES.map((role, i) => (
+          <div className="member" key={i}>
+            <RoleIcon seat={i} size={26} />
+            <div className="meta" style={{ flex: 1, minWidth: 0 }}>
+              <div className="name">{role}</div>
+              <div className="sub mono">{short(circle.seats[i])}{circle.seats[i] === me ? " · you" : ""}</div>
+            </div>
+            {editing === i ? (
+              <div className="row" style={{ gap: 6 }}>
+                <input className="mono" value={newHolder} onChange={(e) => setNewHolder(e.target.value)} placeholder="new wallet" style={{ width: 150 }} />
+                <button className="btn btn-sm" disabled={busy} onClick={() => proposeRotate(i)}>{busy ? "…" : "Propose"}</button>
+                <button className="btn btn-sm btn-ghost" onClick={() => setEditing(null)}>×</button>
+              </div>
+            ) : (
+              <div className="row" style={{ gap: 6 }}>
+                {circle.seats[i] !== PublicKey.default.toBase58() && (
+                  <Link
+                    href={`/inbox?to=${circle.seats[i]}`}
+                    className="btn btn-sm btn-ghost"
+                    title="Send a private message to this seat holder"
+                    aria-label="Send message"
+                  >
+                    ✉
+                  </Link>
+                )}
+                {mySeats.length > 0 && (
+                  <button className="btn btn-sm btn-ghost" onClick={() => { setEditing(i); setNewHolder(""); }}>Change</button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
       <TxNoteView note={note} />
     </section>
