@@ -28,15 +28,10 @@ pub fn propose_child_rotation(
         .seat_of(&ctx.accounts.proposer.key())
         .ok_or(error!(AyniError::NotCouncilSeat))?;
 
-    // The foundation governs its whole federation: the target must be a direct
-    // child of the foundation OR share the foundation's root `parent` (a sibling
-    // forked from the same World Service root). It cannot rotate itself here.
+    // The foundation (the World Service root) governs its whole federation and
+    // may rotate any Circle's seats — EXCEPT itself. Refusing `child == foundation`
+    // is what makes the root permanently un-rotatable/un-deletable on-chain.
     require!(ctx.accounts.child.key() != foundation.key(), AyniError::Unauthorized);
-    require!(
-        ctx.accounts.child.parent == foundation.key()
-            || ctx.accounts.child.parent == foundation.parent,
-        AyniError::Unauthorized
-    );
 
     // New seat set: every seat filled and distinct.
     for i in 0..COUNCIL_SEATS {

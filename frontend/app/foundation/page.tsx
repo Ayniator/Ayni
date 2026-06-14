@@ -50,6 +50,12 @@ function pk(s: string): PublicKey | null {
 }
 type Note = { kind: "ok" | "err"; text: string; sig?: string } | null;
 
+// The foundation (the World Service root) governs every other Circle: anything
+// that isn't the root itself. The root is protected on-chain too (the program
+// refuses `child == foundation`), so it can never be rotated or deleted.
+const governable = (circles: CircleInfo[], foundation: CircleInfo) =>
+  circles.filter((c) => c.pubkey !== foundation.pubkey);
+
 // A deleted Circle's account is closed on-chain and the vote keeps neither its
 // name nor an executed-at time, so we remember the name (for every Circle we see)
 // and stamp the deletion date locally — best-effort, per-browser.
@@ -103,12 +109,13 @@ export default function Foundation() {
             </div>
           </div>
 
-          <SeatsPanel foundation={foundation} wallet={wallet ?? null} me={me!} />
           <AllCirclesPanel foundation={foundation} circles={circles} wallet={wallet ?? null} me={me!} onChanged={() => listCircles().then(setCircles)} />
           <ProfilePanel foundation={foundation} wallet={wallet ?? null} />
           <ReflectionsPanel foundation={foundation} />
           <ChildRotationPanel foundation={foundation} circles={circles} wallet={wallet ?? null} me={me!} />
           <ChildClosePanel foundation={foundation} circles={circles} wallet={wallet ?? null} me={me!} onChanged={() => listCircles().then(setCircles)} />
+          {/* The 7-seat Council last, per request. */}
+          <SeatsPanel foundation={foundation} wallet={wallet ?? null} me={me!} />
         </>
       )}
     </>
@@ -360,15 +367,7 @@ function ChildRotationPanel({
 }: { foundation: CircleInfo; circles: CircleInfo[]; wallet: any; me: string }) {
   // The foundation governs its whole federation: direct children + Circles that
   // share its root `parent` (siblings forked from the same World Service root).
-  const children = useMemo(
-    () =>
-      circles.filter(
-        (c) =>
-          c.pubkey !== foundation.pubkey &&
-          (c.parent === foundation.pubkey || c.parent === foundation.parent)
-      ),
-    [circles, foundation.pubkey, foundation.parent]
-  );
+  const children = useMemo(() => governable(circles, foundation), [circles, foundation]);
   const [sel, setSel] = useState("");
   const [seats, setSeats] = useState<string[]>(Array(7).fill(""));
   const [days, setDays] = useState(7);
@@ -523,10 +522,7 @@ function ChildRotationPanel({
 function ChildClosePanel({
   foundation, circles, wallet, me, onChanged,
 }: { foundation: CircleInfo; circles: CircleInfo[]; wallet: any; me: string; onChanged: () => void }) {
-  const children = useMemo(
-    () => circles.filter((c) => c.pubkey !== foundation.pubkey && (c.parent === foundation.pubkey || c.parent === foundation.parent)),
-    [circles, foundation.pubkey, foundation.parent]
-  );
+  const children = useMemo(() => governable(circles, foundation), [circles, foundation]);
   const [sel, setSel] = useState("");
   const [days, setDays] = useState(7);
   const [busy, setBusy] = useState<string | null>(null);
@@ -658,9 +654,9 @@ function AllCirclesPanel({
   const [openSeats, setOpenSeats] = useState<string | null>(null);
   const mySeats = mySeatIndices(foundation.seats, me);
 
-  // A Circle the foundation governs (so it may open a delete vote over it).
-  const isFederation = (c: CircleInfo) =>
-    c.pubkey !== foundation.pubkey && (c.parent === foundation.pubkey || c.parent === foundation.parent);
+  // A Circle the foundation governs (so it may open a delete vote over it):
+  // every Circle except the root itself.
+  const isFederation = (c: CircleInfo) => c.pubkey !== foundation.pubkey;
 
   const loadCountries = useCallback(() => { listCircleCountries().then(setCountries).catch(() => {}); }, []);
   useEffect(loadCountries, [loadCountries]);

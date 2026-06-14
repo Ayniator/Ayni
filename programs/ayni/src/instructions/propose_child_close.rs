@@ -18,11 +18,10 @@ pub fn propose_child_close(ctx: Context<ProposeChildClose>, _nonce: u64, validit
         .council
         .seat_of(&ctx.accounts.proposer.key())
         .ok_or(error!(AyniError::NotCouncilSeat))?;
+    // The foundation (the World Service root) may close any Circle in its
+    // federation EXCEPT itself. Refusing `child == foundation` is what makes the
+    // root permanently un-deletable on-chain — "the root of all circles" stands.
     require!(ctx.accounts.child.key() != f.key(), AyniError::Unauthorized);
-    require!(
-        ctx.accounts.child.parent == f.key() || ctx.accounts.child.parent == f.parent,
-        AyniError::Unauthorized
-    );
 
     let now = Clock::get()?.unix_timestamp;
     let v = &mut ctx.accounts.vote;

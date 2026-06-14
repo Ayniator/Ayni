@@ -29,6 +29,8 @@ import {
 } from "../../lib/meetings";
 import { createPost } from "../../lib/posts";
 import { checkOnLand } from "../../lib/geo";
+import { COUNTRIES } from "../../lib/countries";
+import { setCircleCountry } from "../../lib/country";
 
 function pk(s: string): PublicKey | null {
   try {
@@ -57,6 +59,7 @@ export default function Create() {
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
   const [city, setCity] = useState("");
+  const [country, setCountry] = useState("");
   const [address, setAddress] = useState("");
   const [geo, setGeo] = useState<{ ok: boolean; label: string; unknown?: boolean } | null>(null);
   const [checking, setChecking] = useState(false);
@@ -126,6 +129,7 @@ export default function Create() {
   function validate(): { parent: PublicKey; seatKeys: PublicKey[] } | string {
     if (!name.trim()) return "Give the Circle a name.";
     if (nameBytes > MAX_NAME_BYTES) return `Name is ${nameBytes} bytes; the limit is ${MAX_NAME_BYTES}.`;
+    if (!country) return "Choose the Circle's country — it's required so the Circle is grouped on the foundation directory.";
     const parentKey = pk(parent);
     if (!parentKey) return "Choose a valid parent Circle.";
     const seatKeys: PublicKey[] = [];
@@ -159,6 +163,9 @@ export default function Create() {
         try { await fn(); steps.push("✓ " + label); }
         catch (e: any) { steps.push("✗ " + label + " — " + String(e?.message || e).slice(0, 80)); }
       };
+
+      // Country is mandatory — record it on-chain (the creator holds a seat).
+      await safe("set country", () => setCircleCountry(wallet, circlePk, country));
 
       // If permissionless, set the open policy (the creator holds a seat).
       if (openJoin) await safe("set open membership", () => setOpenMembership(wallet, circlePk, true));
@@ -376,6 +383,13 @@ export default function Create() {
             </p>
           )}
           <div className="form-row"><label>City</label><input value={city} onChange={(e) => setCity(e.target.value)} placeholder="auto-filled by Check" /></div>
+          <div className="form-row">
+            <label>Country *</label>
+            <select value={country} onChange={(e) => setCountry(e.target.value)} required style={{ flex: 1 }}>
+              <option value="">— choose a country (required) —</option>
+              {COUNTRIES.map((co) => <option key={co.code} value={co.code}>{co.name}</option>)}
+            </select>
+          </div>
           <div className="form-row"><label>Address</label><input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="meeting place / landmark" /></div>
           <label className="form-row" style={{ cursor: "pointer", gap: 8 }}>
             <input type="checkbox" checked={showOnMap} onChange={(e) => setShowOnMap(e.target.checked)} style={{ width: "auto", flex: "0 0 auto" }} />
