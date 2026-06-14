@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import BrandAyni from "./BrandAyni";
 import WalletButton from "./WalletButton";
 import FoundationNavLink from "./FoundationNavLink";
 import InboxNavLink from "./InboxNavLink";
@@ -12,11 +13,15 @@ export default function Nav() {
   const t = useT();
   return (
     <header className="nav">
-      <Link href="/" className="brand">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="AHA — Ancestral Humanity Anonymous" className="brand-logo" />
-        AHA · Ayni
-      </Link>
+      <span className="brand-wrap">
+        <Link href="/" className="brand">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="AHA — Ancestral Humanity Anonymous" className="brand-logo" />
+          <span className="brand-aha">AHA</span>
+          <span className="brand-powered">powered by</span>
+        </Link>
+        <BrandAyni />
+      </span>
       <nav>
         <Link href="/">{t("nav.find")}</Link>
         <Link href="/me">{t("nav.me")}</Link>

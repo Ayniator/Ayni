@@ -69,6 +69,28 @@ a:hover { text-decoration: underline; }
   width: 32px; height: 32px; border-radius: 50%; object-fit: contain;
   flex-shrink: 0;
 }
+/* Brand wordmark: "AHA  powered by  Ayni" — AHA large, "powered by" tiny, Ayni
+   smaller than AHA and explained on hover. */
+.nav .brand-wrap { display: flex; align-items: baseline; gap: 6px; flex-shrink: 0; min-width: 0; }
+.nav .brand-aha { font-size: 18px; line-height: 1; }
+.nav .brand-powered { font-size: 9px; font-weight: 500; letter-spacing: .02em; color: var(--muted); text-transform: lowercase; }
+.ayni-wrap { position: relative; font-size: 13px; font-weight: 700; color: var(--text); cursor: help; outline: none; }
+.ayni-name { border-bottom: 1px dotted var(--muted); }
+.ayni-card {
+  position: absolute; top: 100%; left: 0; z-index: 60; margin-top: 8px;
+  width: 268px; max-width: 78vw; padding: 11px 13px;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 11px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.20);
+  font-size: 12.5px; font-weight: 400; line-height: 1.45; white-space: normal;
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity .12s ease, transform .12s ease, visibility .12s;
+}
+.ayni-wrap:hover .ayni-card, .ayni-wrap:focus .ayni-card, .ayni-wrap:focus-within .ayni-card {
+  opacity: 1; visibility: visible; transform: translateY(0);
+}
+.ayni-links { display: flex; gap: 14px; margin-top: 9px; font-weight: 600; }
+.ayni-links a { color: var(--accent, #6d4cff); }
 .nav nav { display: flex; gap: 4px; flex: 1 1 auto; flex-wrap: wrap; min-width: 0; }
 .nav nav a { color: var(--muted); font-weight: 550; font-size: 14px; padding: 7px 10px; border-radius: 9px; white-space: nowrap; }
 .nav nav a:hover { color: var(--text); background: var(--bg-2); text-decoration: none; }

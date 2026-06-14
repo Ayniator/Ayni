@@ -7,7 +7,7 @@ import SeatMessagingGate from "../components/SeatMessagingGate";
 import Footer from "../components/Footer";
 
 export const metadata: Metadata = {
-  title: "AHA · Ayni — Find a Circle Near You",
+  title: "AHA powered by Ayni — Find a Circle Near You",
   description:
     "Ancestral Humanity Anonymous — find a fellowship Circle near you, read the Daily Reflection, and browse shared documents. Anonymous, owner-less, on Solana.",
   manifest: "/site.webmanifest",
