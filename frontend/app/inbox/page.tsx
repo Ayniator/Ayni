@@ -54,6 +54,13 @@ export default function Inbox() {
   }, [me]);
   useEffect(refresh, [refresh]);
 
+  // Prefill the recipient from ?to=<address> (e.g. the ✉ button on /foundation).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const t = new URLSearchParams(window.location.search).get("to");
+    if (t) setTo(t);
+  }, []);
+
   const visible = useMemo(() => (msgs ?? []).filter((m) => !m.expired), [msgs]);
 
   async function enable() {

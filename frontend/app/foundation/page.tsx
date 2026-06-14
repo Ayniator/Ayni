@@ -5,6 +5,7 @@
 // powers /documents, and compose Daily Reflections for /reflections.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import Identicon from "../../components/Identicon";
@@ -158,7 +159,19 @@ function SeatsPanel({ foundation, wallet, me }: { foundation: CircleInfo; wallet
                 <button className="btn btn-sm btn-ghost" onClick={() => setEditing(null)}>×</button>
               </div>
             ) : (
-              <button className="btn btn-sm btn-ghost" onClick={() => { setEditing(i); setNewHolder(""); }}>Change</button>
+              <div className="row" style={{ gap: 6 }}>
+                {foundation.seats[i] !== PublicKey.default.toBase58() && (
+                  <Link
+                    href={`/inbox?to=${foundation.seats[i]}`}
+                    className="btn btn-sm btn-ghost"
+                    title="Send a private message to this seat holder"
+                    aria-label="Send message"
+                  >
+                    ✉
+                  </Link>
+                )}
+                <button className="btn btn-sm btn-ghost" onClick={() => { setEditing(i); setNewHolder(""); }}>Change</button>
+              </div>
             ))}
           </div>
         ))}
