@@ -254,6 +254,17 @@ pub mod ayni {
         instructions::install_elected_seat(ctx)
     }
 
+    /// Open a MACI (coercion-resistant) round over a member proposal, registering
+    /// the coordinator's encryption key. Any seat. See docs/maci.md.
+    pub fn open_maci_round(ctx: Context<OpenMaciRound>, coordinator: [u8; 32]) -> Result<()> {
+        instructions::open_maci_round(ctx, coordinator)
+    }
+
+    /// Publish an encrypted MACI command (vote or key-change) to an open round.
+    pub fn publish_maci_message(ctx: Context<PublishMaciMessage>, eph_pubkey: [u8; 32], ciphertext: Vec<u8>) -> Result<()> {
+        instructions::publish_maci_message(ctx, eph_pubkey, ciphertext)
+    }
+
     /// Add/remove a treasury withdrawal recipient on a Circle's spend allowlist
     /// (any seat). Enforced by `withdraw_treasury` when the allowlist is on.
     pub fn set_treasury_allow(

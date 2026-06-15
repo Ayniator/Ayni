@@ -439,6 +439,46 @@ impl SeatElection {
     pub const SPACE: usize = 8 + 32 + 32 + 1 + 32 + 1 + 1;
 }
 
+/// A MACI (Minimal Anti-Collusion Infrastructure) voting round bound to a member
+/// proposal. Voters publish ENCRYPTED commands — a vote, or a key-change that
+/// silently invalidates a coerced vote — sealed to the `coordinator` key, so no
+/// observer or briber can see how anyone voted on-chain (receipt-freeness). The
+/// coordinator decrypts the queue off-chain and submits a tally with a ZK proof
+/// that it processed honestly; `tally_hash` records the verified result. This
+/// account is the on-chain message queue + round state. PDA: ["maci", proposal].
+/// (The process/tally circuits + coordinator service are specified in docs/maci.md.)
+#[account]
+pub struct MaciRound {
+    pub circle: Pubkey,
+    pub proposal: Pubkey,
+    pub coordinator: [u8; 32], // x25519 pubkey messages are sealed to
+    pub message_count: u64,
+    pub processed: bool,
+    pub tally_hash: [u8; 32], // set when the coordinator submits the verified tally
+    pub bump: u8,
+}
+impl MaciRound {
+    pub const SPACE: usize = 8 + 32 + 32 + 32 + 8 + 1 + 32 + 1;
+}
+
+/// One encrypted MACI command (vote or key-change), sealed to the round's
+/// coordinator with a single-use ephemeral key. Append-only; the coordinator
+/// applies last-valid-per-voter off-chain, so a later message overrides an
+/// earlier (coerced) one. PDA: ["macimsg", round, index].
+#[account]
+pub struct MaciMessage {
+    pub round: Pubkey,
+    pub index: u64,
+    pub eph_pubkey: [u8; 32],
+    pub ciphertext: Vec<u8>, // fixed CT_LEN
+    pub bump: u8,
+}
+impl MaciMessage {
+    /// 160-byte padded MACI command + 16-byte NaCl box MAC.
+    pub const CT_LEN: usize = 176;
+    pub const SPACE: usize = 8 + 32 + 8 + 32 + 4 + Self::CT_LEN + 1;
+}
+
 /// A Circle's meeting calendar — recurring patterns + exceptional sessions —
 /// as a compact JSON string every member (and visitor) can read. Set by any
 /// Council seat. Separate PDA so the `Circle`/`CircleProfile` layouts are

@@ -2243,6 +2243,75 @@
       "args": []
     },
     {
+      "name": "open_maci_round",
+      "docs": [
+        "Open a MACI (coercion-resistant) round over a member proposal, registering",
+        "the coordinator's encryption key. Any seat. See docs/maci.md."
+      ],
+      "discriminator": [
+        188,
+        21,
+        177,
+        1,
+        218,
+        96,
+        140,
+        113
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal"
+        },
+        {
+          "name": "round",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "coordinator",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "propose",
       "docs": [
         "A Council seat opens a proposal (RotateSeat / MigrateWallet / WithdrawTreasury)."
@@ -2575,6 +2644,81 @@
               64
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "publish_maci_message",
+      "docs": [
+        "Publish an encrypted MACI command (vote or key-change) to an open round."
+      ],
+      "discriminator": [
+        210,
+        54,
+        50,
+        34,
+        119,
+        30,
+        172,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "round",
+          "writable": true
+        },
+        {
+          "name": "message",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  109,
+                  115,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              },
+              {
+                "kind": "account",
+                "path": "round.message_count",
+                "account": "MaciRound"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "eph_pubkey",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "ciphertext",
+          "type": "bytes"
         }
       ]
     },
@@ -4069,6 +4213,32 @@
       ]
     },
     {
+      "name": "MaciMessage",
+      "discriminator": [
+        39,
+        200,
+        223,
+        36,
+        47,
+        94,
+        25,
+        248
+      ]
+    },
+    {
+      "name": "MaciRound",
+      "discriminator": [
+        16,
+        20,
+        3,
+        63,
+        47,
+        150,
+        203,
+        131
+      ]
+    },
+    {
       "name": "MemberProposal",
       "discriminator": [
         4,
@@ -5069,6 +5239,101 @@
                   ]
                 },
                 20
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaciMessage",
+      "docs": [
+        "One encrypted MACI command (vote or key-change), sealed to the round's",
+        "coordinator with a single-use ephemeral key. Append-only; the coordinator",
+        "applies last-valid-per-voter off-chain, so a later message overrides an",
+        "earlier (coerced) one. PDA: [\"macimsg\", round, index]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "index",
+            "type": "u64"
+          },
+          {
+            "name": "eph_pubkey",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ciphertext",
+            "type": "bytes"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaciRound",
+      "docs": [
+        "A MACI (Minimal Anti-Collusion Infrastructure) voting round bound to a member",
+        "proposal. Voters publish ENCRYPTED commands — a vote, or a key-change that",
+        "silently invalidates a coerced vote — sealed to the `coordinator` key, so no",
+        "observer or briber can see how anyone voted on-chain (receipt-freeness). The",
+        "coordinator decrypts the queue off-chain and submits a tally with a ZK proof",
+        "that it processed honestly; `tally_hash` records the verified result. This",
+        "account is the on-chain message queue + round state. PDA: [\"maci\", proposal].",
+        "(The process/tally circuits + coordinator service are specified in docs/maci.md.)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "proposal",
+            "type": "pubkey"
+          },
+          {
+            "name": "coordinator",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "message_count",
+            "type": "u64"
+          },
+          {
+            "name": "processed",
+            "type": "bool"
+          },
+          {
+            "name": "tally_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
               ]
             }
           },

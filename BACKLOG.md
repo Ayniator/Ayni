@@ -131,7 +131,17 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
   seat) holds the renew fee plus reserved fields for member-vote quorum/pass and
   the treasury allowlist (wired in following waves). Admin console → "Self-support
   (Tradition 7)". Deployed (upgrade `2sZmGW35…`); verified set + renew on devnet.
-- ⬜ **MACI / coercion-resistant** member voting (today `choice` is public per ballot).
+- 🟡 **MACI / coercion-resistant** member voting — **submission layer shipped**:
+  `MaciRound` (`["maci", proposal]`) + `open_maci_round` (any seat, registers the
+  coordinator key) + `MaciMessage` (`["macimsg", round, index]`) + `publish_maci_message`
+  (append-only sealed commands — votes or key-changes, NaCl-boxed to the
+  coordinator, fixed 176 B, ephemeral key so the chain reveals no choice). Client:
+  `frontend/lib/maci.ts`. Deployed (upgrade `5q361Qy2…`); verified on devnet
+  (open round + publish, message_count increments). **Remaining (the large part,
+  see `docs/maci.md`):** coordinator service + `process_messages`/`tally` ZK
+  circuits + `submit_maci_tally` on-chain verification + MPC coordinator key.
+  Until tally ships, a round collects sealed commands but produces no verified
+  result.
 - ✅ Per-Circle **quorum/threshold config** for member voting — `finalize_member_proposal`
   reads `CircleConfig.vote_quorum_*` / `vote_pass_*` (num/den), defaulting to ⅓
   quorum + simple majority when unset; the config is seed-bound to the proposal's
