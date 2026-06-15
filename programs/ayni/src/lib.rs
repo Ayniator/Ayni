@@ -227,6 +227,22 @@ pub mod ayni {
         instructions::set_circle_country(ctx, code)
     }
 
+    /// A member designates (or changes) their WingPeer (mentor). Caller controls
+    /// the mentee membership; the wing must be a real member of the Circle.
+    pub fn establish_wing_peer(ctx: Context<EstablishWingPeer>) -> Result<()> {
+        instructions::establish_wing_peer(ctx)
+    }
+
+    /// End a WingPeer relationship (either party). Sets active = false.
+    pub fn end_wing_peer(ctx: Context<EndWingPeer>) -> Result<()> {
+        instructions::end_wing_peer(ctx)
+    }
+
+    /// A Council seat awards a member a progress token (milestone chip).
+    pub fn issue_progress_token(ctx: Context<IssueProgressToken>, milestone: u32) -> Result<()> {
+        instructions::issue_progress_token(ctx, milestone)
+    }
+
     /// Add/remove a treasury withdrawal recipient on a Circle's spend allowlist
     /// (any seat). Enforced by `withdraw_treasury` when the allowlist is on.
     pub fn set_treasury_allow(

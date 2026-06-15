@@ -137,7 +137,15 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
   quorum + simple majority when unset; the config is seed-bound to the proposal's
   Circle (init_if_needed) so it can't be swapped/omitted. Admin "Circle policy"
   sets quorum % and pass % . Deployed (upgrade `5jvJ9EEX…`).
-- ⬜ **Sponsor** relationship + **anniversary/sobriety-chip** schema (map onto acknowledgments/levels).
+- ✅ **WingPeer** (mentor) relationship + **progress-token** schema — `WingPeer`
+  PDA (`["wingpeer", circle, mentee]`) set by the mentee (`establish_wing_peer`,
+  controls their membership) / ended by either party (`end_wing_peer`);
+  `ProgressToken` milestone "chip" PDA (`["progress", circle, member, milestone]`)
+  awarded by any seat (`issue_progress_token`, one per member+milestone). Both
+  keyed by membership commitment, so they stay as anonymous as the memberships.
+  UI: admin Members "🏅 Award chip"; /me "Mentorship & progress" (set/end your
+  WingPeer by wallet, see your chips). Deployed (upgrade `2o8PdaZL…`); verified
+  e2e (establish/award/duplicate-rejected/end).
 - ✅ Treasury **mission/spend allowlist** (Traditions 5/6) — when
   `CircleConfig.treasury_allowlist` is on, `withdraw_treasury` additionally
   requires the recipient to hold a `TreasuryAllow` entry (`allowed = true`) on top

@@ -13,6 +13,7 @@ import RoleIcon from "../../components/RoleIcon";
 import { CircleInfo, explorerTx, listCircles, newCommitment, issueMembership, connection } from "../../lib/member";
 import { isMultisig } from "../../lib/multisig";
 import { AllowEntry, CircleConfigFields, DEFAULT_CONFIG, getCircleConfig, listTreasuryAllowed, setCircleConfig, setTreasuryAllow } from "../../lib/config";
+import { Chip, MILESTONES, issueProgressToken, listProgressTokens, milestoneLabel } from "../../lib/peers";
 import {
   CircleMember,
   CouncilProposal,
@@ -135,7 +136,7 @@ export default function CircleAdmin() {
       <ConfigSection circle={circle} wallet={wallet ?? null} />
       <CouncilSection circle={circle} wallet={wallet ?? null} me={me!} />
       <MemberVotesSection circle={circle} wallet={wallet ?? null} />
-      <MembersSection circle={circle} wallet={wallet ?? null} amSecretary={amSecretary} />
+      <MembersSection circle={circle} wallet={wallet ?? null} amSecretary={amSecretary} anySeat={mySeatIdx.length > 0} />
     </section>
   );
 }
@@ -800,21 +801,38 @@ function MemberVotesSection({ circle, wallet }: { circle: CircleInfo; wallet: an
 // Members
 // ===========================================================================
 
-function MembersSection({ circle, wallet, amSecretary }: { circle: CircleInfo; wallet: any; amSecretary: boolean }) {
+function MembersSection({ circle, wallet, amSecretary, anySeat }: { circle: CircleInfo; wallet: any; amSecretary: boolean; anySeat: boolean }) {
   const [items, setItems] = useState<CircleMember[] | null>(null);
   const [note, setNote] = useState<TxNote>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [ownerInput, setOwnerInput] = useState("");
   const [commitInput, setCommitInput] = useState(""); // member's commitment from a join request
+  const [chips, setChips] = useState<Chip[]>([]);
+  const [chipPick, setChipPick] = useState<Record<string, number>>({}); // commitment → milestone
   const canAdmit = amSecretary || circle.open;
 
   const load = useCallback(() => {
     listCircleMembers(circle.pubkey)
       .then(setItems)
       .catch((e) => setNote({ kind: "err", text: String(e?.message || e) }));
+    listProgressTokens(circle.pubkey).then(setChips).catch(() => {});
   }, [circle.pubkey]);
   useEffect(load, [load]);
+
+  async function award(m: CircleMember) {
+    const milestone = chipPick[m.commitment] ?? MILESTONES[0];
+    setBusy("chip-" + m.pubkey); setNote(null);
+    try {
+      const sig = await issueProgressToken(wallet, new PublicKey(circle.pubkey), m.commitment, milestone);
+      setNote({ kind: "ok", text: `Awarded a ${milestoneLabel(milestone)} chip.`, sig });
+      load();
+    } catch (e: any) {
+      setNote({ kind: "err", text: /already in use|exists/i.test(String(e?.message || e)) ? "That chip was already awarded." : String(e?.message || e) });
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function add() {
     const owner = ownerInput.trim() ? pk(ownerInput) : PublicKey.default;
@@ -935,6 +953,21 @@ function MembersSection({ circle, wallet, amSecretary }: { circle: CircleInfo; w
                 {m.owner ? `owner ${short(m.owner)}` : "fully anonymous"} ·{" "}
                 {m.active ? `through ${day(m.expiresAt)}` : `expired ${day(m.expiresAt)}`}
               </div>
+              {chips.filter((c) => c.member === m.commitment).length > 0 && (
+                <div className="sub" style={{ marginTop: 2 }}>
+                  {chips.filter((c) => c.member === m.commitment).map((c) => (
+                    <span key={c.milestone} className="badge badge-alt" style={{ marginRight: 4 }}>🏅 {milestoneLabel(c.milestone)}</span>
+                  ))}
+                </div>
+              )}
+              {anySeat && (
+                <div className="row" style={{ gap: 6, marginTop: 6 }}>
+                  <select value={chipPick[m.commitment] ?? MILESTONES[0]} onChange={(e) => setChipPick((p) => ({ ...p, [m.commitment]: Number(e.target.value) }))} style={{ maxWidth: 130 }}>
+                    {MILESTONES.map((d) => <option key={d} value={d}>{milestoneLabel(d)}</option>)}
+                  </select>
+                  <button className="btn btn-sm btn-ghost" disabled={busy === "chip-" + m.pubkey} onClick={() => award(m)}>{busy === "chip-" + m.pubkey ? "…" : "🏅 Award chip"}</button>
+                </div>
+              )}
             </div>
             <span className={`pill ${m.active ? "" : "pill-dim"}`}>{m.active ? "active" : "expired"}</span>
             <div className="member-actions">

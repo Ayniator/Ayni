@@ -767,6 +767,205 @@
       ]
     },
     {
+      "name": "end_wing_peer",
+      "docs": [
+        "End a WingPeer relationship (either party). Sets active = false."
+      ],
+      "discriminator": [
+        247,
+        92,
+        143,
+        41,
+        21,
+        96,
+        99,
+        121
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "wing_peer",
+            "membership"
+          ]
+        },
+        {
+          "name": "wing_peer",
+          "writable": true
+        },
+        {
+          "name": "membership",
+          "docs": [
+            "The membership the signer controls — must be the mentee or the wing."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "establish_wing_peer",
+      "docs": [
+        "A member designates (or changes) their WingPeer (mentor). Caller controls",
+        "the mentee membership; the wing must be a real member of the Circle."
+      ],
+      "discriminator": [
+        145,
+        21,
+        47,
+        7,
+        108,
+        101,
+        87,
+        65
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "mentee_membership",
+            "wing_membership"
+          ]
+        },
+        {
+          "name": "mentee_membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "mentee_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wing_membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "wing_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wing_peer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  103,
+                  112,
+                  101,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "mentee_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "docs": [
+            "A key the mentee controls (owner or guardian)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "execute_child_close",
       "docs": [
         "Apply a passed delete-Circle vote: close the child (and its profile)."
@@ -1744,6 +1943,113 @@
         {
           "name": "require_cosign",
           "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "issue_progress_token",
+      "docs": [
+        "A Council seat awards a member a progress token (milestone chip)."
+      ],
+      "discriminator": [
+        218,
+        101,
+        65,
+        117,
+        117,
+        14,
+        110,
+        159
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "member_membership"
+          ]
+        },
+        {
+          "name": "member_membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "member_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "member_membership.commitment",
+                "account": "Membership"
+              },
+              {
+                "kind": "arg",
+                "path": "milestone"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (signs + pays the chip's rent)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "milestone",
+          "type": "u32"
         }
       ]
     },
@@ -3770,6 +4076,19 @@
       ]
     },
     {
+      "name": "ProgressToken",
+      "discriminator": [
+        189,
+        170,
+        155,
+        227,
+        248,
+        223,
+        251,
+        10
+      ]
+    },
+    {
       "name": "Proposal",
       "discriminator": [
         26,
@@ -3806,6 +4125,19 @@
         189,
         168,
         41
+      ]
+    },
+    {
+      "name": "WingPeer",
+      "discriminator": [
+        175,
+        9,
+        195,
+        231,
+        127,
+        158,
+        51,
+        167
       ]
     }
   ],
@@ -5043,6 +5375,48 @@
       }
     },
     {
+      "name": "ProgressToken",
+      "docs": [
+        "A progress token — an on-chain milestone \"chip\" celebrating a member's",
+        "journey (e.g. 30 / 90 / 365 days), attested by a Council seat. One per",
+        "(member, milestone). PDA: [\"progress\", circle, member, milestone]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "milestone",
+            "type": "u32"
+          },
+          {
+            "name": "issued_at",
+            "type": "i64"
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "Proposal",
       "docs": [
         "A pending Council decision. Approvals are a bitmask over the 7 seats, so a",
@@ -5213,6 +5587,55 @@
           {
             "name": "wallet",
             "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WingPeer",
+      "docs": [
+        "A WingPeer relationship — a more-experienced member (\"wing\") who takes a",
+        "newer member (\"mentee\") under their wing (the fellowship's sponsor bond).",
+        "Both are memberships of the same Circle, identified by commitment so the",
+        "pairing stays as anonymous as the memberships. One primary wing per mentee.",
+        "PDA: [\"wingpeer\", circle, mentee]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "mentee",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "wing",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "established_at",
+            "type": "i64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
           },
           {
             "name": "bump",

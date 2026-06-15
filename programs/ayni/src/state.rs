@@ -387,6 +387,40 @@ impl TreasuryAllow {
     pub const SPACE: usize = 8 + 32 + 32 + 1 + 1;
 }
 
+/// A WingPeer relationship — a more-experienced member ("wing") who takes a
+/// newer member ("mentee") under their wing (the fellowship's sponsor bond).
+/// Both are memberships of the same Circle, identified by commitment so the
+/// pairing stays as anonymous as the memberships. One primary wing per mentee.
+/// PDA: ["wingpeer", circle, mentee].
+#[account]
+pub struct WingPeer {
+    pub circle: Pubkey,
+    pub mentee: [u8; 32], // mentee membership commitment
+    pub wing: [u8; 32],   // wing-peer membership commitment
+    pub established_at: i64,
+    pub active: bool,
+    pub bump: u8,
+}
+impl WingPeer {
+    pub const SPACE: usize = 8 + 32 + 32 + 32 + 8 + 1 + 1;
+}
+
+/// A progress token — an on-chain milestone "chip" celebrating a member's
+/// journey (e.g. 30 / 90 / 365 days), attested by a Council seat. One per
+/// (member, milestone). PDA: ["progress", circle, member, milestone].
+#[account]
+pub struct ProgressToken {
+    pub circle: Pubkey,
+    pub member: [u8; 32], // membership commitment
+    pub milestone: u32,   // days reached (a chip's denomination)
+    pub issued_at: i64,
+    pub issuer: Pubkey,   // the seat that attested it
+    pub bump: u8,
+}
+impl ProgressToken {
+    pub const SPACE: usize = 8 + 32 + 32 + 4 + 8 + 32 + 1;
+}
+
 /// A Circle's meeting calendar — recurring patterns + exceptional sessions —
 /// as a compact JSON string every member (and visitor) can read. Set by any
 /// Council seat. Separate PDA so the `Circle`/`CircleProfile` layouts are

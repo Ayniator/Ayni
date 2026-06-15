@@ -35,6 +35,7 @@ import {
 import { emailNote, notifyCircleEmail } from "../../lib/circleEmail";
 import CircleAdmin from "../admin/CircleAdmin";
 import { fileToAvatarDataUrl, getUserProfile, listTimezones, setUserProfile } from "../../lib/profile";
+import { Chip, WingPeerInfo, endWingPeer, establishWingPeer, getWingPeer, listProgressTokens, memberCommitmentOf, milestoneLabel } from "../../lib/peers";
 
 const sol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(4).replace(/\.?0+$/, "") || "0";
 const day = (unix: number) => new Date(unix * 1000).toLocaleDateString();
@@ -105,10 +106,23 @@ export default function Me() {
         </div>
       )}
 
+      {connected && publicKey && !loading && memberships.length === 0 && (
+        <div className="card" style={{ borderColor: "var(--accent)", marginBottom: 14 }}>
+          <h3 style={{ marginTop: 0 }}>👋 New here? Getting started</h3>
+          <ol className="sm" style={{ margin: "0 0 4px", paddingLeft: 18, lineHeight: 1.7 }}>
+            <li><a href="/">Find a Circle near you</a> on the map — or <a href="/create">create your own</a>.</li>
+            <li><strong>Join below</strong>: open Circles admit you instantly; others hand your join request to the Scribe-Secretary.</li>
+            <li>Turn on <a href="/inbox">encrypted messaging</a> so your Circle can reach you privately.</li>
+          </ol>
+          <p className="muted sm" style={{ margin: 0 }}>Everything here is anonymous by default — a membership is a ZK commitment, not your name.</p>
+        </div>
+      )}
+
       {connected && publicKey && (
         <div className="grid two" style={{ alignItems: "start" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <WalletCard publicKey={publicKey} balance={balance} memberships={memberships} byPubkey={byPubkey} home={home} />
+            <MentorshipCard wallet={wallet ?? null} memberships={memberships} />
             <ProfileCard />
             <JoinCard
               circles={circles}
@@ -209,6 +223,79 @@ function WalletCard({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyMembership[] }) {
+  const [wings, setWings] = useState<Record<string, WingPeerInfo | null>>({});
+  const [chips, setChips] = useState<Record<string, Chip[]>>({});
+  const [wingInput, setWingInput] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const load = useCallback(() => {
+    for (const m of memberships) {
+      getWingPeer(m.circle, m.commitment).then((w) => setWings((p) => ({ ...p, [m.circle]: w }))).catch(() => {});
+      listProgressTokens(m.circle).then((all) => setChips((p) => ({ ...p, [m.circle]: all.filter((c) => c.member === m.commitment) }))).catch(() => {});
+    }
+  }, [memberships]);
+  useEffect(load, [load]);
+
+  async function setWing(m: MyMembership) {
+    const w = (wingInput[m.circle] ?? "").trim();
+    if (!w || !wallet) return;
+    setBusy("set-" + m.circle); setNote(null);
+    try {
+      const wingCommit = await memberCommitmentOf(m.circle, w);
+      if (!wingCommit) throw new Error("That wallet isn't a (wallet-bound) member of this Circle.");
+      await establishWingPeer(wallet, new PublicKey(m.circle), m.commitment, wingCommit);
+      setNote({ kind: "ok", text: "WingPeer set." });
+      setWingInput((p) => ({ ...p, [m.circle]: "" }));
+      load();
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
+
+  async function endWing(m: MyMembership) {
+    if (!wallet) return;
+    setBusy("end-" + m.circle); setNote(null);
+    try {
+      await endWingPeer(wallet, new PublicKey(m.circle), m.commitment, m.commitment);
+      setNote({ kind: "ok", text: "WingPeer ended." });
+      load();
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
+
+  if (memberships.length === 0) return null;
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>Mentorship &amp; progress</h3>
+      <p className="muted sm" style={{ marginTop: 0 }}>Your WingPeer (a member who mentors you) and your milestone chips, per Circle.</p>
+      {memberships.map((m) => {
+        const w = wings[m.circle];
+        const cs = chips[m.circle] ?? [];
+        return (
+          <div key={m.pubkey} style={{ padding: "10px 0", borderTop: "1px solid var(--border)" }}>
+            <div className="name">{m.circleName}</div>
+            <div className="sub" style={{ marginTop: 4 }}>
+              {cs.length ? cs.map((c) => <span key={c.milestone} className="badge badge-alt" style={{ marginRight: 4 }}>🏅 {milestoneLabel(c.milestone)}</span>) : <span className="muted">No chips yet.</span>}
+            </div>
+            <div className="sub" style={{ marginTop: 6 }}>
+              WingPeer: {w && w.active ? <span className="mono">{w.wing.slice(0, 8)}…</span> : <span className="muted">none</span>}
+              {w && w.active && <button className="btn btn-sm btn-ghost" style={{ marginLeft: 8 }} disabled={busy === "end-" + m.circle} onClick={() => endWing(m)}>End</button>}
+            </div>
+            <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+              <input className="mono" value={wingInput[m.circle] ?? ""} onChange={(e) => setWingInput((p) => ({ ...p, [m.circle]: e.target.value }))} placeholder="WingPeer's wallet address" style={{ flex: 1, minWidth: 180 }} />
+              <button className="btn btn-sm" disabled={busy === "set-" + m.circle} onClick={() => setWing(m)}>{busy === "set-" + m.circle ? "…" : (w && w.active ? "Change" : "Set WingPeer")}</button>
+            </div>
+          </div>
+        );
+      })}
+      {note && <p className={note.kind === "err" ? "error" : "ok-note"} style={{ marginBottom: 0 }}>{note.text}</p>}
     </div>
   );
 }
