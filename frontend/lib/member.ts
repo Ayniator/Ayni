@@ -25,6 +25,10 @@ const seed = (s: string) => new TextEncoder().encode(s);
 export const treasuryPda = (circle: PublicKey) =>
   PublicKey.findProgramAddressSync([seed("treasury"), circle.toBytes()], PROGRAM_ID)[0];
 
+/** The per-Circle policy PDA: ["config", circle]. */
+export const circleConfigPda = (circle: PublicKey) =>
+  PublicKey.findProgramAddressSync([seed("config"), circle.toBytes()], PROGRAM_ID)[0];
+
 export const memberTreePda = (circle: PublicKey) =>
   PublicKey.findProgramAddressSync([seed("members"), circle.toBytes()], PROGRAM_ID)[0];
 

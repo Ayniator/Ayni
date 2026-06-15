@@ -12,6 +12,7 @@ import Identicon from "../../components/Identicon";
 import RoleIcon from "../../components/RoleIcon";
 import { CircleInfo, explorerTx, listCircles, newCommitment, issueMembership, connection } from "../../lib/member";
 import { isMultisig } from "../../lib/multisig";
+import { CircleConfigFields, DEFAULT_CONFIG, getCircleConfig, setCircleConfig } from "../../lib/config";
 import {
   CircleMember,
   CouncilProposal,
@@ -131,6 +132,7 @@ export default function CircleAdmin() {
 
       <SeatsSection circle={circle} wallet={wallet ?? null} me={me!} />
       <PolicySection circle={circle} wallet={wallet ?? null} onChanged={refresh} />
+      <ConfigSection circle={circle} wallet={wallet ?? null} />
       <CouncilSection circle={circle} wallet={wallet ?? null} me={me!} />
       <MemberVotesSection circle={circle} wallet={wallet ?? null} />
       <MembersSection circle={circle} wallet={wallet ?? null} amSecretary={amSecretary} />
@@ -183,6 +185,54 @@ function PolicySection({ circle, wallet, onChanged }: { circle: CircleInfo; wall
         <button className="btn btn-sm" disabled={busy} onClick={() => toggle(!circle.open)}>
           {busy ? "…" : circle.open ? "Require validation" : "Make open"}
         </button>
+      </div>
+      <TxNoteView note={note} />
+    </section>
+  );
+}
+
+// ===========================================================================
+// Self-support (Tradition 7) — donation required into the treasury to renew
+// ===========================================================================
+
+function ConfigSection({ circle, wallet }: { circle: CircleInfo; wallet: any }) {
+  const [cfg, setCfg] = useState<CircleConfigFields | null>(null);
+  const [sol, setSol] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<TxNote>(null);
+
+  useEffect(() => {
+    getCircleConfig(circle.pubkey).then((c) => {
+      setCfg(c);
+      setSol(c.renewDonationLamports ? (c.renewDonationLamports / LAMPORTS_PER_SOL).toString() : "");
+    });
+  }, [circle.pubkey]);
+
+  async function save() {
+    if (!wallet) return;
+    const lamports = Math.round(parseFloat(sol || "0") * LAMPORTS_PER_SOL);
+    if (!Number.isFinite(lamports) || lamports < 0) return setNote({ kind: "err", text: "Enter a valid amount in SOL (0 = free)." });
+    setBusy(true); setNote(null);
+    try {
+      const next = { ...(cfg ?? DEFAULT_CONFIG), renewDonationLamports: lamports };
+      const sig = await setCircleConfig(wallet, new PublicKey(circle.pubkey), next);
+      setNote({ kind: "ok", text: lamports ? `Renewals now require a ${sol} SOL donation to the treasury.` : "Renewals are now free.", sig });
+      setCfg(next);
+    } catch (e: any) {
+      setNote({ kind: "err", text: String(e?.message || e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card">
+      <SectionHead title="Self-support (Tradition 7)" sub="Optionally require a donation into the Circle treasury to renew a membership — the act of renewal is the contribution." />
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <label className="sm muted">Renewal donation</label>
+        <input type="number" min="0" step="0.01" value={sol} onChange={(e) => setSol(e.target.value)} placeholder="0" style={{ maxWidth: 130 }} />
+        <span className="sm muted">SOL · 0 = free</span>
+        <button className="btn btn-sm" disabled={busy || cfg === null} onClick={save}>{busy ? "Saving…" : "Save"}</button>
       </div>
       <TxNoteView note={note} />
     </section>

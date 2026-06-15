@@ -346,6 +346,47 @@ impl CircleCountry {
     pub const SPACE: usize = 8 + 32 + 4 + Self::MAX_CODE + 1;
 }
 
+/// Per-Circle tunable policy — a sibling PDA so the `Circle` layout is untouched
+/// and existing Circles need no migration. Any Council seat sets it; it is
+/// created on first use with safe defaults (no donation, classic ⅓-quorum +
+/// simple-majority voting, treasury allowlist off). PDA: ["config", circle].
+///
+/// The full layout is defined up front so the donation / quorum / allowlist
+/// features can be wired in incrementally without ever re-migrating the account.
+#[account]
+pub struct CircleConfig {
+    pub circle: Pubkey,
+    /// Donation (lamports) required *into the treasury* to renew a membership
+    /// (Tradition 7 — self-support). 0 = renewal is free.
+    pub renew_donation_lamports: u64,
+    /// Member-vote quorum as num/den of the eligible set (0 den ⇒ default ⅓).
+    pub vote_quorum_num: u16,
+    pub vote_quorum_den: u16,
+    /// Member-vote pass threshold as yes/turnout (0 den ⇒ default simple majority).
+    pub vote_pass_num: u16,
+    pub vote_pass_den: u16,
+    /// When true, a treasury withdrawal recipient must hold a TreasuryAllow marker.
+    pub treasury_allowlist: bool,
+    pub bump: u8,
+}
+impl CircleConfig {
+    pub const SPACE: usize = 8 + 32 + 8 + 2 + 2 + 2 + 2 + 1 + 1;
+}
+
+/// Treasury allowlist entry: marks `recipient` as permitted to receive a
+/// withdrawal from `circle` (only enforced when `CircleConfig.treasury_allowlist`
+/// is on). PDA: ["treasallow", circle, recipient].
+#[account]
+pub struct TreasuryAllow {
+    pub circle: Pubkey,
+    pub recipient: Pubkey,
+    pub allowed: bool,
+    pub bump: u8,
+}
+impl TreasuryAllow {
+    pub const SPACE: usize = 8 + 32 + 32 + 1 + 1;
+}
+
 /// A Circle's meeting calendar — recurring patterns + exceptional sessions —
 /// as a compact JSON string every member (and visitor) can read. Set by any
 /// Council seat. Separate PDA so the `Circle`/`CircleProfile` layouts are

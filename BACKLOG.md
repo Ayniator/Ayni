@@ -124,7 +124,13 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
 - 🟡 **Per-Circle email provisioning** (F25) — address derivation + provision/registration send path done (`/api/circle-email`); SMTP live (Mailgun) on the deployed host; server-side send hook **built** (`indexer/email-indexer.js`, baseline-safe, verified on devnet). Only mailbox **receive** (MX + Mailgun inbound route) remains — a DNS task, see `indexer/README.md`.
 - ✅ **Solana multisig: docs + helper + treasury enforcement** — `docs/multisig.md` (and a docs.html card) explain SPL Token m-of-n multisigs and how to make one (`spl-token create-multisig`, `scripts/create-multisig.js`, or the in-browser `lib/multisig.ts` `createMultisigWithWallet`). `lib/multisig.ts` also exposes `isMultisig`. The program now **requires** the treasury steward wallet to be a multisig (see F29).
 - ✅ Token-2022 **NonTransferable mint creation** as a program instruction (`create_membership_mint`) — finishes F3. Deployed + verified on devnet.
-- ⬜ Enforce **donation-on-renew** (`renew_membership` currently extends term without requiring a transfer).
+- ✅ Enforce **donation-on-renew** — `renew_membership` now CPI-transfers the
+  Circle's `CircleConfig.renew_donation_lamports` into the treasury PDA as the act
+  of renewal (Tradition 7); 0 = free. New per-Circle **`CircleConfig`** sibling
+  PDA (`["config", circle]`, no `Circle` migration) + `set_circle_config` (any
+  seat) holds the renew fee plus reserved fields for member-vote quorum/pass and
+  the treasury allowlist (wired in following waves). Admin console → "Self-support
+  (Tradition 7)". Deployed (upgrade `2sZmGW35…`); verified set + renew on devnet.
 - ⬜ **MACI / coercion-resistant** member voting (today `choice` is public per ballot).
 - ⬜ Per-Circle **quorum/threshold config** for member voting (currently fixed ⅓ + majority).
 - ⬜ **Sponsor** relationship + **anniversary/sobriety-chip** schema (map onto acknowledgments/levels).

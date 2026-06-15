@@ -227,6 +227,28 @@ pub mod ayni {
         instructions::set_circle_country(ctx, code)
     }
 
+    /// Set a Circle's tunable policy (donation-on-renew, member-vote
+    /// quorum/pass thresholds, treasury allowlist). Any seat; PDA ["config", circle].
+    pub fn set_circle_config(
+        ctx: Context<SetCircleConfig>,
+        renew_donation_lamports: u64,
+        vote_quorum_num: u16,
+        vote_quorum_den: u16,
+        vote_pass_num: u16,
+        vote_pass_den: u16,
+        treasury_allowlist: bool,
+    ) -> Result<()> {
+        instructions::set_circle_config(
+            ctx,
+            renew_donation_lamports,
+            vote_quorum_num,
+            vote_quorum_den,
+            vote_pass_num,
+            vote_pass_den,
+            treasury_allowlist,
+        )
+    }
+
     // --- Sybil resistance: anonymous proof-of-personhood (see docs/sybil.md) ---
 
     /// Configure the Circle's sybil gate (on/off + the unique-human Merkle root).

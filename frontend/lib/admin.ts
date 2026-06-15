@@ -14,12 +14,15 @@ import { Keypair, PublicKey } from "@solana/web3.js";
 import {
   PROGRAM_ID,
   SigningWallet,
+  circleConfigPda,
   invalidateCircles,
   memberTreePda,
   openMembershipPda,
   programWith,
   readOnlyProgram,
+  treasuryPda,
 } from "./member";
+import { SystemProgram } from "@solana/web3.js";
 import { TOKEN_2022_PROGRAM_ID } from "./multisig";
 
 // ---------------------------------------------------------------------------
@@ -465,7 +468,14 @@ export async function renewMembership(
 ): Promise<string> {
   return programWith(wallet)
     .methods.renewMembership()
-    .accounts({ circle, membership, payer: wallet.publicKey })
+    .accounts({
+      circle,
+      membership,
+      config: circleConfigPda(circle),
+      treasury: treasuryPda(circle),
+      payer: wallet.publicKey,
+      systemProgram: SystemProgram.programId,
+    })
     .rpc();
 }
 

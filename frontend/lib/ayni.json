@@ -2291,12 +2291,73 @@
           }
         },
         {
+          "name": "config",
+          "docs": [
+            "The Circle's policy. Created on first use (default = free renewal); its",
+            "`renew_donation_lamports` is the self-support fee. Required (not optional)",
+            "so the fee can't be bypassed by omitting it."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "The Circle treasury PDA — receives the renewal donation."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
           "name": "payer",
           "docs": [
             "Anyone may pay to renew a membership (a member can renew anonymously,",
             "or another member can gift a renewal)."
           ],
+          "writable": true,
           "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -2424,6 +2485,89 @@
         {
           "name": "ciphertext",
           "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "set_circle_config",
+      "docs": [
+        "Set a Circle's tunable policy (donation-on-renew, member-vote",
+        "quorum/pass thresholds, treasury allowlist). Any seat; PDA [\"config\", circle]."
+      ],
+      "discriminator": [
+        176,
+        213,
+        192,
+        17,
+        56,
+        152,
+        32,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (signs + pays the config rent on first set)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "renew_donation_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "vote_quorum_num",
+          "type": "u16"
+        },
+        {
+          "name": "vote_quorum_den",
+          "type": "u16"
+        },
+        {
+          "name": "vote_pass_num",
+          "type": "u16"
+        },
+        {
+          "name": "vote_pass_den",
+          "type": "u16"
+        },
+        {
+          "name": "treasury_allowlist",
+          "type": "bool"
         }
       ]
     },
@@ -3252,6 +3396,19 @@
       ]
     },
     {
+      "name": "CircleConfig",
+      "discriminator": [
+        71,
+        130,
+        8,
+        45,
+        102,
+        40,
+        4,
+        68
+      ]
+    },
+    {
       "name": "CircleCountry",
       "discriminator": [
         35,
@@ -3912,6 +4069,68 @@
               "Human-readable Circle name (also a PDA seed, so <= MAX_NAME bytes)."
             ],
             "type": "string"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CircleConfig",
+      "docs": [
+        "Per-Circle tunable policy — a sibling PDA so the `Circle` layout is untouched",
+        "and existing Circles need no migration. Any Council seat sets it; it is",
+        "created on first use with safe defaults (no donation, classic ⅓-quorum +",
+        "simple-majority voting, treasury allowlist off). PDA: [\"config\", circle].",
+        "",
+        "The full layout is defined up front so the donation / quorum / allowlist",
+        "features can be wired in incrementally without ever re-migrating the account."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "renew_donation_lamports",
+            "docs": [
+              "Donation (lamports) required *into the treasury* to renew a membership",
+              "(Tradition 7 — self-support). 0 = renewal is free."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "vote_quorum_num",
+            "docs": [
+              "Member-vote quorum as num/den of the eligible set (0 den ⇒ default ⅓)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "vote_quorum_den",
+            "type": "u16"
+          },
+          {
+            "name": "vote_pass_num",
+            "docs": [
+              "Member-vote pass threshold as yes/turnout (0 den ⇒ default simple majority)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "vote_pass_den",
+            "type": "u16"
+          },
+          {
+            "name": "treasury_allowlist",
+            "docs": [
+              "When true, a treasury withdrawal recipient must hold a TreasuryAllow marker."
+            ],
+            "type": "bool"
           },
           {
             "name": "bump",
