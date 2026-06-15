@@ -99,7 +99,7 @@ export default function Foundation() {
         <>
           <div className="card">
             <div className="row">
-              <Identicon seed={foundation.pubkey} size={44} />
+              <Identicon seed={`AHA${foundation.pubkey}`} title={foundation.name} size={44} />
               <div className="meta" style={{ flex: 1, minWidth: 0 }}>
                 <div className="name" style={{ fontSize: 18 }}>{foundation.name}</div>
                 <div className="sub">
@@ -744,7 +744,7 @@ function AllCirclesPanel({
                 const isFound = c.pubkey === foundation.pubkey;
                 return (
                   <div className="member" key={c.pubkey} style={{ alignItems: "flex-start" }}>
-                    <Identicon seed={c.pubkey} size={30} />
+                    <Identicon seed={`AHA${c.pubkey}`} title={c.name} size={30} />
                     <div className="meta" style={{ flex: 1, minWidth: 0 }}>
                       <div className="name">{c.name}{isFound && <span className="badge badge-alt" style={{ marginLeft: 6 }}>foundation</span>}</div>
                       <div className="sub">

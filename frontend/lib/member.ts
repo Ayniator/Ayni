@@ -15,7 +15,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Connection, PublicKey } from "@solana/web3.js";
 import idl from "./ayni.json";
-import { RPC_URL } from "./solana";
+import { RPC_URL, rpcConnection } from "./solana";
 
 export const PROGRAM_ID = new PublicKey((idl as any).address);
 export const SECRETARY_SEAT = 1; // [Treasurer, Secretary, RhythmKeeper, 4 Elders]
@@ -46,7 +46,7 @@ export interface SigningWallet {
 }
 
 export function connection(): Connection {
-  return new Connection(RPC_URL, "confirmed");
+  return rpcConnection();
 }
 
 export function programWith(wallet: SigningWallet): anchor.Program {

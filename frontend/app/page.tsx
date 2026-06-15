@@ -159,7 +159,7 @@ export default function Home() {
               onKeyDown={(e) => { if (e.key === "Enter") setSelected(c); }}
             >
               <div className="row">
-                <Identicon seed={c.circle} size={46} />
+                <Identicon seed={`AHA${c.circle}`} title={c.name || "Circle"} size={46} />
                 <div className="meta" style={{ flex: 1 }}>
                   <div className="name">{c.name || "Circle"}</div>
                   <div className="sub">
@@ -213,7 +213,7 @@ function CircleDetail({
     <div className="card circle-detail">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div className="row" style={{ gap: 12 }}>
-          <Identicon seed={circle.circle} size={48} />
+          <Identicon seed={`AHA${circle.circle}`} title={circle.name || "Circle"} size={48} />
           <div>
             <div className="name" style={{ fontSize: 18 }}>{circle.name || "Circle"}</div>
             <div className="sub">{circle.city}{located ? ` · ${circle.distanceKm.toFixed(0)} km away` : ""}</div>

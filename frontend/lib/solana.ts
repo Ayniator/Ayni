@@ -4,11 +4,36 @@
 // For very large deployments, swap this for an indexer with the same shape.
 
 import * as anchor from "@coral-xyz/anchor";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Commitment, Connection, PublicKey } from "@solana/web3.js";
 import idl from "./ayni.json";
 
 export const RPC_URL =
   process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com";
+
+// Helius (and most RPCs) rate-limit getProgramAccounts / getSignaturesForAddress.
+// Retry 429/502/503 with exponential backoff + jitter so the heavy pages
+// (inbox, foundation directory) don't surface transient "Too many requests".
+const RETRY_STATUS = new Set([429, 502, 503]);
+export async function rpcFetch(input: any, init?: any): Promise<Response> {
+  let delay = 350;
+  for (let attempt = 0; ; attempt++) {
+    let res: Response | undefined;
+    try {
+      res = await fetch(input, init);
+    } catch (e) {
+      if (attempt >= 5) throw e;
+    }
+    if (res && !RETRY_STATUS.has(res.status)) return res;
+    if (attempt >= 5) return res as Response;
+    await new Promise((r) => setTimeout(r, delay + Math.random() * 250));
+    delay = Math.min(delay * 2, 3000);
+  }
+}
+
+/** A Connection that transparently retries rate-limited (429) RPC calls. */
+export function rpcConnection(commitment: Commitment = "confirmed"): Connection {
+  return new Connection(RPC_URL, { commitment, fetch: rpcFetch as any });
+}
 
 export interface Circle {
   pubkey: string; // the CircleProfile PDA
@@ -24,7 +49,7 @@ export interface Circle {
 }
 
 function readOnlyProgram(): anchor.Program {
-  const connection = new Connection(RPC_URL, "confirmed");
+  const connection = rpcConnection();
   // A provider with no wallet — fine for account reads.
   const provider = new anchor.AnchorProvider(
     connection,

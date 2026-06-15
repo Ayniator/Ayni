@@ -65,7 +65,7 @@ export default function CircleMap({
         <Popup>You are here</Popup>
       </Marker>
       {circles.map((c) => (
-        <Marker key={c.pubkey} position={[c.lat, c.lon]} icon={icon(c.circle)}>
+        <Marker key={c.pubkey} position={[c.lat, c.lon]} icon={icon(`AHA${c.circle}`)}>
           <Popup>
             <strong>{c.name || "Circle"}</strong>
             <br />
