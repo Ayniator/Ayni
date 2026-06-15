@@ -421,6 +421,24 @@ impl ProgressToken {
     pub const SPACE: usize = 8 + 32 + 32 + 4 + 8 + 32 + 1;
 }
 
+/// Binds a member proposal (F6 anonymous ZK ballot) to a seat election: if the
+/// proposal passes, `candidate` is installed into `council.seats[seat_index]`
+/// (group-conscience election of a servant). The proposal's `description_hash`
+/// MUST equal H("AHA-elect" || seat_index || candidate), so the machine-readable
+/// outcome is exactly what members anonymously voted on. PDA: ["election", proposal].
+#[account]
+pub struct SeatElection {
+    pub circle: Pubkey,
+    pub proposal: Pubkey,
+    pub seat_index: u8,
+    pub candidate: Pubkey,
+    pub installed: bool,
+    pub bump: u8,
+}
+impl SeatElection {
+    pub const SPACE: usize = 8 + 32 + 32 + 1 + 32 + 1 + 1;
+}
+
 /// A Circle's meeting calendar — recurring patterns + exceptional sessions —
 /// as a compact JSON string every member (and visitor) can read. Set by any
 /// Council seat. Separate PDA so the `Circle`/`CircleProfile` layouts are

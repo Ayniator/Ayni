@@ -18,6 +18,10 @@ import {
   CircleMember,
   CouncilProposal,
   MemberProposal,
+  SeatElectionInfo,
+  installElectedSeat,
+  listSeatElections,
+  proposeSeatElection,
   SEAT_ROLES,
   SECRETARY,
   actionMigrateWallet,
@@ -136,6 +140,7 @@ export default function CircleAdmin() {
       <ConfigSection circle={circle} wallet={wallet ?? null} />
       <CouncilSection circle={circle} wallet={wallet ?? null} me={me!} />
       <MemberVotesSection circle={circle} wallet={wallet ?? null} />
+      <SeatElectionsSection circle={circle} wallet={wallet ?? null} anySeat={mySeatIdx.length > 0} />
       <MembersSection circle={circle} wallet={wallet ?? null} amSecretary={amSecretary} anySeat={mySeatIdx.length > 0} />
     </section>
   );
@@ -678,6 +683,97 @@ const PERIODS: { label: string; secs: number }[] = [
   { label: "1 week", secs: 604800 },
   { label: "60 seconds (test)", secs: 60 },
 ];
+
+// ===========================================================================
+// Seat elections (F28) — members elect a servant into a seat (anonymous ZK vote)
+// ===========================================================================
+
+function SeatElectionsSection({ circle, wallet, anySeat }: { circle: CircleInfo; wallet: any; anySeat: boolean }) {
+  const [elections, setElections] = useState<SeatElectionInfo[] | null>(null);
+  const [props, setProps] = useState<Record<string, MemberProposal>>({});
+  const [seatIdx, setSeatIdx] = useState(3);
+  const [cand, setCand] = useState("");
+  const [days, setDays] = useState(7);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<TxNote>(null);
+
+  const load = useCallback(() => {
+    listSeatElections(circle.pubkey).then(setElections).catch(() => setElections([]));
+    listMemberProposals(circle.pubkey).then((ps) => setProps(Object.fromEntries(ps.map((p) => [p.pubkey, p])))).catch(() => {});
+  }, [circle.pubkey]);
+  useEffect(load, [load]);
+
+  async function open() {
+    const c = pk(cand);
+    if (!c) return setNote({ kind: "err", text: "Enter a valid candidate wallet." });
+    setBusy("open"); setNote(null);
+    try {
+      const sig = await proposeSeatElection(wallet, new PublicKey(circle.pubkey), seatIdx, c, days * 86400);
+      setNote({ kind: "ok", text: `Election opened for ${SEAT_ROLES[seatIdx]} (members vote anonymously; valid ${days}d).`, sig });
+      setCand(""); load();
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
+
+  async function install(e: SeatElectionInfo) {
+    setBusy("i" + e.pubkey); setNote(null);
+    try {
+      const sig = await installElectedSeat(wallet, new PublicKey(circle.pubkey), new PublicKey(e.proposal));
+      setNote({ kind: "ok", text: "Elected servant installed into the seat.", sig });
+      load();
+    } catch (e2: any) { setNote({ kind: "err", text: String(e2?.message || e2) }); }
+    finally { setBusy(null); }
+  }
+
+  return (
+    <section className="card">
+      <SectionHead title="Seat elections" sub="Members elect a servant into a seat by anonymous one-member-one-vote (ZK). A passing ballot installs the candidate." />
+      {anySeat ? (
+        <div className="form-row" style={{ flexWrap: "wrap", gap: 8 }}>
+          <select value={seatIdx} onChange={(e) => setSeatIdx(Number(e.target.value))}>
+            {SEAT_ROLES.map((r, i) => <option key={i} value={i}>{r}</option>)}
+          </select>
+          <input className="mono" value={cand} onChange={(e) => setCand(e.target.value)} placeholder="candidate wallet" style={{ flex: 1, minWidth: 160 }} />
+          <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
+            {[1, 3, 7, 14, 30].map((d) => <option key={d} value={d}>{d}d</option>)}
+          </select>
+          <button className="btn btn-sm" disabled={busy === "open"} onClick={open}>{busy === "open" ? "Opening…" : "Open election"}</button>
+        </div>
+      ) : <p className="muted sm">Only a Council seat can open an election.</p>}
+
+      <p className="muted sm" style={{ marginTop: 8 }}>
+        Members cast anonymous ballots via the member-vote ZK flow (verified on-chain by the real circuit). In-browser vote casting is the remaining piece being wired.
+      </p>
+
+      <TxNoteView note={note} />
+
+      {elections && elections.length > 0 && (
+        <div className="votes" style={{ marginTop: 8 }}>
+          {elections.map((e) => {
+            const p = props[e.proposal];
+            const st = e.installed ? "installed ✓" : p?.status ?? "…";
+            return (
+              <div className="vote" key={e.pubkey}>
+                <div className="vote-main">
+                  <RoleIcon seat={e.seatIndex} size={22} />
+                  <div>
+                    <div className="name">{SEAT_ROLES[e.seatIndex]} → {short(e.candidate)}</div>
+                    <div className="sub">{p ? `${p.yes}/${p.yes + p.no} yes · ${st}` : st}</div>
+                  </div>
+                </div>
+                <div className="vote-actions">
+                  {p?.status === "passed" && !e.installed && (
+                    <button className="btn btn-sm" disabled={busy === "i" + e.pubkey} onClick={() => install(e)}>{busy === "i" + e.pubkey ? "…" : "Install"}</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
 
 function MemberVotesSection({ circle, wallet }: { circle: CircleInfo; wallet: any }) {
   const [items, setItems] = useState<MemberProposal[] | null>(null);

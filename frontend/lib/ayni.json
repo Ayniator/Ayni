@@ -1566,6 +1566,44 @@
       ]
     },
     {
+      "name": "install_elected_seat",
+      "docs": [
+        "Install the winner of a passed seat election into the Council (F28)."
+      ],
+      "discriminator": [
+        152,
+        200,
+        78,
+        16,
+        121,
+        41,
+        13,
+        118
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "writable": true,
+          "relations": [
+            "proposal",
+            "election"
+          ]
+        },
+        {
+          "name": "proposal"
+        },
+        {
+          "name": "election",
+          "writable": true
+        },
+        {
+          "name": "caller",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "issue_acknowledgment",
       "docs": [
         "Issue an acknowledgment credential (course/initiation certificate),",
@@ -2050,6 +2088,78 @@
         {
           "name": "milestone",
           "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "link_seat_election",
+      "docs": [
+        "Bind a member proposal to a seat election (F28). The proposal's",
+        "description_hash must equal H(\"AHA-elect\" || seat_index || candidate)."
+      ],
+      "discriminator": [
+        145,
+        165,
+        134,
+        36,
+        60,
+        223,
+        203,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal"
+        },
+        {
+          "name": "election",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "seat_index",
+          "type": "u8"
+        },
+        {
+          "name": "candidate",
+          "type": "pubkey"
         }
       ]
     },
@@ -4102,6 +4212,19 @@
       ]
     },
     {
+      "name": "SeatElection",
+      "discriminator": [
+        213,
+        123,
+        206,
+        25,
+        10,
+        37,
+        59,
+        125
+      ]
+    },
+    {
       "name": "TreasuryAllow",
       "discriminator": [
         103,
@@ -5536,6 +5659,45 @@
                 "type": "pubkey"
               }
             ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeatElection",
+      "docs": [
+        "Binds a member proposal (F6 anonymous ZK ballot) to a seat election: if the",
+        "proposal passes, `candidate` is installed into `council.seats[seat_index]`",
+        "(group-conscience election of a servant). The proposal's `description_hash`",
+        "MUST equal H(\"AHA-elect\" || seat_index || candidate), so the machine-readable",
+        "outcome is exactly what members anonymously voted on. PDA: [\"election\", proposal]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "proposal",
+            "type": "pubkey"
+          },
+          {
+            "name": "seat_index",
+            "type": "u8"
+          },
+          {
+            "name": "candidate",
+            "type": "pubkey"
+          },
+          {
+            "name": "installed",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

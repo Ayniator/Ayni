@@ -243,6 +243,17 @@ pub mod ayni {
         instructions::issue_progress_token(ctx, milestone)
     }
 
+    /// Bind a member proposal to a seat election (F28). The proposal's
+    /// description_hash must equal H("AHA-elect" || seat_index || candidate).
+    pub fn link_seat_election(ctx: Context<LinkSeatElection>, seat_index: u8, candidate: Pubkey) -> Result<()> {
+        instructions::link_seat_election(ctx, seat_index, candidate)
+    }
+
+    /// Install the winner of a passed seat election into the Council (F28).
+    pub fn install_elected_seat(ctx: Context<InstallElectedSeat>) -> Result<()> {
+        instructions::install_elected_seat(ctx)
+    }
+
     /// Add/remove a treasury withdrawal recipient on a Circle's spend allowlist
     /// (any seat). Enforced by `withdraw_treasury` when the allowlist is on.
     pub fn set_treasury_allow(

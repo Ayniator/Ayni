@@ -391,6 +391,63 @@ export async function createMemberProposal(
     .rpc();
 }
 
+// --- F28: member election of a Council seat (anonymous ZK ballot installs a seat) ---
+
+/** H("AHA-elect" || seat_index || candidate) — the proposal's description_hash. */
+async function electionHash(seatIndex: number, candidate: PublicKey): Promise<Uint8Array> {
+  const data = new Uint8Array([...new TextEncoder().encode("AHA-elect"), seatIndex & 0xff, ...candidate.toBytes()]);
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+}
+
+export const electionPda = (proposal: PublicKey) =>
+  PublicKey.findProgramAddressSync([seed("election"), proposal.toBytes()], PROGRAM_ID)[0];
+
+/** Open a seat election: create the member-vote proposal (committing to seat+candidate)
+ *  and link it as a SeatElection, so a passing ballot installs the candidate. */
+export async function proposeSeatElection(
+  wallet: SigningWallet,
+  circle: PublicKey,
+  seatIndex: number,
+  candidate: PublicKey,
+  votingPeriodSecs: number
+): Promise<string> {
+  const program = programWith(wallet);
+  const nonce = freshNonce();
+  const proposal = memberProposalPda(circle, nonce);
+  const hashBytes = await electionHash(seatIndex, candidate);
+  rememberProposalText(hexOf(hashBytes), `Elect ${candidate.toBase58()} to ${SEAT_ROLES[seatIndex] ?? `seat ${seatIndex}`}`);
+  await program.methods
+    .createMemberProposal(nonce, [...hashBytes], new anchor.BN(votingPeriodSecs))
+    .accounts({ circle, memberTree: memberTreePda(circle), proposal, proposer: wallet.publicKey })
+    .rpc();
+  return program.methods
+    .linkSeatElection(seatIndex, candidate)
+    .accounts({ circle, proposal, election: electionPda(proposal), payer: wallet.publicKey, systemProgram: SystemProgram.programId })
+    .rpc();
+}
+
+/** Install the winner of a passed seat election into the Council. */
+export async function installElectedSeat(wallet: SigningWallet, circle: PublicKey, proposal: PublicKey): Promise<string> {
+  return programWith(wallet)
+    .methods.installElectedSeat()
+    .accounts({ circle, proposal, election: electionPda(proposal), caller: wallet.publicKey })
+    .rpc();
+}
+
+export interface SeatElectionInfo { pubkey: string; proposal: string; seatIndex: number; candidate: string; installed: boolean }
+
+/** Every seat election recorded for a Circle. */
+export async function listSeatElections(circle: string): Promise<SeatElectionInfo[]> {
+  const rows = await (readOnlyProgram().account as any).seatElection.all([{ memcmp: { offset: 8, bytes: circle } }]);
+  return rows.map((r: any): SeatElectionInfo => ({
+    pubkey: r.publicKey.toBase58(),
+    proposal: r.account.proposal.toBase58(),
+    seatIndex: r.account.seatIndex,
+    candidate: r.account.candidate.toBase58(),
+    installed: Boolean(r.account.installed),
+  }));
+}
+
 export async function finalizeMemberProposal(
   wallet: SigningWallet,
   circle: PublicKey,
