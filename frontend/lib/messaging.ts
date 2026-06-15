@@ -198,11 +198,17 @@ export async function sendMessage(
 }
 
 const MSG_RECIPIENT_OFFSET = 8; // discriminator → recipient is the first field now
+// Exact on-chain size of a v2 Message account: 8 disc + 32 recipient + 32 eph +
+// 24 nonce + 8 id + 8 created + 8 expires + (4+1040) ciphertext + 1 bump = 1165.
+// Filtering on it skips legacy v1 messages (different layout) so decoding the
+// fixed-size v2 set never overruns the buffer.
+const MSG_ACCOUNT_SIZE = 8 + 32 + 32 + 24 + 8 + 8 + 8 + (4 + CT_LEN) + 1;
 
 /** All messages addressed to `me` (newest first), expired ones flagged. */
 export async function listInbox(me: string): Promise<InboxMessage[]> {
   const program = readOnlyProgram();
   const rows = await (program.account as any).message.all([
+    { dataSize: MSG_ACCOUNT_SIZE },
     { memcmp: { offset: MSG_RECIPIENT_OFFSET, bytes: me } },
   ]);
   const now = Date.now() / 1000;
