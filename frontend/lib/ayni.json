@@ -2924,6 +2924,81 @@
       ]
     },
     {
+      "name": "set_treasury_allow",
+      "docs": [
+        "Add/remove a treasury withdrawal recipient on a Circle's spend allowlist",
+        "(any seat). Enforced by `withdraw_treasury` when the allowlist is on."
+      ],
+      "discriminator": [
+        139,
+        75,
+        145,
+        211,
+        139,
+        195,
+        249,
+        200
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "allow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "recipient"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (signs + pays the marker rent on first set)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "recipient",
+          "type": "pubkey"
+        },
+        {
+          "name": "allowed",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "set_treasury_wallet",
       "docs": [
         "Write the Circle's treasury steward wallet, authorized by an executed",
@@ -3327,6 +3402,67 @@
           "writable": true
         },
         {
+          "name": "config",
+          "docs": [
+            "The Circle's policy (its `treasury_allowlist` flag). Seed-bound +",
+            "created on first use, so it can't be omitted to dodge an enabled allowlist."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "allow",
+          "docs": [
+            "The recipient's allowlist entry — only required when the allowlist is on."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "recipient"
+              }
+            ]
+          }
+        },
+        {
           "name": "treasury",
           "writable": true,
           "pda": {
@@ -3354,6 +3490,15 @@
         {
           "name": "recipient",
           "writable": true
+        },
+        {
+          "name": "caller",
+          "docs": [
+            "Whoever triggers the (still-permissionless) withdrawal; pays config rent",
+            "on first use. The transaction fee-payer anyway."
+          ],
+          "writable": true,
+          "signer": true
         },
         {
           "name": "system_program",
@@ -3635,6 +3780,19 @@
         136,
         53,
         33
+      ]
+    },
+    {
+      "name": "TreasuryAllow",
+      "discriminator": [
+        103,
+        244,
+        40,
+        199,
+        52,
+        19,
+        250,
+        222
       ]
     },
     {
@@ -5004,6 +5162,35 @@
                 "type": "pubkey"
               }
             ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreasuryAllow",
+      "docs": [
+        "Treasury allowlist entry: marks `recipient` as permitted to receive a",
+        "withdrawal from `circle` (only enforced when `CircleConfig.treasury_allowlist`",
+        "is on). PDA: [\"treasallow\", circle, recipient]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "allowed",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

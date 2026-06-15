@@ -138,7 +138,13 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
   Circle (init_if_needed) so it can't be swapped/omitted. Admin "Circle policy"
   sets quorum % and pass % . Deployed (upgrade `5jvJ9EEX…`).
 - ⬜ **Sponsor** relationship + **anniversary/sobriety-chip** schema (map onto acknowledgments/levels).
-- ⬜ Treasury **mission/spend allowlist** (Traditions 5/6).
+- ✅ Treasury **mission/spend allowlist** (Traditions 5/6) — when
+  `CircleConfig.treasury_allowlist` is on, `withdraw_treasury` additionally
+  requires the recipient to hold a `TreasuryAllow` entry (`allowed = true`) on top
+  of the 4-of-7 vote. New `set_treasury_allow` (any seat) + admin "Circle policy"
+  allowlist manager. Config is seed-bound + init_if_needed in withdraw so it
+  can't be omitted to bypass. Deployed (upgrade `5Q6yfmMv…`); verified on devnet:
+  allowlist off → withdraw OK, on+unlisted → blocked, on+listed → OK.
 
 ### Design decisions (see PROJECT.md §10)
 - ⬜ Harden **RotateSeat** against the "purge before migration" attack (time-lock / freeze during pending migration).

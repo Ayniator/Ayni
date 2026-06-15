@@ -29,6 +29,10 @@ export const treasuryPda = (circle: PublicKey) =>
 export const circleConfigPda = (circle: PublicKey) =>
   PublicKey.findProgramAddressSync([seed("config"), circle.toBytes()], PROGRAM_ID)[0];
 
+/** A treasury-allowlist entry PDA: ["treasallow", circle, recipient]. */
+export const treasuryAllowPda = (circle: PublicKey, recipient: PublicKey) =>
+  PublicKey.findProgramAddressSync([seed("treasallow"), circle.toBytes(), recipient.toBytes()], PROGRAM_ID)[0];
+
 export const memberTreePda = (circle: PublicKey) =>
   PublicKey.findProgramAddressSync([seed("members"), circle.toBytes()], PROGRAM_ID)[0];
 

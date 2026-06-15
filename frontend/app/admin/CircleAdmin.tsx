@@ -12,7 +12,7 @@ import Identicon from "../../components/Identicon";
 import RoleIcon from "../../components/RoleIcon";
 import { CircleInfo, explorerTx, listCircles, newCommitment, issueMembership, connection } from "../../lib/member";
 import { isMultisig } from "../../lib/multisig";
-import { CircleConfigFields, DEFAULT_CONFIG, getCircleConfig, setCircleConfig } from "../../lib/config";
+import { AllowEntry, CircleConfigFields, DEFAULT_CONFIG, getCircleConfig, listTreasuryAllowed, setCircleConfig, setTreasuryAllow } from "../../lib/config";
 import {
   CircleMember,
   CouncilProposal,
@@ -200,10 +200,17 @@ function ConfigSection({ circle, wallet }: { circle: CircleInfo; wallet: any }) 
   const [sol, setSol] = useState("");
   const [quorumPct, setQuorumPct] = useState(""); // % of eligible members; blank = default ⅓
   const [passPct, setPassPct] = useState("");      // % yes of turnout; blank = default majority
-  const [busy, setBusy] = useState(false);
+  const [allowlist, setAllowlist] = useState(false);
+  const [allowed, setAllowed] = useState<AllowEntry[]>([]);
+  const [newAllow, setNewAllow] = useState("");
+  const [busy, setBusy] = useState<string | false>(false);
   const [note, setNote] = useState<TxNote>(null);
 
   const pctFromFrac = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100).toString() : "");
+
+  const loadAllow = useCallback(() => {
+    listTreasuryAllowed(circle.pubkey).then((rows) => setAllowed(rows.filter((r) => r.allowed))).catch(() => {});
+  }, [circle.pubkey]);
 
   useEffect(() => {
     getCircleConfig(circle.pubkey).then((c) => {
@@ -211,8 +218,34 @@ function ConfigSection({ circle, wallet }: { circle: CircleInfo; wallet: any }) 
       setSol(c.renewDonationLamports ? (c.renewDonationLamports / LAMPORTS_PER_SOL).toString() : "");
       setQuorumPct(pctFromFrac(c.voteQuorumNum, c.voteQuorumDen));
       setPassPct(pctFromFrac(c.votePassNum, c.votePassDen));
+      setAllowlist(c.treasuryAllowlist);
     });
-  }, [circle.pubkey]);
+    loadAllow();
+  }, [circle.pubkey, loadAllow]);
+
+  async function addAllow() {
+    if (!wallet) return;
+    const r = pk(newAllow);
+    if (!r) return setNote({ kind: "err", text: "Enter a valid recipient address." });
+    setBusy("add"); setNote(null);
+    try {
+      const sig = await setTreasuryAllow(wallet, new PublicKey(circle.pubkey), r, true);
+      setNote({ kind: "ok", text: "Recipient added to the treasury allowlist.", sig });
+      setNewAllow(""); loadAllow();
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(false); }
+  }
+
+  async function removeAllow(recipient: string) {
+    if (!wallet) return;
+    setBusy("rm" + recipient); setNote(null);
+    try {
+      const sig = await setTreasuryAllow(wallet, new PublicKey(circle.pubkey), new PublicKey(recipient), false);
+      setNote({ kind: "ok", text: "Recipient removed from the allowlist.", sig });
+      loadAllow();
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(false); }
+  }
 
   function pctToFrac(s: string): [number, number] {
     const v = parseFloat(s);
@@ -225,13 +258,14 @@ function ConfigSection({ circle, wallet }: { circle: CircleInfo; wallet: any }) 
     if (!Number.isFinite(lamports) || lamports < 0) return setNote({ kind: "err", text: "Enter a valid amount in SOL (0 = free)." });
     const [qn, qd] = pctToFrac(quorumPct);
     const [pn, pd] = pctToFrac(passPct);
-    setBusy(true); setNote(null);
+    setBusy("save"); setNote(null);
     try {
       const next: CircleConfigFields = {
         ...(cfg ?? DEFAULT_CONFIG),
         renewDonationLamports: lamports,
         voteQuorumNum: qn, voteQuorumDen: qd,
         votePassNum: pn, votePassDen: pd,
+        treasuryAllowlist: allowlist,
       };
       const sig = await setCircleConfig(wallet, new PublicKey(circle.pubkey), next);
       setNote({ kind: "ok", text: "Policy saved.", sig });
@@ -262,10 +296,37 @@ function ConfigSection({ circle, wallet }: { circle: CircleInfo; wallet: any }) 
           <input type="number" min="0" max="100" step="1" value={passPct} onChange={(e) => setPassPct(e.target.value)} placeholder="50" style={{ maxWidth: 90 }} />
           <span className="sm muted">% yes of turnout · blank = simple majority</span>
         </div>
+        <label className="form-row" style={{ cursor: "pointer", gap: 8 }}>
+          <input type="checkbox" checked={allowlist} onChange={(e) => setAllowlist(e.target.checked)} style={{ width: "auto", flex: "0 0 auto" }} />
+          <span className="sm">Restrict treasury withdrawals to an allowlist <span className="muted">— a 4-of-7 vote still can only pay pre-approved recipients (mission control, Traditions 5/6)</span></span>
+        </label>
         <div className="form-actions">
-          <button className="btn btn-sm" disabled={busy || cfg === null} onClick={save}>{busy ? "Saving…" : "Save policy"}</button>
+          <button className="btn btn-sm" disabled={!!busy || cfg === null} onClick={save}>{busy === "save" ? "Saving…" : "Save policy"}</button>
         </div>
       </div>
+
+      {allowlist && (
+        <>
+          <h4 style={{ margin: "14px 0 6px" }}>Treasury allowlist</h4>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            <input className="mono" value={newAllow} onChange={(e) => setNewAllow(e.target.value)} placeholder="recipient wallet / multisig" style={{ flex: 1, minWidth: 200 }} />
+            <button className="btn btn-sm" disabled={busy === "add"} onClick={addAllow}>{busy === "add" ? "Adding…" : "Add"}</button>
+          </div>
+          {allowed.length === 0 ? (
+            <p className="muted sm" style={{ marginTop: 6 }}>No approved recipients yet — withdrawals will be blocked until you add at least one.</p>
+          ) : (
+            <div className="members" style={{ marginTop: 8 }}>
+              {allowed.map((a) => (
+                <div className="member" key={a.recipient}>
+                  <Identicon seed={a.recipient} size={26} />
+                  <div className="meta" style={{ flex: 1, minWidth: 0 }}><div className="name mono">{short(a.recipient)}</div></div>
+                  <button className="btn btn-sm btn-ghost" disabled={busy === "rm" + a.recipient} onClick={() => removeAllow(a.recipient)}>Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
       <TxNoteView note={note} />
     </section>
   );

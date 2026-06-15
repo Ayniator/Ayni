@@ -227,6 +227,16 @@ pub mod ayni {
         instructions::set_circle_country(ctx, code)
     }
 
+    /// Add/remove a treasury withdrawal recipient on a Circle's spend allowlist
+    /// (any seat). Enforced by `withdraw_treasury` when the allowlist is on.
+    pub fn set_treasury_allow(
+        ctx: Context<SetTreasuryAllow>,
+        recipient: Pubkey,
+        allowed: bool,
+    ) -> Result<()> {
+        instructions::set_treasury_allow(ctx, recipient, allowed)
+    }
+
     /// Set a Circle's tunable policy (donation-on-renew, member-vote
     /// quorum/pass thresholds, treasury allowlist). Any seat; PDA ["config", circle].
     pub fn set_circle_config(

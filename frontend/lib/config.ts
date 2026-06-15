@@ -5,7 +5,7 @@
 
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
-import { SigningWallet, circleConfigPda, programWith, readOnlyProgram } from "./member";
+import { SigningWallet, circleConfigPda, programWith, readOnlyProgram, treasuryAllowPda } from "./member";
 
 export interface CircleConfigFields {
   renewDonationLamports: number; // 0 = free renewal
@@ -47,6 +47,35 @@ export async function setCircleConfig(
       systemProgram: SystemProgram.programId,
     })
     .rpc();
+}
+
+/** Add/remove a treasury withdrawal recipient on the allowlist (any seat). */
+export async function setTreasuryAllow(
+  wallet: SigningWallet,
+  circle: PublicKey,
+  recipient: PublicKey,
+  allowed: boolean
+): Promise<string> {
+  return programWith(wallet)
+    .methods.setTreasuryAllow(recipient, allowed)
+    .accounts({
+      circle,
+      allow: treasuryAllowPda(circle, recipient),
+      seat: wallet.publicKey,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export interface AllowEntry { recipient: string; allowed: boolean }
+
+/** Every treasury-allowlist entry for a Circle (allowed and revoked). */
+export async function listTreasuryAllowed(circle: string): Promise<AllowEntry[]> {
+  const program = readOnlyProgram();
+  const rows = await (program.account as any).treasuryAllow.all([
+    { memcmp: { offset: 8, bytes: circle } }, // discriminator → circle first
+  ]);
+  return rows.map((r: any) => ({ recipient: r.account.recipient.toBase58(), allowed: Boolean(r.account.allowed) }));
 }
 
 /** This Circle's policy, or DEFAULT_CONFIG if none has been set. */
