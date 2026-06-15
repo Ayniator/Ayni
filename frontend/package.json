@@ -5,7 +5,7 @@
   "description": "AHA / Ayni web app — Find a Circle Near You, Daily Reflections, Documents (IPFS).",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint"
   },
@@ -16,12 +16,14 @@
     "@solana/wallet-adapter-react-ui": "^0.9.39",
     "@solana/web3.js": "^1.95.0",
     "@types/nodemailer": "^8.0.1",
+    "circomlibjs": "^0.1.7",
     "leaflet": "^1.9.4",
     "next": "^16.2.9",
     "nodemailer": "^8.0.11",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-leaflet": "^5.0.0",
+    "snarkjs": "^0.7.6",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1"
   },

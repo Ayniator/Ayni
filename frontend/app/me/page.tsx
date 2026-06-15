@@ -27,7 +27,6 @@ import {
   hex,
   issueMembership,
   listCircles,
-  newCommitment,
   saveJoinRequest,
   setHomeCircle,
   treasuryBalance,
@@ -36,6 +35,8 @@ import { emailNote, notifyCircleEmail } from "../../lib/circleEmail";
 import CircleAdmin from "../admin/CircleAdmin";
 import { fileToAvatarDataUrl, getUserProfile, listTimezones, setUserProfile } from "../../lib/profile";
 import { Chip, WingPeerInfo, endWingPeer, establishWingPeer, getWingPeer, listProgressTokens, memberCommitmentOf, milestoneLabel } from "../../lib/peers";
+import { MemberProposal, SeatElectionInfo, SEAT_ROLES, listMemberProposals, listSeatElections } from "../../lib/admin";
+import { castMemberVote, haveVotingKey, newMemberIdentity } from "../../lib/zk-vote";
 
 const sol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(4).replace(/\.?0+$/, "") || "0";
 const day = (unix: number) => new Date(unix * 1000).toLocaleDateString();
@@ -122,6 +123,7 @@ export default function Me() {
         <div className="grid two" style={{ alignItems: "start" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <WalletCard publicKey={publicKey} balance={balance} memberships={memberships} byPubkey={byPubkey} home={home} />
+            <VotesCard wallet={wallet ?? null} memberships={memberships} />
             <MentorshipCard wallet={wallet ?? null} memberships={memberships} />
             <ProfileCard />
             <JoinCard
@@ -228,6 +230,77 @@ function WalletCard({
 }
 
 // ---------------------------------------------------------------------------
+
+const shortHex = (s: string) => `${s.slice(0, 4)}…${s.slice(-4)}`;
+
+type OpenVote = { circle: string; circleName: string; proposal: string; label: string; yes: number; no: number; commitment: string };
+
+function VotesCard({ wallet, memberships }: { wallet: any; memberships: MyMembership[] }) {
+  const [votes, setVotes] = useState<OpenVote[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [done, setDone] = useState<Record<string, boolean>>({});
+
+  const load = useCallback(async () => {
+    const out: OpenVote[] = [];
+    for (const m of memberships) {
+      try {
+        const [props, elections] = await Promise.all([listMemberProposals(m.circle), listSeatElections(m.circle)]);
+        const byProp = new Map(elections.map((e: SeatElectionInfo) => [e.proposal, e]));
+        for (const p of props as MemberProposal[]) {
+          if (p.status !== "running") continue;
+          const e = byProp.get(p.pubkey);
+          const label = e ? `Elect ${shortHex(e.candidate)} → ${SEAT_ROLES[e.seatIndex] ?? `seat ${e.seatIndex}`}` : (p.description || "Member proposal");
+          out.push({ circle: m.circle, circleName: m.circleName, proposal: p.pubkey, label, yes: p.yes, no: p.no, commitment: m.commitment });
+        }
+      } catch {}
+    }
+    setVotes(out);
+  }, [memberships]);
+  useEffect(() => { load(); }, [load]);
+
+  async function vote(v: OpenVote, choice: boolean) {
+    if (!wallet) return;
+    if (!haveVotingKey(v.commitment)) {
+      setNote({ kind: "err", text: "Your voting key isn't on this device — vote from the device you joined on, or rejoin to mint a votable membership." });
+      return;
+    }
+    setBusy(v.proposal); setNote({ kind: "ok", text: "Proving your anonymous ballot… (a few seconds)" });
+    try {
+      await castMemberVote(wallet, v.circle, v.proposal, choice);
+      setNote({ kind: "ok", text: `Anonymous ${choice ? "YES" : "NO"} ballot cast & verified on-chain.` });
+      setDone((d) => ({ ...d, [v.proposal]: true }));
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      setNote({ kind: "err", text: /already in use|nullifier/i.test(msg) ? "You've already voted on this proposal." : msg });
+    } finally { setBusy(null); }
+  }
+
+  if (memberships.length === 0) return null;
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>Open votes</h3>
+      <p className="muted sm" style={{ marginTop: 0 }}>Anonymous one-member-one-vote (ZK). Your ballot is proved in your browser; the chain never learns it was you.</p>
+      {votes === null && <p className="muted sm">Loading…</p>}
+      {votes && votes.length === 0 && <p className="muted sm" style={{ margin: 0 }}>No open votes in your Circles.</p>}
+      {votes && votes.map((v) => (
+        <div key={v.proposal} style={{ padding: "10px 0", borderTop: "1px solid var(--border)" }}>
+          <div className="name">{v.label}</div>
+          <div className="sub">{v.circleName} · {v.yes} yes / {v.no} no</div>
+          {done[v.proposal] ? (
+            <p className="ok-note" style={{ margin: "6px 0 0" }}>✓ ballot cast</p>
+          ) : (
+            <div className="row" style={{ gap: 6, marginTop: 6 }}>
+              <button className="btn btn-sm" disabled={busy === v.proposal} onClick={() => vote(v, true)}>{busy === v.proposal ? "Proving…" : "Vote YES"}</button>
+              <button className="btn btn-sm btn-ghost" disabled={busy === v.proposal} onClick={() => vote(v, false)}>Vote NO</button>
+            </div>
+          )}
+        </div>
+      ))}
+      {note && <p className={note.kind === "err" ? "error" : "ok-note"} style={{ marginBottom: 0 }}>{note.text}</p>}
+    </div>
+  );
+}
 
 function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyMembership[] }) {
   const [wings, setWings] = useState<Record<string, WingPeerInfo | null>>({});
@@ -402,7 +475,7 @@ function JoinCard({
     setSig(null);
     try {
       onHome(circle.pubkey);
-      const commitment = newCommitment();
+      const commitment = await newMemberIdentity(); // votable identity: commitment = Poseidon(secret), secret kept on this device
       if (canSelfIssue) {
         // Permissionless circle → self-admit (open marker sent). Otherwise the
         // connected wallet is the Scribe-Secretary, who admits directly.
