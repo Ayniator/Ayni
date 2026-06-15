@@ -198,25 +198,43 @@ function PolicySection({ circle, wallet, onChanged }: { circle: CircleInfo; wall
 function ConfigSection({ circle, wallet }: { circle: CircleInfo; wallet: any }) {
   const [cfg, setCfg] = useState<CircleConfigFields | null>(null);
   const [sol, setSol] = useState("");
+  const [quorumPct, setQuorumPct] = useState(""); // % of eligible members; blank = default ⅓
+  const [passPct, setPassPct] = useState("");      // % yes of turnout; blank = default majority
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<TxNote>(null);
+
+  const pctFromFrac = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100).toString() : "");
 
   useEffect(() => {
     getCircleConfig(circle.pubkey).then((c) => {
       setCfg(c);
       setSol(c.renewDonationLamports ? (c.renewDonationLamports / LAMPORTS_PER_SOL).toString() : "");
+      setQuorumPct(pctFromFrac(c.voteQuorumNum, c.voteQuorumDen));
+      setPassPct(pctFromFrac(c.votePassNum, c.votePassDen));
     });
   }, [circle.pubkey]);
+
+  function pctToFrac(s: string): [number, number] {
+    const v = parseFloat(s);
+    return Number.isFinite(v) && v > 0 ? [Math.round(v), 100] : [0, 0];
+  }
 
   async function save() {
     if (!wallet) return;
     const lamports = Math.round(parseFloat(sol || "0") * LAMPORTS_PER_SOL);
     if (!Number.isFinite(lamports) || lamports < 0) return setNote({ kind: "err", text: "Enter a valid amount in SOL (0 = free)." });
+    const [qn, qd] = pctToFrac(quorumPct);
+    const [pn, pd] = pctToFrac(passPct);
     setBusy(true); setNote(null);
     try {
-      const next = { ...(cfg ?? DEFAULT_CONFIG), renewDonationLamports: lamports };
+      const next: CircleConfigFields = {
+        ...(cfg ?? DEFAULT_CONFIG),
+        renewDonationLamports: lamports,
+        voteQuorumNum: qn, voteQuorumDen: qd,
+        votePassNum: pn, votePassDen: pd,
+      };
       const sig = await setCircleConfig(wallet, new PublicKey(circle.pubkey), next);
-      setNote({ kind: "ok", text: lamports ? `Renewals now require a ${sol} SOL donation to the treasury.` : "Renewals are now free.", sig });
+      setNote({ kind: "ok", text: "Policy saved.", sig });
       setCfg(next);
     } catch (e: any) {
       setNote({ kind: "err", text: String(e?.message || e) });
@@ -227,12 +245,26 @@ function ConfigSection({ circle, wallet }: { circle: CircleInfo; wallet: any }) 
 
   return (
     <section className="card">
-      <SectionHead title="Self-support (Tradition 7)" sub="Optionally require a donation into the Circle treasury to renew a membership — the act of renewal is the contribution." />
-      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <label className="sm muted">Renewal donation</label>
-        <input type="number" min="0" step="0.01" value={sol} onChange={(e) => setSol(e.target.value)} placeholder="0" style={{ maxWidth: 130 }} />
-        <span className="sm muted">SOL · 0 = free</span>
-        <button className="btn btn-sm" disabled={busy || cfg === null} onClick={save}>{busy ? "Saving…" : "Save"}</button>
+      <SectionHead title="Circle policy" sub="Self-support (Tradition 7) and member-vote thresholds — change them anytime; a 0 / blank value keeps the default." />
+      <div className="form">
+        <div className="form-row">
+          <label>Renewal donation</label>
+          <input type="number" min="0" step="0.01" value={sol} onChange={(e) => setSol(e.target.value)} placeholder="0" style={{ maxWidth: 130 }} />
+          <span className="sm muted">SOL into the treasury · 0 = free</span>
+        </div>
+        <div className="form-row">
+          <label>Member-vote quorum</label>
+          <input type="number" min="0" max="100" step="1" value={quorumPct} onChange={(e) => setQuorumPct(e.target.value)} placeholder="33" style={{ maxWidth: 90 }} />
+          <span className="sm muted">% of members must vote · blank = default ⅓</span>
+        </div>
+        <div className="form-row">
+          <label>Pass threshold</label>
+          <input type="number" min="0" max="100" step="1" value={passPct} onChange={(e) => setPassPct(e.target.value)} placeholder="50" style={{ maxWidth: 90 }} />
+          <span className="sm muted">% yes of turnout · blank = simple majority</span>
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-sm" disabled={busy || cfg === null} onClick={save}>{busy ? "Saving…" : "Save policy"}</button>
+        </div>
       </div>
       <TxNoteView note={note} />
     </section>
@@ -626,7 +658,7 @@ function MemberVotesSection({ circle, wallet }: { circle: CircleInfo; wallet: an
     setBusy(p.pubkey);
     setNote(null);
     try {
-      const sig = await finalizeMemberProposal(wallet, new PublicKey(p.pubkey));
+      const sig = await finalizeMemberProposal(wallet, new PublicKey(circle.pubkey), new PublicKey(p.pubkey));
       setNote({ kind: "ok", text: "Outcome recorded.", sig });
       load();
     } catch (e: any) {

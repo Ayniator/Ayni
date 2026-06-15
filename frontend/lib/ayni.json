@@ -917,11 +917,45 @@
           "writable": true
         },
         {
+          "name": "config",
+          "docs": [
+            "The Circle's policy (quorum/pass thresholds). Bound to the proposal's",
+            "Circle by seeds, created on first use with safe defaults — so it can't be",
+            "swapped for a more permissive config or omitted to dodge a tighter one."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.circle",
+                "account": "MemberProposal"
+              }
+            ]
+          }
+        },
+        {
           "name": "finalizer",
           "docs": [
             "Anyone may finalize once the deadline has passed."
           ],
+          "writable": true,
           "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []

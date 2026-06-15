@@ -393,11 +393,17 @@ export async function createMemberProposal(
 
 export async function finalizeMemberProposal(
   wallet: SigningWallet,
+  circle: PublicKey,
   proposal: PublicKey
 ): Promise<string> {
   return programWith(wallet)
     .methods.finalizeMemberProposal()
-    .accounts({ proposal, finalizer: wallet.publicKey })
+    .accounts({
+      proposal,
+      config: circleConfigPda(circle),
+      finalizer: wallet.publicKey,
+      systemProgram: SystemProgram.programId,
+    })
     .rpc();
 }
 

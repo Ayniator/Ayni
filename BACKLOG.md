@@ -132,7 +132,11 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
   the treasury allowlist (wired in following waves). Admin console → "Self-support
   (Tradition 7)". Deployed (upgrade `2sZmGW35…`); verified set + renew on devnet.
 - ⬜ **MACI / coercion-resistant** member voting (today `choice` is public per ballot).
-- ⬜ Per-Circle **quorum/threshold config** for member voting (currently fixed ⅓ + majority).
+- ✅ Per-Circle **quorum/threshold config** for member voting — `finalize_member_proposal`
+  reads `CircleConfig.vote_quorum_*` / `vote_pass_*` (num/den), defaulting to ⅓
+  quorum + simple majority when unset; the config is seed-bound to the proposal's
+  Circle (init_if_needed) so it can't be swapped/omitted. Admin "Circle policy"
+  sets quorum % and pass % . Deployed (upgrade `5jvJ9EEX…`).
 - ⬜ **Sponsor** relationship + **anniversary/sobriety-chip** schema (map onto acknowledgments/levels).
 - ⬜ Treasury **mission/spend allowlist** (Traditions 5/6).
 
