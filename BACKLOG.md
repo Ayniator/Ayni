@@ -162,7 +162,12 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
 
 ### Product layer (not protocol)
 - ⬜ Frontend (Realms-style UI), onboarding flow.
-- ⬜ Notifications (Dialect-style) for proposals/votes.
+- ✅ Notifications (Dialect-style) for proposals/votes — in-app notifications
+  center derived entirely from chain (`lib/notifications.ts`): Council votes you
+  must cast/execute, open member votes, memberships expiring < 30 days, and
+  milestone chips earned. Nav 🔔 bell with unread badge + `/notifications` page
+  (viewing marks read, per-device). No external dep; Dialect Cloud / Blinks push
+  remains a future option on the same content model.
 - ⬜ Off-chain mirror linking meetings/material/docs to on-chain proposals.
 
 ---

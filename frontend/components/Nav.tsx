@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import BrandAyni from "./BrandAyni";
+import NotificationsBell from "./NotificationsBell";
 import WalletButton from "./WalletButton";
 import FoundationNavLink from "./FoundationNavLink";
 import InboxNavLink from "./InboxNavLink";
@@ -33,6 +34,7 @@ export default function Nav() {
         <FoundationNavLink />
       </nav>
       <div className="nav-right">
+        <NotificationsBell />
         <SettingsControls />
         <WalletButton />
         <NetworkSelector />
