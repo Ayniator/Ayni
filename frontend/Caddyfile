@@ -1,16 +1,18 @@
 # Caddy reverse proxy for the AHA · Ayni frontend.
-# Serves the site over HTTPS with an automatic Let's Encrypt certificate on both
-# the standard port 443 and on port 9999, proxying to the Next.js container.
 #
-# $DOMAIN defaults to aha.a13z.org. The cert is issued automatically once the
-# domain's DNS points at this host and ports 80 + 443 are reachable.
+# Serves the site over HTTPS on port 8443 for $DOMAIN (default aha.a13z.org),
+# proxying to the Next.js container.
+#
+# This host's ports 80 and 443 are owned by another stack (the Odoo nginx),
+# which also runs certbot. Rather than issue a certificate itself, Caddy uses
+# the Let's Encrypt certificate that certbot obtains/renews for aha.a13z.org,
+# mounted read-only from the shared certbot volume at /etc/letsencrypt.
 
 {
-	# Let's Encrypt account email (recommended). Set ACME_EMAIL in .env.
-	email {$ACME_EMAIL}
+	auto_https disable_redirects
 }
 
-# Same domain + Let's Encrypt cert on 443 (default), 8443, and 9999 — all HTTPS.
-{$DOMAIN:aha.a13z.org}, {$DOMAIN:aha.a13z.org}:8443, {$DOMAIN:aha.a13z.org}:9999 {
+{$DOMAIN:aha.a13z.org}:8443 {
+	tls /etc/letsencrypt/live/aha.a13z.org/fullchain.pem /etc/letsencrypt/live/aha.a13z.org/privkey.pem
 	reverse_proxy frontend:3000
 }

@@ -1,17 +1,20 @@
 # Launch the AHA · Ayni frontend:
 #
-#     docker compose up --build
+#     docker compose up --build -d
 #
-# Access (Caddy + automatic Let's Encrypt for $DOMAIN, default aha.a13z.org):
-#   • https://$DOMAIN              (HTTPS, port 443)
-#   • https://$DOMAIN:8443         (HTTPS, port 8443 — same Let's Encrypt cert)
-#   • https://$DOMAIN:9999         (HTTPS, port 9999 — same Let's Encrypt cert)
+# Access (Caddy + Let's Encrypt via Cloudflare DNS-01 for $DOMAIN, default
+# aha.a13z.org):
+#   • https://$DOMAIN:8443         (HTTPS, port 8443 — Let's Encrypt cert)
 #   • http://localhost:3000        (the app directly, bypassing the proxy)
-# Requires the domain's DNS → this host with ports 80 + 443 reachable for ACME.
+#
+# This host's ports 80 and 443 are used by another stack, so the certificate is
+# issued via the Cloudflare DNS-01 challenge instead of HTTP-01. That needs a
+# Cloudflare API token (Zone:DNS:Edit on a13z.org) — set CF_API_TOKEN in .env.
 #
 # Configure via a .env file next to this one (or shell env), e.g.
 #     DOMAIN=aha.a13z.org
 #     ACME_EMAIL=admin@a13z.org
+#     CF_API_TOKEN=cloudflare-zone-dns-edit-token
 #     NEXT_PUBLIC_RPC_URL=https://devnet.helius-rpc.com/?api-key=KEY
 #     NEXT_PUBLIC_FOUNDATION_CIRCLE=5ojNff2MEHNgLv55DgsYRvd7SYY2jZ8uaSst65b2Yrm7
 
@@ -28,8 +31,6 @@ services:
     image: aha-frontend
     expose:
       - "3000"
-    ports:
-      - "3000:3000" # direct access (optional — remove to keep it proxy-only)
     environment:
       # Server-side only (the /api/circle-email route). Optional.
       SMTP_HOST: ${SMTP_HOST:-}
@@ -41,25 +42,28 @@ services:
       AHA_EMAIL_DOMAIN: ${AHA_EMAIL_DOMAIN:-aha.community}
     restart: unless-stopped
 
-  # Reverse proxy: HTTPS on $DOMAIN (auto Let's Encrypt) + plain HTTP on :9999.
+  # Reverse proxy: HTTPS on $DOMAIN:8443 using the Let's Encrypt cert that the
+  # Odoo stack's certbot issues/renews for aha.a13z.org (shared volume below).
   caddy:
     image: caddy:2-alpine
     depends_on:
       - frontend
     environment:
       DOMAIN: ${DOMAIN:-aha.a13z.org}
-      ACME_EMAIL: ${ACME_EMAIL:-}
     ports:
-      - "8443:8443" # HTTPS on the domain (Let's Encrypt), alternate port
-      - "9999:9999" # HTTPS on the domain (Let's Encrypt), alternate port
-      - "443:443"   # HTTPS on the domain (Let's Encrypt)
-      - "80:80"     # ACME HTTP-01 challenge + HTTP→HTTPS redirect
+      - "8443:8443" # HTTPS on the domain (Let's Encrypt cert, alternate port)
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data     # persisted certificates (survives restarts)
+      - letsencrypt:/etc/letsencrypt:ro  # certbot-managed certs (read-only)
+      - caddy_data:/data
       - caddy_config:/config
     restart: unless-stopped
 
 volumes:
   caddy_data:
   caddy_config:
+  # The Odoo stack's certbot certificate volume, joined read-only so Caddy can
+  # serve the aha.a13z.org Let's Encrypt cert it manages.
+  letsencrypt:
+    external: true
+    name: odoo19_certbot_certs
