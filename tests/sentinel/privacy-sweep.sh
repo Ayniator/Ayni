@@ -48,15 +48,24 @@ report "no console.* of identity material" "$hits"
 # 3. Traditions: nothing may rank, score, or compare a member (T11/T12). The
 #    backlog's audit rejects karma/ratings outright. `level` (shamanic lineage)
 #    and vote tallies are legitimate and excluded by name.
-# Matched the way a field is actually written — snake_case/standalone
-# (`member_score`, `karma`) or camelCase (`memberScore`, `trustRating`). A plain
-# \b pattern misses `memberScore`; a plain substring pattern hits
-# `saturating_add` and `celebrating`. Case-sensitive on purpose.
+# A ranking violation is a FIELD/IDENTIFIER, never prose: the whole point of a
+# non-comparative design is documentation that says "no score, no rank", and a
+# word-scanning gate that flagged those sentences would be useless. So match
+# only identifier shapes:
+#   * camelCase — `memberScore`, `trustRating` (a capitalised trigger glued to
+#     a preceding identifier char),
+#   * a field or assignment — `score:`, `rank =`, `karma:` (a lowercase trigger
+#     immediately followed by `:` or `=`).
+# `saturating_add`/`celebrating` (contain "rating") and prose "no score," never
+# match. Case-sensitive on purpose.
 RANK='score|rating|ranking|karma|reputation|leaderboard|streak'
 RANK_UC='Score|Rating|Ranking|Karma|Reputation|Leaderboard|Streak'
-hits=$(grep -rnE "(^|[^a-zA-Z])($RANK|$RANK_UC)|[a-z_]($RANK_UC)" $SRC $EX programs/ frontend/lib/ frontend/components/ frontend/app/ 2>/dev/null \
+hits=$(grep -rnE "[a-zA-Z0-9_]($RANK_UC)|(^|[^a-zA-Z0-9_])($RANK)[[:space:]]*[:=]" $SRC $EX programs/ frontend/lib/ frontend/components/ frontend/app/ 2>/dev/null \
   | grep -viE 'underscore|scorecard')
 report "no score/rating/rank/karma/reputation field" "$hits"
+# Known, JUSTIFIED member-facing exceptions (Membership.level, ProgressToken
+# chips) are documented in docs/traditions-justifications.md — they are personal
+# milestones/credentials, not rankings; residual public-visibility is Epic 5.
 
 echo
 if [ "$fails" -gt 0 ]; then

@@ -479,6 +479,35 @@ impl MaciMessage {
     pub const SPACE: usize = 8 + 32 + 8 + 32 + 4 + Self::CT_LEN + 1;
 }
 
+/// One quipu cord — a single step of the twelve, completed and tied by the
+/// member's sponsor as the closing act of the ceremony (Trust Platform Epic 3).
+///
+/// Binary and personal by design: the account either exists (you walked the
+/// step) or it does not. There is NO score, no fraction, no "N of 12" — the
+/// only fields are which step and when. The cord's alchemical COLOUR is not
+/// stored on-chain; it is derived from `step` client-side (see
+/// `frontend/lib/quipu.ts` and `docs/quipu.md`), so the colour mapping can be
+/// finalised against the Emerald correspondence table without a chain change.
+///
+/// `sponsor` is the tying sponsor's membership commitment (the wing bond), so
+/// the ceremony's closing act is recorded as anonymously as the memberships
+/// themselves. One cord per (member, step). PDA: ["quipu", circle, member, step].
+#[account]
+pub struct QuipuCord {
+    pub circle: Pubkey,
+    pub member: [u8; 32],  // the walker's membership commitment
+    pub step: u8,          // 1..=12
+    pub sponsor: [u8; 32], // the tying sponsor's membership commitment
+    pub completed_at: i64,
+    pub bump: u8,
+}
+
+impl QuipuCord {
+    pub const FIRST_STEP: u8 = 1;
+    pub const LAST_STEP: u8 = 12;
+    pub const SPACE: usize = 8 + 32 + 32 + 1 + 32 + 8 + 1;
+}
+
 /// A Circle's meeting calendar — recurring patterns + exceptional sessions —
 /// as a compact JSON string every member (and visitor) can read. Set by any
 /// Council seat. Separate PDA so the `Circle`/`CircleProfile` layouts are

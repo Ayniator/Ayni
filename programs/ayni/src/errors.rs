@@ -86,4 +86,6 @@ pub enum AyniError {
     SelfAttestation,
     #[msg("The trusted servant must be a different person than the parrain")]
     ParrainCannotConfirm,
+    #[msg("Quipu step must be between 1 and 12")]
+    InvalidStep,
 }

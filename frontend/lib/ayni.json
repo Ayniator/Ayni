@@ -4847,6 +4847,159 @@
       ]
     },
     {
+      "name": "tie_quipu_cord",
+      "docs": [
+        "The sponsor ties a quipu cord for a completed step (Epic 3): one cord per",
+        "(member, step), step 1..=12, colour derived off-chain from the step."
+      ],
+      "discriminator": [
+        210,
+        221,
+        117,
+        74,
+        136,
+        13,
+        128,
+        77
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "member_membership",
+            "sponsor_membership",
+            "wing_peer"
+          ]
+        },
+        {
+          "name": "member_membership",
+          "docs": [
+            "The walker's membership."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "member_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "sponsor_membership",
+          "docs": [
+            "The sponsor's membership (the wing side of the bond)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "sponsor_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wing_peer",
+          "docs": [
+            "The member's sponsor bond — seed-bound to the member, so it can't be",
+            "swapped for someone else's."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  103,
+                  112,
+                  101,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "member_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "cord",
+          "docs": [
+            "One cord per (member, step) — `init` collision IS the refusal of a second."
+          ],
+          "writable": true
+        },
+        {
+          "name": "sponsor",
+          "docs": [
+            "The sponsor (signs + pays the cord's rent — the closing act of the rite)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "step",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "update_circle_location",
       "docs": [
         "Update only a Circle's location (coordinates + city + address) on its",
@@ -5634,6 +5787,19 @@
       ]
     },
     {
+      "name": "QuipuCord",
+      "discriminator": [
+        215,
+        32,
+        229,
+        147,
+        202,
+        127,
+        32,
+        75
+      ]
+    },
+    {
       "name": "SeatElection",
       "discriminator": [
         213,
@@ -5909,6 +6075,11 @@
       "code": 6041,
       "name": "ParrainCannotConfirm",
       "msg": "The trusted servant must be a different person than the parrain"
+    },
+    {
+      "code": 6042,
+      "name": "InvalidStep",
+      "msg": "Quipu step must be between 1 and 12"
     }
   ],
   "types": [
@@ -7394,6 +7565,63 @@
           },
           {
             "name": "issued_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "QuipuCord",
+      "docs": [
+        "One quipu cord — a single step of the twelve, completed and tied by the",
+        "member's sponsor as the closing act of the ceremony (Trust Platform Epic 3).",
+        "",
+        "Binary and personal by design: the account either exists (you walked the",
+        "step) or it does not. There is NO score, no fraction, no \"N of 12\" — the",
+        "only fields are which step and when. The cord's alchemical COLOUR is not",
+        "stored on-chain; it is derived from `step` client-side (see",
+        "`frontend/lib/quipu.ts` and `docs/quipu.md`), so the colour mapping can be",
+        "finalised against the Emerald correspondence table without a chain change.",
+        "",
+        "`sponsor` is the tying sponsor's membership commitment (the wing bond), so",
+        "the ceremony's closing act is recorded as anonymously as the memberships",
+        "themselves. One cord per (member, step). PDA: [\"quipu\", circle, member, step]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "step",
+            "type": "u8"
+          },
+          {
+            "name": "sponsor",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "completed_at",
             "type": "i64"
           },
           {

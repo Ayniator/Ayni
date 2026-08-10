@@ -168,6 +168,12 @@ pub mod ayni {
         instructions::refill_faucet(ctx, amount)
     }
 
+    /// The sponsor ties a quipu cord for a completed step (Epic 3): one cord per
+    /// (member, step), step 1..=12, colour derived off-chain from the step.
+    pub fn tie_quipu_cord(ctx: Context<TieQuipuCord>, step: u8) -> Result<()> {
+        instructions::tie_quipu_cord(ctx, step)
+    }
+
     // --- Member posts / bulletins (F30) ---
 
     /// A member publishes a time-boxed post (text and/or IPFS image).

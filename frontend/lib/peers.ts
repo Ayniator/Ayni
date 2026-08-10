@@ -101,3 +101,41 @@ export async function listProgressTokens(circle: string): Promise<Chip[]> {
     .map((r: any): Chip => ({ member: toHex(Uint8Array.from(r.account.member)), milestone: Number(r.account.milestone), issuedAt: Number(r.account.issuedAt) }))
     .sort((a: Chip, b: Chip) => a.milestone - b.milestone);
 }
+
+// --- Quipu cords (Epic 3) — one pendant cord per completed step -------------
+
+export const quipuCordPda = (circle: PublicKey, member: Uint8Array, step: number) =>
+  PublicKey.findProgramAddressSync([seed("quipu"), circle.toBytes(), member, Uint8Array.of(step)], PROGRAM_ID)[0];
+
+/** The sponsor (the member's wing) ties a cord for a completed step (1..=12). */
+export async function tieQuipuCord(wallet: SigningWallet, circle: PublicKey, memberHex: string, sponsorHex: string, step: number): Promise<string> {
+  const member = toBytes(memberHex);
+  const sponsor = toBytes(sponsorHex);
+  return programWith(wallet)
+    .methods.tieQuipuCord(step)
+    .accounts({
+      circle,
+      memberMembership: membershipPda(circle, member),
+      sponsorMembership: membershipPda(circle, sponsor),
+      wingPeer: wingPeerPda(circle, member),
+      cord: quipuCordPda(circle, member, step),
+      sponsor: wallet.publicKey,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export interface CordRow { member: string; step: number; completedAt: number; sponsor: string }
+
+/** Every quipu cord in a Circle (filter by member in the UI). Never summed. */
+export async function listQuipuCords(circle: string): Promise<CordRow[]> {
+  const rows = await (readOnlyProgram().account as any).quipuCord.all([{ memcmp: { offset: 8, bytes: circle } }]);
+  return rows
+    .map((r: any): CordRow => ({
+      member: toHex(Uint8Array.from(r.account.member)),
+      step: Number(r.account.step),
+      completedAt: Number(r.account.completedAt),
+      sponsor: toHex(Uint8Array.from(r.account.sponsor)),
+    }))
+    .sort((a: CordRow, b: CordRow) => a.step - b.step);
+}

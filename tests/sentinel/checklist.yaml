@@ -8,9 +8,10 @@
 # test:adversarial, Playwright); none of that exists in this repo, so the layers
 # are mapped onto what is real here. Do not delete a gap to make a round pass.
 
-round: 2
+round: 3
 established: 2026-08-10
-baseline_report: reports/sentinel/NRR-2026-08-10-1.md
+baseline_report: reports/sentinel/NRR-2026-08-10-2.md
+previous_baseline_report: reports/sentinel/NRR-2026-08-10-1.md
 
 layers:
   E_build_health:
@@ -20,7 +21,10 @@ layers:
         note: needs a C toolchain; on this host run it in the rust:1-slim container
       - name: BPF build + IDL
         cmd: anchor build
-        note: containerized (ubuntu:24.04 or rust:1-slim + platform-tools cache)
+        note: containerized (ubuntu:24.04 or rust:1-slim + platform-tools cache);
+          round 2 confirmed target/deploy/ayni.so built (63 instructions,
+          target/idl/ayni.json), cited from the round-2 briefing, not
+          independently re-executed by Sentinel this round
       - name: frontend typecheck
         cmd: cd frontend && npx tsc --noEmit
       - name: dependency audit
@@ -28,6 +32,9 @@ layers:
     gaps:
       - root `tsc` fails (pre-ES2020 target); frontend is clean — see NRR round 1 R9
       - prettier fails on 12 files (R10)
+      - "round 2: neither cargo check nor the audit was independently re-run by
+         Sentinel — both cited from the round-2 task briefing as known-green.
+         Round 3 should re-verify directly rather than cite a third time."
 
   D_privacy_invariants:
     runnable:
@@ -39,53 +46,98 @@ layers:
           - no logging macros in the Anchor program
           - no console.* of identity material
           - no score/rating/rank/karma/reputation field on a member
-        verified: positive (clean tree passes) and negative (injected violations fail)
+        verified: "re-executed fresh round 2 (2026-08-10) — all 5 gates clean,
+          unchanged from round 1. NOTE: this gate is a literal-string regex and
+          does NOT catch Membership.level / ProgressToken (see R7) because
+          neither uses a banned word — a known, acknowledged blind spot, not a
+          bug in the script."
     # The seven Layer D assertions. These are ARCHITECTURAL: greps cannot decide
     # them, and no adversarial suite exists yet, so they are tracked, not gated.
     assertions:
-      1_sponsor_edge: VIOLATED       # WingPeer is public; activate_faucet rides it
+      1_sponsor_edge: "VIOLATED overall, IMPROVED round 2 — the E2 anonymous
+        AdmissionAttestation account (parrain=[0;32], attest_admission_zk.rs:60-65)
+        genuinely contains no parrain identity, PASS at the account-state layer.
+        Still VIOLATED because: (a) attest_admission.rs (named pilot) writes the
+        parrain commitment in plain; (b) WingPeer (state.rs:396-406) unchanged;
+        (c) the E2 tx itself is fee-paid by the parrain's own wallet
+        (zk-vote.ts:200-203, no /api/relay exists yet — F55 open), so tx-history
+        still deanonymizes the anonymous form."
       2_trust_list: n/a              # feature not built
-      3_message_metadata: VIOLATED   # content sealed, recipient+timing public
-      4_biometric: PASS              # no biometric/WebAuthn code exists
-      5_circle_roster: VIOLATED      # Membership stores commitment + owner publicly
-      6_hidden_content: untestable   # per-element visibility not built
-      7_faucet_parrain_link: VIOLATED # pilot: activation tx links parrain↔neophyte
+      3_message_metadata: VIOLATED   # content sealed, recipient+timing public — unchanged round 2
+      4_biometric: PASS              # no biometric/WebAuthn code exists — unchanged
+      5_circle_roster: VIOLATED      # Membership stores commitment + owner publicly — unchanged round 2
+      6_hidden_content: untestable   # per-element visibility not built — unchanged
+      7_faucet_parrain_link: "VIOLATED overall, IMPROVED round 2 — the on-chain
+        activate_faucet grant tx is unchanged (parrain Signer + recipient=owner,
+        still public). BUT the treasurer ledger sub-requirement, absent in round
+        1, now exists and holds: fixed-size nacl.box blobs
+        (frontend/app/api/faucet-ledger/route.ts), decrypt-only-by-treasurer-key,
+        one-time unlinkable codes, amount-uniform (FAUCET_AMOUNT_COOLDOWN,
+        state.rs:745), independent activation (15-120s) + ledger-delivery
+        (1-7min) jitter. Server-observed arrival order/timing is honestly
+        acknowledged in both files' comments as a residual, blurred-not-erased
+        channel; Sentinel notes it is weaker than claimed for low-volume
+        circles specifically (near-unique correlation by elimination when
+        grants are rare)."
     gaps:
       - "no adversarial suite (npm run test:adversarial) — the only thing that can
-         PROVE assertions 1/3/5/7 rather than argue them. Highest-value gap."
+         PROVE assertions 1/3/5/7 rather than argue them. Highest-value gap,
+         unchanged for 2 rounds."
+      - "round 2: the forbidden-pattern sweep cannot detect R7-shaped violations
+         (public per-member rank fields that don't use a banned literal word).
+         Needs a semantic check, not just a regex, before round 3."
 
   C_proof_layer:
     runnable:
       - name: verifying-key integrity
         cmd: bash tests/sentinel/zk-integrity.sh
         checks: [vkey matches zkey, rust matches vkey, no placeholder keys]
+        verified: "re-executed fresh round 2 in a node:20-bookworm-slim
+          container (host has no native node) — all 9 checks pass, byte-
+          identical to round 1 (1543/1540/3201 non-zero constants)."
       - name: program suites against a local validator
         cmd: anchor test --skip-build
-        suites: [tests/ayni.ts, tests/resilience.ts, tests/cosign.ts, tests/faucet.ts]
+        suites: [tests/ayni.ts, tests/resilience.ts, tests/cosign.ts, tests/faucet.ts, tests/epic1.ts]
+        note: "round 2: 35/35 reported known-green per the round-2 briefing;
+          NOT independently re-executed by Sentinel this round. Round 3 should
+          re-run directly (recipe in tests/README.md, ubuntu:24.04 container)."
     gaps:
       - grant_level / issue_acknowledgment / verify_disclosure / prove_personhood
         have no end-to-end proof test
       - no CLI-vs-browser verifier parity check
+      - "NEW round 2: attest_admission_zk (F53) has NO end-to-end proof test —
+         tests/epic1.ts:232-251 only exercises confirm_admission's null-parrain
+         branch with a hand-built named attestation, never the real ZK
+         instruction. WARNING this round (feature is new); FAILs round 3 if
+         still uncovered."
 
   B_api_contract:
     runnable: []
     gaps:
-      - "no API contract suite. One route exists: frontend/app/api/circle-email.
-         Round 2 hardened it (on-chain verification of every claim + rate limit);
-         that hardening is UNTESTED — first thing to cover."
+      - "no API contract suite. TWO routes now exist and are both wholly
+         untested: frontend/app/api/circle-email (hardened round 1/2, still
+         untested) and frontend/app/api/faucet-ledger (NEW round 2 — no
+         seal/open round-trip test, no fixed-size-blob rejection test, no
+         wrong-key-cannot-decrypt test, no queue-flush test)."
 
   A_ux_e2e:
     runnable:
       - name: unit tests
         cmd: npx ts-mocha tests/jazzicon.ts
+        note: "not re-executed round 2 (no native node on host; not
+          containerized this round — only the two scripts explicitly asked for
+          were run in-container). Round 3 should re-run."
     gaps:
       - "no Playwright/e2e suite, so the spec's DOM assertion (no fraction,
          percentage, 'of 12', progress bar, star, score) never runs anywhere"
+      - "NEW round 2: zero UI-level coverage of the admission stepper
+         (attest/confirm), the faucet 'first gas' button + jitter countdown,
+         or the treasurer ledger panel."
 
 features:
   # id, what Sentinel checks, where it is covered today.
   - id: F35
-    name: Epic 0 — gas faucet
+    name: Epic 0 — gas faucet (+ F47 treasurer ledger, F48 disbursement jitter)
     shipped_round: 2
     covered_by: [tests/faucet.ts, tests/sentinel/privacy-sweep.sh]
     cases:
@@ -104,14 +156,15 @@ features:
          behind `finalized && passed`, which needs a real Groth16 ballot — belongs
          to the devnet flow in tests/f28-election.ts"
       - no UI-level test of the treasurer panel or the parrain button
-      - "NEW this round: the encrypted treasurer ledger (lib/faucetLedger.ts +
-         /api/faucet-ledger) — needs tests: fixed-size blob validation on the
-         route, seal/open round-trip, non-treasurer cannot decrypt, queue flush,
-         and the Layer D assertion that a dumped drop-box file yields no
-         identity and no tx linkage"
-      - "NEW this round: activation timing jitter (15-120s) + independent ledger
-         delivery jitter (1-7 min) — assert decorrelation in the adversarial
-         suite when it exists"
+      - "F47 treasurer ledger (lib/faucetLedger.ts + /api/faucet-ledger) — code
+         reviewed and Layer-D-assessed by Sentinel round 2 (see NRR-2 assertion
+         #7), found sound in design, but has NO executable test: seal/open
+         round-trip, fixed-size blob validation on the route, non-treasurer
+         cannot decrypt, queue flush."
+      - "F48 activation jitter (15-120s, me/page.tsx:353-356) + ledger delivery
+         jitter (1-7min, faucetLedger.ts:37) — code-reviewed present and
+         correctly wired; no automated decorrelation test exists (needs an
+         adversarial suite)."
 
   - id: F50-F52
     name: Epic 1 — two-sponsor admission (amended v0.2)
@@ -127,6 +180,12 @@ features:
       - confirm is seat-gated; distinct-persons rule (parrain's seat refused)
       - confirm inserts into the tree, increments count, closes the marker (one-shot)
       - policy off restores the legacy door
+      - "round 2 Sentinel confirmed by reading the code (not by new test): the
+         member-tree insert (merkle::insert_leaf) and member_count increment
+         happen ONLY in confirm_admission.rs (lines ~44-48); issue_provisional_
+         membership.rs explicitly does NOT touch the tree (comment at lines
+         59-60) — the provisional-cannot-vote property is structural, not a UI
+         flag, confirmed by code reading."
     uncovered:
       - "the structural 'provisional cannot vote' half needs a real ZK ballot
          attempt against a tree that lacks the commitment — devnet flow"
@@ -136,18 +195,29 @@ features:
     name: Epic 2 — anonymous vouch-proof (attest_admission_zk)
     shipped_round: 2
     covered_by: []
+    reviewed_by: "Sentinel round 2, code reading only (NRR-2 assertion #1) —
+      confirmed AdmissionAttestation.parrain == 0 and vouchnull PDA carries no
+      payload for the anonymous path; confirmed the fee-payer/relayer gap
+      (zk-vote.ts:200-203, no /api/relay) is real and honestly documented, not
+      hidden."
     uncovered:
       - "END-TO-END ZK TEST MISSING: a real member_vote Groth16 proof →
          attest_admission_zk → issue_provisional → confirm_admission with a null
          parrain. Needs the browser/devnet proving flow (like tests/vote.ts,
          which cannot run headless). Until then attest_admission_zk is verified
-         only by construction (reuses the F28-proven VK + public-signal order)."
-      - "Layer D: assert a dump of the attestation + vouchnull accounts yields no
-         parrain identity and no parrain→newcomer edge (the whole point of E2)."
+         only by construction (reuses the F28-proven VK + public-signal order)
+         plus round-2 Sentinel code reading. STILL a WARNING this round (F53
+         shipped this round); escalates to FAIL in round 3 if still uncovered."
+      - "Layer D dump-simulation of the attestation + vouchnull accounts: done
+         by Sentinel manually this round (assertion #1), not by an automated
+         adversarial suite — no suite exists to re-run this check
+         mechanically next round."
 
   - id: F25
     name: Circle email notifications
     covered_by: []
     uncovered:
       - "the round-2 hardening of app/api/circle-email (chain verification of
-         circleName/membership, IP rate limit) has no test — see layer B"
+         circleName/membership, IP rate limit) has no test — see layer B.
+         Round 2 Sentinel confirmed by reading route.ts that the hardening is
+         still present and not regressed."
