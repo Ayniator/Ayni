@@ -1,4 +1,4 @@
-# AHA / Ayni — feature backlog & status
+# AHA / Ayni — unified feature backlog & status
 
 Living tracker of what's implemented and what's planned. **AHA** (*Ancestral
 Humanity Anonymous*) is a worldwide, chain-agnostic decentralized fellowship for
@@ -11,186 +11,462 @@ Solana implementation.
 - Discipline: model changes land on `main`, then merge into the chain branch;
   implementation lands on the chain branch.
 
-> `BACKLOG.md` is the **single source of truth for feature status**. Update it in
-> the same commit whenever a feature is added, finished, or descoped.
+> `BACKLOG.md` is the **single source of truth for feature status**, and as of
+> **2026-08-10 it unifies the two backlogs that used to run in parallel**:
+>
+> 1. the **implementation registry** (F-numbers, formerly this file alone), and
+> 2. the **product backlog** — `backlog/AHA_Trust_Platform_Backlog.docx` and its
+>    text extraction `backlog/AHA_Trust_Platform_Backlog.md` (Epics **E0–E10**,
+>    the Sequencing table and the Traditions Audit), which remains the
+>    **authoritative source of product intent**. Nothing here overrides it; this
+>    file records what has actually been built against it.
+>
+> `backlog/AHA_Trust_Platform_GapAnalysis.md` is the **working paper** of that
+> mapping (epic-by-epic COVERED/PARTIAL/MISSING/CONFLICTS). It is evidence, not
+> authority: where it and the code disagree, the code wins and this file says so.
+>
+> Update this file in the same commit whenever a feature is added, finished, or
+> descoped — and keep `docs/shipped.md` reconciled with it in that same commit.
 
-**Status legend:** ✅ implemented (code-complete) · 🟡 partial / stubbed · ⬜ planned
-**Toolchain status (2026-08):** the Rust program **compiles clean** —
-`cargo check --workspace --all-targets` passes with 0 errors — and `anchor build`
-runs in Docker on this machine (no native Solana/Anchor/circom toolchain on the
-host `PATH`; builds are containerized). **Update (2026-06):** the circuits were compiled and a
-**single-contributor** phase-2 ceremony was run — `verifying_key*.rs` for
-`member_vote`, `lineage_grant`, and `ack_disclose` now hold **real** Groth16
-keys (not placeholders), and the deployed devnet program verifies against them.
-Functional for devnet; **mainnet still needs a proper multi-party ceremony**
-(the single-contributor key is a trust weakness, not a functional one).
+**Status legend**
+`✅` implemented (code-complete) · `🟡` partial / stubbed · `⬜` planned ·
+`⚠` **architectural conflict** — shipped and working against its own spec, but
+contradicts the product backlog's Traditions Audit or an epic's stated property;
+resolving it needs a redesign, not a patch (see *Known issues*) ·
+`Fn b` = a rider / policy addendum to `Fn`, never an independent feature.
+
+**Epic column** — `E0`–`E10` tie a row to the product backlog; `—` means
+infrastructure that serves no single epic.
+
+### Toolchain & baseline (as of 2026-08-10)
+
+- **Host `PATH`:** `cargo` 1.97.1, `anchor-cli` 0.31.1, `solana-cli` 2.1.21
+  (Agave) are installed and on `PATH`. `node`, `npm` and `circom` are **not** —
+  circuit compilation and npm tasks still need a container.
+  (The earlier "no native Solana/Anchor toolchain on the host" claim was stale.)
+- **CI pins** `ANCHOR_VERSION 0.31.1` / `SOLANA_VERSION 2.1.21`
+  (`.github/workflows/ci.yml`) and matches the installed toolchain. The former
+  "Agave 2.3.13" claim in this file was wrong — 2.3 is the `solana-poseidon`
+  *crate* version in `programs/ayni/Cargo.toml`, not the validator.
+- **Compile:** host-target `cargo check --workspace --all-targets` clean
+  (0 errors, 67 warnings) at commit **`aea1438`** (Sentinel R1). Not
+  re-established for the current tree; `anchor build` / `cargo-build-sbf` (BPF
+  stack + size limits) **not verified** this round. *Every future toolchain claim
+  must carry the commit it was measured at.*
+- **Tests** (suite list, not a count — counts drift every round):
+  `tests/ayni.ts` (3, F1/F7/F24) · `tests/cosign.ts` (2, F11) ·
+  `tests/resilience.ts` (3, F9–F11) · `tests/profile.ts` (4, F18) ·
+  `tests/vote.ts` (3, F6 real-proof e2e) · `tests/faucet.ts` (15, F35) —
+  30 Anchor cases — plus `tests/jazzicon.ts` (8 unit, F20) and the
+  `tests/f28-election.ts` devnet script (F28), which `Anchor.toml` currently
+  `--ignore`s (uncommitted change).
+- **Circuits / keys:** `member_vote`, `lineage_grant` and `ack_disclose` are
+  compiled and `verifying_key*.rs` hold **real** Groth16 keys (not placeholders),
+  verified byte-exact against the `.zkey`s by Sentinel Layer C. The phase-2
+  ceremony was **single-contributor** — functional for devnet, **not acceptable
+  for mainnet** (see **F44**). `docs/zk-lineage.md` §6 still calls the VK a
+  placeholder and is stale.
 
 ---
 
 ## Feature registry (Ayni / `solana`)
 
+One registry, two axes: the **F-number** is the implementation identity (never
+renumbered once correct); the **Epic** column is the product identity.
+
 ### Membership & identity
-| # | Feature | Status | Instructions / files | Notes |
-|---|---------|--------|----------------------|-------|
-| F1 | Soulbound yearly membership (ZK-commitment keyed) | ✅ | `issue_membership`, `renew_membership` | anonymous; renews term |
-| F2 | Selective-disclosure identity (optional `owner` wallet) | ✅ | `Membership.owner` | default = fully anonymous |
-| F3 | Soulbound Token-2022 membership token | ✅ | `create_membership_mint`, `set_membership_mint`, `mint_membership_token`; `frontend/lib/admin.ts`, `/admin` Treasurer control | `create_membership_mint` now creates the Token-2022 **NonTransferable** mint (authority = Circle PDA, 0 decimals, no freeze) and registers it in one Treasurer-gated instruction — no external setup step. `set_membership_mint` still allows registering an externally-created mint. Deployed to devnet (upgrade `fCbGbo33…`); verified end-to-end via `scripts/test-membership-mint.js` (mint owned by Token-2022, NonTransferable extension present, authority = Circle PDA, `circle.membership_mint` set). |
+| # | Epic | Feature | Status | Instructions / files | Notes |
+|---|------|---------|--------|----------------------|-------|
+| F1 | E1 | Soulbound yearly membership (ZK-commitment keyed) | ✅ | `issue_membership`, `renew_membership`; `Membership` (`state.rs:58-84`) | anonymous; renews term. Leaf inserted into the MemberTree in the *same* instruction (`issue_membership.rs:71`) — which is why provisional membership is not representable today (see **F51**). |
+| F2 | E5 | Selective-disclosure identity (optional `owner` wallet) | ✅ | `Membership.owner` (`state.rs:65-68`) | `default()` = fully anonymous. ⚠ In practice the shipped join flow always binds the wallet, so rosters are enumerable (Sentinel R1 → E2/E5). |
+| F3 | — | Soulbound Token-2022 membership token | ✅ | `create_membership_mint` (NonTransferable ext + `non_transferable_mint_initialize` before `initialize_mint2`), `set_membership_mint`, `mint_membership_token`; `frontend/lib/admin.ts`; `scripts/test-membership-mint.js` | Mint authority = Circle PDA, 0 decimals, no freeze; registered in one Treasurer-gated instruction. *Environment claim (not checkable from the repo):* devnet upgrade `fCbGbo33…` and the end-to-end devnet verification. |
 
 ### Sybil resistance
-| # | Feature | Status | Instructions / files | Notes |
-|---|---------|--------|----------------------|-------|
-| F4 | Social vouching (always-on) | ✅ | `issue_membership` (authority-gated) | a human admits a human |
-| F31 | Per-Circle membership policy: **permissionless vs Scribe-Secretary-gated** | ✅ | `set_open_membership`, `OpenMembership` marker PDA; `issue_membership` (optional marker); `lib/member.ts`, `/me`, `/admin`, `/create` | a Circle may be **open** (anyone self-admits) or **validated** (the Scribe-Secretary admits), toggled by any seat. Migration-safe marker PDA `["openjoin", circle]` — no `Circle` layout change. Deployed to devnet; verified: gated→non-Secretary rejected, open→self-join succeeds, re-gate→rejected. |
-| F5 | Anonymous proof-of-personhood (one human → one membership/Circle) | ✅ | `set_personhood`, `prove_personhood`, `PersonhoodCredential` | reuses `member_vote` circuit/VK; World ID-style root; `docs/sybil.md` |
+| # | Epic | Feature | Status | Instructions / files | Notes |
+|---|------|---------|--------|----------------------|-------|
+| F4 | E1 | Social vouching (always-on) | ✅ | `issue_membership` — **Scribe-Secretary-seat-gated** (`issue_membership.rs:18-34`, `council.require_seat(SEAT_SECRETARY)`) unless an `OpenMembership` marker is present | a human admits a human. **Corrected:** this row used to say "authority-gated". There is no authority — `Circle` has no authority field (`state.rs:10-35`) and `council.rs:17` states "The Council IS the authority". ⚠ The Secretary's wallet signs every gated admission, producing a public named-admitter edge (E1/E2). |
+| F31 | E1 | Per-Circle membership policy: **permissionless vs Scribe-Secretary-gated** | ✅ ⚠ | `set_open_membership`, `OpenMembership` marker PDA `["openjoin", circle]`; `issue_membership` (optional marker); `lib/member.ts`, `/me`, `/admin`, `/create` | Migration-safe marker PDA — no `Circle` layout change. ⚠ **Open membership is zero-vouch self-admission — the direct opposite of E1's "every member enters through two existing members".** Both cannot be the shipped admission model; reconciliation is an ADR (see *Open decisions*). *Environment claim:* the devnet gated→open→re-gate verification. |
+| F5 | E1 | Anonymous proof-of-personhood (one human → one membership/Circle) | ✅ | `set_personhood` (Secretary-gated), `prove_personhood` (verifies against `VERIFYING_KEY_VOTE`), `PersonhoodCredential` (`state.rs:244-252`), consumed at `issue_membership.rs:37-46`; `docs/sybil.md` | reuses the `member_vote` circuit/VK; World ID-style root. F35's "one grant ever" guarantee leans on this being switched on. |
 
 ### Governance & voting
-| # | Feature | Status | Instructions / files | Notes |
-|---|---------|--------|----------------------|-------|
-| F6 | Anonymous member voting (one member, one vote) | ✅ | `initialize_member_tree`, `create_member_proposal`, `cast_vote`, `finalize_member_proposal`; `circuits/member_vote.circom`; **browser prover `frontend/lib/zk-vote.ts`** | Semaphore-style; per-proposal nullifier; ⅓ quorum + majority; `docs/member-voting.md`. **In-browser ZK voting wired (Next + webpack)**: identity is now `commitment = Poseidon(secret)` with the secret kept on the member's device; `/me` "Open votes" reconstructs the tree, proves with snarkjs (`/zk/*.wasm`+`.zkey`), and casts. Memberships minted before this change (random commitment) can't prove — rejoin to mint a votable one. |
-| F7 | 7-seat Council (4-of-7) | ✅ | `appoint_seat`, `propose`, `approve`, `execute_proposal`, `cancel_proposal`; `council.rs` | 3 servants + 4 elders |
-| F8 | Forkable federated Circles | ✅ | `initialize_circle` (per Circle) | World Service authority over local Circles |
-| F28 | **Member election of the 7 Council seats** | ✅ (full: on-chain protocol + in-browser ZK voting) | new `ElectionProposal` + `cast_election_ballot` (reuse `member_vote` VK) + `finalize_election` + `install_elected_seat`; in-browser prover from `app/voting/prove.ts` | group-conscience **election** of each seat holder — members nominate + vote anonymously (one-member-one-vote), winner installed into the seat. **NOT blocked** (earlier note was wrong): the `member_vote` ceremony is done and `cast_vote` already verifies real proofs on devnet. Remaining = pure engineering: (1) demonstrate a real ballot end-to-end on the deployed program (proves the snarkjs→groth16-solana encoding + Poseidon match), (2) on-chain election plumbing (an `ElectionProposal` carrying seat_index + candidate, balloted like a `MemberProposal`, with `install_elected_seat` writing `council.seats[i]` on a passed finalize, respecting uniqueness), (3) browser proving + election UI. Open: term length / recall, interaction with `RotateSeat`. Mainnet also wants the multi-party ceremony. |
+| # | Epic | Feature | Status | Instructions / files | Notes |
+|---|------|---------|--------|----------------------|-------|
+| F6 | E2 | Anonymous member voting (one member, one vote) | ✅ | `initialize_member_tree`, `create_member_proposal`, `cast_vote` (+ `vote_nullifier` PDA), `finalize_member_proposal`; `circuits/member_vote.circom`; **browser prover `frontend/lib/zk-vote.ts`** (+ `frontend/public/zk/member_vote.wasm`/`.zkey`); Node prover `app/voting/prove.ts` | Semaphore-style, per-proposal nullifier. **Corrected:** quorum/pass are **configurable** (`CircleConfig.vote_quorum_*`/`vote_pass_*`, see **F37**) and only *default* to ⅓ + simple majority. Identity is `commitment = Poseidon(secret)`, secret kept on-device; memberships minted before this change can't prove — rejoin. ⚠ `zk-vote.ts:158` sets `payer: wallet.publicKey`, so the prover is named on chain — the "via relayer" anonymity in `docs/member-voting.md` is **not** implemented (see **F55**). |
+| F7 | — | 7-seat Council (4-of-7) | ✅ | `propose`, `approve`, `execute_proposal`, `cancel_proposal`; `council.rs:28-45` (`Council`), `:111-137` (`Proposal`, approvals bitmask) | 3 servants + 4 elders. **Corrected:** `appoint_seat` **does not exist** — seats are set at `initialize_circle` and changed via `ProposalAction::RotateSeat` or `install_elected_seat`. |
+| F8 | — | Forkable federated Circles | ✅ | `initialize_circle`; `Circle.parent` (`state.rs:11-16`) | World Service authority over local Circles; federation ops in `propose_child_*`. |
+| F28 | — | **Member election of the 7 Council seats** | ✅ | `link_seat_election` (`election_hash` = H("AHA-elect"‖seat_index‖candidate) bound to the member proposal's `description_hash`; `SeatElection` PDA `["election", proposal]`), `install_elected_seat` (requires finalized+passed, one-shot, seat-uniqueness); ballots reuse `create_member_proposal`/`cast_vote`/`finalize_member_proposal`; browser prover `frontend/lib/zk-vote.ts`; `tests/f28-election.ts` | Group-conscience election of each seat holder. **Corrected:** the earlier row named `ElectionProposal`, `cast_election_ballot` and `finalize_election` — **none exist**; and it credited `app/voting/prove.ts` (the Node/CLI prover) as the browser prover. **Open:** term length / recall; interaction with `RotateSeat`; mainnet multi-party ceremony (**F44**). |
+| F37 | — | Per-Circle **quorum / pass-threshold config** for member voting | ✅ | `set_circle_config`; `finalize_member_proposal` reads `CircleConfig.vote_quorum_*` / `vote_pass_*` (num/den) | Defaults ⅓ quorum + simple majority when unset. Config is seed-bound to the proposal's Circle (`init_if_needed`) so it can't be swapped or omitted. Admin "Circle policy". Rider on **F36**. *Environment claim:* devnet upgrade `5jvJ9EEX…`. |
+| F39 | E2 | **MACI / coercion-resistant member voting** | 🟡 | `open_maci_round` (any seat, registers the coordinator key), `publish_maci_message` (append-only sealed commands, NaCl-boxed, fixed 176 B, ephemeral key); `MaciRound` `["maci", proposal]`, `MaciMessage` `["macimsg", round, index]`; `frontend/lib/maci.ts`, `docs/maci.md` | **Submission layer only.** There is no coordinator service, no `process_messages`/`tally` circuits and no `submit_maci_tally` — *a round collects sealed commands and produces no verified result*, while `MaciRound.tally_hash` (`state.rs:457`) sits unused and the doc-comment describes the full receipt-free flow in the present tense (Sentinel R8). Largest open engineering item in the registry. *Environment claim:* devnet upgrade `5q361Qy2…`. |
 
 ### Resilience & recovery
-| # | Feature | Status | Instructions / files | Notes |
-|---|---------|--------|----------------------|-------|
-| F9 | Key recovery — migrate all artifacts (4-of-7) | ✅ | `propose`/`execute_proposal` (MigrateWallet / **SetAuthority**), `recover_membership` | seats rebound atomically; memberships per-account; **authority** rotatable (time-locked) |
-| F10 | Migration time-lock + any-seat contest | ✅ | `execute_proposal`, `cancel_proposal`, `Council.recovery_timelock` | anti-collusion |
-| F11 | Member co-signature & self-recovery (≤2 guardians, 1-of-2) | ✅ | `set_recovery`, `member_migrate`, `recover_membership` | `docs/resilience.md` |
+| # | Epic | Feature | Status | Instructions / files | Notes |
+|---|------|---------|--------|----------------------|-------|
+| F9 | E8 | Key recovery — migrate all artifacts (4-of-7) | ✅ | `propose`/`execute_proposal` (`ProposalAction::MigrateWallet`, `council.rs:96`), `recover_membership` (rebinds `Membership.owner`, refuses `old_wallet == default`) | seats rebound atomically; memberships per-account. **Corrected:** `ProposalAction::SetAuthority` **does not exist** — the enum is exactly {RotateSeat, MigrateWallet, WithdrawTreasury, SetTreasuryWallet} (`council.rs:92-104`) — and "authority rotatable" was false by construction. **No admin key exists by design:** MigrateWallet rebinds wallets, RotateSeat / `install_elected_seat` rebind seats. |
+| F10 | E8 | Migration time-lock + any-seat contest | ✅ | `Council.recovery_timelock`, `Proposal.eligible_at`, `execute_proposal` (armed/eligible check), `cancel_proposal`; `tests/resilience.ts` | anti-collusion. `arm_if_ready` (`council.rs:148-162`) now applies the uniform contest window to **every** action including RotateSeat — this is what closed the old "purge before migration" item. |
+| F11 | E8 | Member co-signature & self-recovery (≤2 guardians, 1-of-2) | ✅ | `set_recovery`, `member_migrate`, `recover_membership` (`require_cosign` → `is_member_key`); `Membership.recovery_keys` (`state.rs:69-88`); `docs/resilience.md`; `tests/cosign.ts` | Guardians are arbitrary member-chosen wallets and act **1-of-2**. E8 wants recovery through the member's *two sponsors* — that needs E1 to exist first and blinded keys, not raw pubkeys (see **F66**). |
 
 ### Shamanic lineage & credentials
-| # | Feature | Status | Instructions / files | Notes |
-|---|---------|--------|----------------------|-------|
-| F12 | ZK lineage level grants (issuer-anonymous) | ✅ | `initialize_lineage`, `grant_level`; `circuits/lineage_grant.circom`; `merkle.rs` | append-only Poseidon tree; `docs/zk-lineage.md` |
-| F13 | Acknowledgment credentials (PPP·CCC·XXX·DDD) | ✅ | `issue_acknowledgment`; `Acknowledgment` | stores only root R; reuses lineage VK for attestation |
-| F14 | ZK selective field disclosure | ✅ | `circuits/ack_disclose.circom`; `app/acknowledgment/prove.ts` | reveal/hide each field |
-| F15 | ZK predicate proofs (date / course-in-catalog / teacher-in-set) | ✅ | `ack_disclose.circom`; `prove.ts buildSet` | `docs/acknowledgments.md` |
-| F16 | On-chain predicate-gated access | ✅ | `verify_disclosure`, `AccessPass`, `verifying_key_ack.rs` | mints an AccessPass |
+| # | Epic | Feature | Status | Instructions / files | Notes |
+|---|------|---------|--------|----------------------|-------|
+| F12 | E2 | ZK lineage level grants (issuer-anonymous) | ✅ ⚠ | `initialize_lineage`, `grant_level` (`VERIFYING_KEY`); `circuits/lineage_grant.circom`; `merkle.rs`; `app/lineage/prove.ts`, `poseidonTree.ts`; `docs/zk-lineage.md` | append-only Poseidon tree. ⚠ It feeds `Membership.level` (`state.rs:64`), a **public ordinal rank** rendered beside member identities — the strongest contradiction of E4's "no ratings, no verification tiers, nothing comparative" (Sentinel R7). |
+| F13 | E2 | Acknowledgment credentials (PPP·CCC·XXX·DDD) | ✅ | `issue_acknowledgment` (reuses the lineage `VERIFYING_KEY`; public inputs [nullifier, lineage.root, attest_level, ack_root]); `Acknowledgment` (`state.rs:162-174`) | stores only the root R. |
+| F14 | E5 | ZK selective field disclosure | ✅ | `circuits/ack_disclose.circom`; `app/acknowledgment/prove.ts` (reveal/hide flags); `verify_disclosure` | reveal/hide each field. The read-path analogue E5 needs must verify **off-chain** — see **F60**. |
+| F15 | E5 | ZK predicate proofs (date / course-in-catalog / teacher-in-set) | ✅ | `ack_disclose.circom`; `app/acknowledgment/prove.ts` (`buildSet`, catalog-membership and teacher-set paths); `docs/acknowledgments.md` | — |
+| F16 | E5 | On-chain predicate-gated access | ✅ | `verify_disclosure` (recomputed `requirements_hash` == stored, `VERIFYING_KEY_ACK`), `AccessPass` PDA `["access", gate, requirements_hash, ack]`; `verifying_key_ack.rs` | mints an AccessPass. ⚠ Reusing this pattern for *profile* visibility would publish "viewer V unlocked member M's element" — the interest graph E5 forbids. |
 
 ### Treasury
-| # | Feature | Status | Instructions / files | Notes |
-|---|---------|--------|----------------------|-------|
-| F17 | Self-supporting donation treasury | ✅ | `donate`, `donate_token` (any SPL/Token-2022), `withdraw_treasury` (treasury PDA) | `app/treasury/fund.ts` (`fundFoundation`); `docs/treasury.md` |
-| F29 | **Change the Circle treasury wallet (4-of-7) — must be a multisig** | ✅ | `ProposalAction::SetTreasuryWallet`, `propose`/`execute_proposal`/`set_treasury_wallet`, `TreasuryConfig` PDA; admin console "Council votes" + "Apply"; `frontend/lib/multisig.ts`, `scripts/create-multisig.js`, `docs/multisig.md` | Council **4-of-7** designates/rotates the treasury steward wallet. New time-locked, contestable proposal action (same machinery as `WithdrawTreasury`): `execute_proposal` authorizes, `set_treasury_wallet` writes the wallet into a separate `TreasuryConfig` PDA (`["treasurycfg", circle]` — migration-safe, no `Circle` layout change). **The steward wallet MUST be a multisig** (Tradition 7 — money held in common, never by one key): `set_treasury_wallet` re-checks on-chain that the passed account is an initialized SPL Token / Token-2022 `Multisig` with `m ≥ 2` (`TreasuryNotMultisig` otherwise); the admin console validates the same before proposing, and ships a create-a-multisig helper. Deployed to devnet (upgrade `cDX8sWiJ…`); helper verified against a real 2-of-3 multisig (`AHvaueFp…`). |
-| F35 | **Gas faucet — first gas for the neophyte** (Trust Platform Epic 0) | ✅ (program + frontend + `tests/faucet.ts`; adversarially reviewed, 3 findings fixed) | `init_faucet` (any seat), `set_faucet_amount` (Treasurer, ≤ on-chain cap), `activate_faucet` (parrain one-shot per identity), `refill_faucet` (passed member vote, one-shot); `instructions/{init_faucet,set_faucet_amount,activate_faucet,refill_faucet}.rs`, `FaucetJar` in `state.rs`; `docs/faucet.md` | Per-Circle jar PDA (`["faucet", circle]`, lamports on the account). Parrain attestation = the existing **WingPeer** bond; **one grant per membership commitment** (i.e. per member per Circle) via nullifier `["faucetnull", circle, commitment]` — fellowship-wide dedup would need a linkable commitment, so it is left to proof-of-personhood (F5). Uniform grant = `jar.grant_lamports` (default 1_500_000, cap `FAUCET_MAX_GRANT_LAMPORTS = 2_000_000` enforced by the program); uniformity is enforced — once a jar has paid, a retune pauses grants for `FAUCET_AMOUNT_COOLDOWN` (24h) so an amount cannot be aimed at one neophyte. Refill is capped on-chain at `FAUCET_MAX_REFILL_GRANTS` (100) grants' worth, so one ballot cannot move the treasury. Refill only via a passed F6 member vote whose `description_hash = sha256("AHA-faucet-refill" ‖ circle ‖ amount_le)`, then permissionless one-shot execution. Pilot limits (see `docs/faucet.md`): activation tx links parrain↔neophyte wallets (anonymous form = Epic 2 + Epic 10 relayer decision); treasurer one-time-code ledger not built. |
+| # | Epic | Feature | Status | Instructions / files | Notes |
+|---|------|---------|--------|----------------------|-------|
+| F17 | E0 | Self-supporting donation treasury | ✅ | `donate`, `donate_token` (any SPL/Token-2022), `withdraw_treasury` (treasury PDA `["treasury", circle]` signs); `app/treasury/fund.ts`; `docs/treasury.md` | `withdraw_treasury` also enforces the **F38** recipient allowlist and a `drained` replay guard (`council.rs:121-123`). ⬜ It has **no rent-exempt floor** — no `rent`/`minimum_balance` check anywhere in the file, so a 4-of-7 vote can drain the PDA to 0 (tracked under *Open decisions* → mainnet gates). |
+| F36 | — | **`CircleConfig` policy PDA + donation-on-renew** (Tradition 7) | ✅ | `set_circle_config` (any seat); `CircleConfig` PDA `["config", circle]`; `renew_membership` CPI-transfers `renew_donation_lamports` into the treasury as the act of renewal (0 = free) | Was shipped-but-unnumbered free text. Parent row for **F37** (vote thresholds) and **F38** (treasury allowlist); read by `withdraw_treasury.rs:73-80` and `finalize_member_proposal`. Admin console → "Self-support (Tradition 7)". *Environment claim:* devnet upgrade `2sZmGW35…`. |
+| F38 | — | Treasury **mission/spend allowlist** (Traditions 5/6) | ✅ | `set_treasury_allow` (any seat); `TreasuryAllow` entry required by `withdraw_treasury.rs:36-48` when `CircleConfig.treasury_allowlist` is on; admin "Circle policy" allowlist manager | Was shipped-but-unnumbered free text. Config is seed-bound + `init_if_needed` in the withdraw path so it cannot be omitted to bypass. *Environment claim:* devnet upgrade `5Q6yfmMv…`, allowlist off/on-unlisted/on-listed verified. |
+| F29 | E10 | **Change the Circle treasury wallet (4-of-7) — must be a multisig** | ✅ | `ProposalAction::SetTreasuryWallet`, `propose`/`execute_proposal`/`set_treasury_wallet` (unpacks SPL/Token-2022 `Multisig`, requires `is_initialized && m ≥ 2 && n ≥ m`, else `TreasuryNotMultisig`), `TreasuryConfig` PDA `["treasurycfg", circle]`; `frontend/lib/multisig.ts`, `scripts/create-multisig.js`, `docs/multisig.md` | Tradition 7 — money held in common, never by one key. Same time-locked, contestable machinery as `WithdrawTreasury`. *Environment claims:* devnet upgrade `cDX8sWiJ…`, 2-of-3 multisig `AHvaueFp…`. |
+| F35 | E0 | **Gas faucet — first gas for the neophyte** | ✅ ⚠ | `init_faucet` (any seat), `set_faucet_amount` (Treasurer, ≤ on-chain cap), `activate_faucet` (parrain one-shot per identity), `refill_faucet` (passed member vote, one-shot); `FaucetJar` (`state.rs:623-639`); `docs/faucet.md`; `tests/faucet.ts` (15 cases); `frontend/lib/faucet.ts` | Per-Circle jar PDA `["faucet", circle]`. Parrain attestation = the **F27** WingPeer bond; **one grant per membership commitment per Circle** via nullifier `["faucetnull", circle, commitment]` (E0's story says "one grant, one time, ever" — fellowship-wide dedup would need a linkable commitment, so it is delegated to **F5**). Uniform grant `jar.grant_lamports`, cap `FAUCET_MAX_GRANT_LAMPORTS = 2_000_000` (`state.rs:643`); a retune pauses grants for `FAUCET_AMOUNT_COOLDOWN` 24h so an amount cannot be aimed at one neophyte; refill capped at `FAUCET_MAX_REFILL_GRANTS = 100` grants' worth. Refill binds to an F6 vote whose `description_hash = hashv("AHA-faucet-refill" ‖ circle ‖ amount_le)` (solana `hashv` — sha256). ⚠ **Pilot limits:** the activation tx publicly links parrain↔neophyte and rests on the public WingPeer PDA (Sentinel R2); `activate_faucet` rejects `owner == default`, so first gas is only available to members who have **publicly bound a wallet**; an open+no-personhood Circle can farm its own jar (`docs/faucet.md:113`). Remaining E0 work: **F49** (F47/F48 shipped same day, pilot form). ⬜ *No devnet upgrade signature recorded — every other shipped row cites one.* |
 
 ### Directory & frontend
-| # | Feature | Status | Instructions / files | Notes |
-|---|---------|--------|----------------------|-------|
-| F18 | Public Circle directory (geo + IPFS doc CIDs) | ✅ | `upsert_circle_profile`, `CircleProfile`; `frontend/` (Find a Circle / Reflections / Documents) | "Find a Circle Near You" map; one `getProgramAccounts` read |
-| F19 | Update circle locations (in-place, no history) | ✅ | `update_circle_location` | a relocating Circle changes only its coordinates/city/address — name & doc CIDs untouched; **overwrite only, no location history kept** |
-| F20 | Deterministic Jazzicon identicons | ✅ | `frontend/lib/jazzicon.ts`; `tests/jazzicon.ts` | self-contained SVG + SHA-256; used as the avatar everywhere. **Brand rule (regression-guarded):** addresses starting with `AHA` render entirely in the **purple/violet** family — background *and* every shape (hue 255–305), never orange. Earlier fix only recolored the background; shapes still hashed orange, so the coin read orange. Now the whole palette is constrained for `AHA*`, case-insensitive, and `tests/jazzicon.ts` asserts all stops are purple (R>G ∧ B>G) for `AHA*` and that non-AHA stays full-spectrum — **do not remove that test.** |
-| F21 | Delist a Circle from the directory | ✅ | `close_circle_profile` | closes the `CircleProfile` (rent → seat); Circle/Council/members untouched; `scripts/close-circle.js` |
-| F22 | Wallet connect + "My Circle" member console | ✅ | `frontend/app/me/`, `lib/member.ts`, `components/WalletProviders.tsx` | connect a Wallet-Standard wallet → see your memberships (memcmp on `owner`), join a home circle, 7th-Tradition `donate` |
-| F23 | "Create a Circle" self-serve UI | ✅ | `initialize_circle`, `initialize_member_tree`; `frontend/app/create/`, `lib/createCircle.ts` | guided wizard: name (≤32 B), parent (foundation default), 7 distinct seats (creator auto-seated so they can sign the member-tree init, depth pinned to circuit), advanced term/time-lock; shows the assigned `@aha` address on success |
-| F24 | Circle administration console (seat-gated) | ✅ | `propose`/`approve`/`execute_proposal`/`cancel_proposal`, `create_member_proposal`/`finalize_member_proposal`, `issue_membership`/`renew_membership`/`revoke_membership`, `set_open_membership`, `set_treasury_wallet`; `frontend/app/admin/CircleAdmin.tsx` | now embedded at the bottom of **My Circle** (`/me`) with an "Administration of [combo]" picker (the standalone menu was removed). Role, Council + group-conscience votes (CRUD), membership add/renew/**delete** (`revoke_membership`, Scribe-Secretary), and the membership/treasury-wallet policy. Casting member ballots is the ZK flow (F6). |
-| F34 | **Foundation-led federation governance** (rotate seats / delete a Circle, 4-of-7) | ✅ | `propose/approve/execute_child_rotation`, `propose/approve/execute_child_close`, `ChildSeatVote`/`ChildCloseVote`; `frontend/app/foundation/` | the foundation Council (4-of-7, 1–90-day validity window) can rotate any federation Circle's 7 seats or delete a Circle (closes it + delists its profile). Federation = Circles sharing the foundation's root `parent`. Deployed. |
+| # | Epic | Feature | Status | Instructions / files | Notes |
+|---|------|---------|--------|----------------------|-------|
+| F18 | — | Public Circle directory (geo + IPFS doc CIDs) | ✅ | `upsert_circle_profile`, `CircleProfile` (`state.rs:263-293`); `frontend/app/page.tsx`, `/documents`, `/reflections`, `components/CircleMap.tsx`; `tests/profile.ts` | "Find a Circle Near You" map; one `getProgramAccounts` read. See **F71** for the third-party geolocation calls on this page. |
+| F19 | — | Update circle locations (in-place, no history) | ✅ | `update_circle_location` (any seat; validates coordinate ranges + field lengths) | writes only lat/lon/city/address — name & doc CIDs untouched; **overwrite only, no location history kept**. |
+| F26 | E4 | Structured **meeting schedule** + calendar on a Circle *(formerly F18b)* | ✅ | `set_meetings`, `CircleMeetings` (`state.rs:487-496`, JSON blob, `MAX_DATA` 900); `frontend/lib/meetings.ts`, `/create`, home Circle detail | recurring patterns ("2nd Wednesday monthly 18:00") + one-off sessions, expanded into an upcoming-meetings calendar visible to everyone. **Renumbered `F18b` → `F26`** and moved here beside F18/F19 — it is Circle metadata, not a rider on the directory (see the numbering footnote). |
+| F41 | — | Circle country / continent grouping | ✅ | `set_circle_country` (seat-gated), `CircleCountry` PDA `["country", circle]`; `frontend/lib/country.ts` | Was a shipped instruction with **no feature row anywhere** — the only IDL entry point that mapped to nothing. Powers continent→country grouping in the foundation directory. |
+| F20 | E6 | Deterministic Jazzicon identicons | ✅ ⚠ | `frontend/lib/jazzicon.ts`, `components/Identicon.tsx`; `tests/jazzicon.ts` | self-contained SVG + SHA-256. **Brand rule (regression-guarded):** addresses starting with `AHA` render entirely in the purple/violet family — background *and* every shape (hue 255–305), never orange; `tests/jazzicon.ts:48-74` asserts all stops are purple for `AHA*` and that non-AHA keeps the full hue wheel — **do not remove that test.** ⚠ Currently "the avatar everywhere", including to unauthenticated visitors — E5/E6 demote it to a key-visualisation fallback kept **off** member-facing pages. |
+| F21 | — | Delist a Circle from the directory | ✅ | `close_circle_profile` (`require_any_seat`, rent → seat); `scripts/close-circle.js` | Circle/Council/members untouched. |
+| F22 | E9 | Wallet connect + "My Circle" member console | ✅ | `frontend/app/me/`, `lib/member.ts` (memcmp on `OWNER_OFFSET`), `components/WalletProviders.tsx`, `WalletButton.tsx` | connect a Wallet-Standard wallet → see your memberships, join a home circle, 7th-Tradition `donate`. |
+| F23 | E9 | "Create a Circle" self-serve UI | ✅ | `initialize_circle`, `initialize_member_tree`; `frontend/app/create/`, `lib/createCircle.ts` | guided wizard: name (≤32 B), parent (foundation default), 7 distinct seats (creator auto-seated so they can sign the member-tree init, depth pinned to the circuit), advanced term/time-lock; shows the assigned `@aha` address on success. Its two hardcoded wallet links are what **F67** replaces. |
+| F24 | — | Circle administration console (seat-gated) | ✅ | `propose`/`approve`/`execute_proposal`/`cancel_proposal`, `create_member_proposal`/`finalize_member_proposal`, `issue_membership`/`renew_membership`/`revoke_membership`, `set_open_membership`, `set_treasury_wallet`; `frontend/app/admin/CircleAdmin.tsx` embedded in `/me` | the standalone menu was removed — `/admin/page.tsx` is now only a redirect. Role, Council + group-conscience votes (CRUD), membership add/renew/**delete**, membership & treasury-wallet policy. Casting member ballots is the ZK flow (F6). *Housekeeping:* `frontend/components/AdminNavLink.tsx` is now orphaned (imported by neither `Nav.tsx` nor `layout.tsx`) — dead code, delete it. |
+| F34 | E10 | **Foundation-led federation governance** (rotate seats / delete a Circle, 4-of-7) | ✅ | `propose/approve/execute_child_rotation`, `propose/approve/execute_child_close` (`validity_secs`, 1–90-day window), `ChildSeatVote`/`ChildCloseVote`; `frontend/app/foundation/`, `lib/foundation.ts` | the foundation Council can rotate any federation Circle's 7 seats or delete a Circle (closes it + delists its profile). Federation = Circles sharing the foundation's root `parent`. This already makes some cross-Circle votes **binding** — see the sovereignty ADR under *Open decisions*. |
+| F71 | E5 | Remove third-party IP-geolocation from the public site | ⬜ | `frontend/app/page.tsx:74` (ipwho.is, ipapi.co), `frontend/lib/geo.ts:18` (nominatim.openstreetmap.org) | Sentinel **R6**: the client hands a visitor's IP to two geolocation APIs and precise coordinates to Nominatim. Fixable without redesign — self-host, proxy, or drop the fallback and add consent copy. |
 
 ### Community & content
-| # | Feature | Status | Instructions / files | Notes |
-|---|---------|--------|----------------------|-------|
-| F30 | **Member posts / bulletins** (text + picture, time-boxed, seat-removable) | ✅ | `create_post` / `delete_post`, `Post` account; `frontend/app/board/`, `lib/posts.ts` | Any **member** (a wallet that owns a live membership in the Circle) publishes a post — text and/or an IPFS image (CID on-chain) — valid `start_date`→`end_date` (shown only in that window). **Any of the 7 Council seats deletes any post anytime** (rent refunded to the acting seat). Member-auth = passing a membership whose `owner == author` (so fully-anonymous, owner-less memberships can't post — noted limitation). UI: the **Board** page (compose for members, delete for seats). Deployed to devnet; verified: post created, non-member rejected, seat-delete succeeds. |
-
-| F32 | **Encrypted 1:1 private messaging** | ✅ | `register_messaging_key`/`send_message`/`delete_message`, `MessagingKey`/`Message`; `frontend/app/inbox/`, `lib/messaging.ts` | **Inbox** menu with a red unread badge. End-to-end encrypted (tweetnacl box; x25519 keypair derived from a deterministic wallet signature, public half published on-chain). Send to any address that enabled messaging; decrypt-on-select (one signature per session); optional expiry (clients hide, anyone may close). Caveat: ciphertext is private but sender/recipient **metadata is public on-chain**. Deployed. |
-| F32b | **Seat-holders must have messaging enabled** | ✅ (UX-enforced) | `frontend/components/SeatMessagingGate.tsx` (mounted in `layout.tsx`) | Policy: any wallet holding one of the 7 seats in **any** Circle must have messaging enabled, so servants are always reachable. **Cannot be force-enabled cryptographically** — a wallet's messaging key derives from *its own* signature (`deriveBoxKeypair`), so only the holder can publish it. Enforcement is therefore a **persistent, non-dismissable banner**: when a connected seat-holder lacks a published `MessagingKey`, the app shows "You hold a Council seat — enable messaging" with a one-click enable (one signature). ⬜ optional hardening: also require a `MessagingKey` PDA to exist before `appoint_seat`/`execute` RotateSeat installs a holder (on-chain), with a chicken-and-egg caveat (the appointee must enable first). |
-| F18b | Structured **meeting schedule** + calendar on a Circle | ✅ | `set_meetings`, `CircleMeetings`; `lib/meetings.ts`, `/create`, home Circle detail | recurring patterns (e.g. "2nd Wednesday monthly 18:00") + one-off sessions in a per-Circle on-chain account; the home Circle detail expands them into an upcoming-meetings calendar visible to everyone. |
-| F33 | **User profile: avatar + timezone** | ✅ | `lib/profile.ts`; `/me` ProfileCard | per-device (localStorage) avatar (overrides the Jazzicon on My Circle) + timezone (localises Inbox timestamps). Cross-device/on-chain publishing remains a future option. |
+| # | Epic | Feature | Status | Instructions / files | Notes |
+|---|------|---------|--------|----------------------|-------|
+| F30 | E5 | **Member posts / bulletins** (text + picture, time-boxed, seat-removable) | ✅ ⚠ | `create_post` / `delete_post`, `Post`; `frontend/app/board/`, `lib/posts.ts` | Any member publishes text and/or an IPFS image, valid `start_date`→`end_date`. Any of the 7 seats deletes any post anytime (rent → acting seat). ⚠ `create_post.rs:27` requires `membership.owner == author`, so **publishing is a permanent public proof that a named wallet is a member** (Sentinel R5) and owner-less anonymous memberships cannot post at all — a rank-by-disclosure asymmetry. ⚠ `/board` renders posts and author identicons to **unconnected visitors** — posting is gated, reading is not (E5). |
+| F32 | E7 | **Encrypted 1:1 private messaging** | ✅ ⚠ | `register_messaging_key`/`send_message`/`delete_message`, `MessagingKey`/`Message` (`state.rs:545-559`; recipient, `eph_pubkey`, nonce, fixed 1040-byte ciphertext); `frontend/app/inbox/`, `lib/messaging.ts` | Inbox with unread badge. End-to-end encrypted (tweetnacl box; x25519 keypair from a deterministic wallet signature, public half on-chain); decrypt-on-select; optional expiry. **Content confidentiality is sound.** ⚠ Against **E7** this is the architecture the epic rules out, not a partial version of it: messages live **on chain** with a cleartext `recipient`, a public timestamp and a public fee-payer (`messaging.ts:191` `payer: wallet.publicKey`); `delete_message` closes the account but ciphertext + metadata persist in ledger history; the static key gives **no forward secrecy**; and the `MessagingKey` PDA publicly marks every messaging-enabled wallet as fellowship-adjacent (Sentinel R4). Sunset plan = **F63**. |
+| F32b | E7 | **Seat-holders must have messaging enabled** *(rider on F32)* | ✅ (UX-enforced) | `frontend/components/SeatMessagingGate.tsx`, mounted in `frontend/app/layout.tsx` | Policy: any wallet holding one of the 7 seats in **any** Circle must have messaging enabled, so servants are always reachable. **Cannot be force-enabled cryptographically** — the key derives from the holder's *own* signature — so enforcement is a persistent, non-dismissable banner with a one-click enable. ⬜ optional on-chain hardening: require a `MessagingKey` PDA before a holder is installed — **corrected target**: `execute_proposal`'s RotateSeat branch (`execute_proposal.rs:31-40`) and `install_elected_seat` (the old note named `appoint_seat`, which does not exist), with a chicken-and-egg caveat. ⚠ The policy pushes every seat-holder to publish a fellowship-adjacent marker. |
+| F27 | E1 · E3 | **WingPeer (mentor) bond + ProgressToken milestone chips** | ✅ ⚠ | `establish_wing_peer` (set by the mentee) / `end_wing_peer` (either party), `WingPeer` PDA `["wingpeer", circle, mentee]`; `issue_progress_token` (any seat, one per member+milestone), `ProgressToken` PDA `["progress", circle, member, milestone]`; admin "🏅 Award chip", `/me` "Mentorship & progress" | Was shipped-but-unnumbered and is **load-bearing**: F35's parrain attestation is this bond, and three epics map onto it. Both keyed by membership commitment. ⚠ **Two recorded Traditions conflicts:** the WingPeer PDA publishes a commitment→commitment **sponsor edge** (Sentinel R2 — exactly what E2 exists to remove) and `ProgressToken.issuer` (`state.rs:417`) permanently records the **named awarding seat**. ⚠ `ProgressToken.milestone` is **elapsed days** (`state.rs:415`), not the twelve steps — chips are enumerable and members are orderable by chip count (Sentinel R7, escalating). E3's step model is **F57**, not this. *Environment claim:* devnet upgrade `2o8PdaZL…`. |
+| F33 | E6 | **User profile: avatar + timezone** | ✅ | `frontend/lib/profile.ts` (localStorage `aha:profile`), `/me` ProfileCard | per-device avatar (overrides the Jazzicon on My Circle) + IANA timezone (localises Inbox timestamps). Nothing is written on-chain — so "never public by default" holds only **vacuously**: there is no disclosure path at all. E4/E6 need the encrypted profile object of **F60**. The stored avatar is the **resized raw photograph** (see **F69**). |
+| F40 | — | Notifications centre (chain-derived) | ✅ | `frontend/lib/notifications.ts`, `frontend/app/notifications/`, nav 🔔 bell with unread badge | Was shipped-but-unnumbered free text. Derived entirely from chain: Council votes you must cast/execute, open member votes, memberships expiring < 30 days, milestone chips earned. Viewing marks read (per-device). No external dependency; Dialect Cloud / Blinks push remains a future option on the same content model. **F63** must rework it — it is built on the on-chain F32 design. |
 
 ### Off-chain infrastructure
-| # | Feature | Status | Instructions / files | Notes |
-|---|---------|--------|----------------------|-------|
-| F25 | Mandatory per-Circle email on the AHA domain (auto-provisioned at registration) | 🟡 | `frontend/lib/circleEmail.ts`, `frontend/app/api/circle-email/route.ts`; wired into `/create`, `/me`, `/admin`; `indexer/email-indexer.js` | Every Circle gets a **deterministic** `@aha`-domain address (`slug-<pda6>@DOMAIN`) the moment it is created — mandatory, derived, no opt-out. A Node route sends a *provision* email on creation and a *registration* email (with the new member's wallet) on each `issue_membership`. **Send path live** (Mailgun SMTP wired on the deployed host) and **the server-side hook is built**: `indexer/email-indexer.js` polls the program for new `Circle`/`Membership` accounts and POSTs to `/api/circle-email`, covering registrations outside this UI (baseline-safe — never re-sends the back-catalog; verified end-to-end on devnet). The **only** remaining piece for ✅ is mailbox **receive** on the live domain — an MX + Mailgun inbound *Route* (DNS/dashboard task, see `indexer/README.md`), so the derived addresses can accept replies, not just send. |
+| # | Epic | Feature | Status | Instructions / files | Notes |
+|---|------|---------|--------|----------------------|-------|
+| F25 | E9 | Mandatory per-Circle email on the AHA domain (auto-provisioned at registration) | 🟡 ⚠ | `frontend/lib/circleEmail.ts` (deterministic `slug-<pda6>@DOMAIN`), `frontend/app/api/circle-email/route.ts`; wired into `/create`, `/me`, `/admin`; `indexer/email-indexer.js` | Every Circle gets a derived `@aha` address at creation — mandatory, no opt-out. A route sends a *provision* mail on creation and a *registration* mail on each `issue_membership`; `indexer/email-indexer.js` polls for new `Circle`/`Membership` accounts and covers registrations outside this UI (baseline-safe). **Remaining for ✅:** mailbox **receive** — MX + Mailgun inbound Route (DNS task, `indexer/README.md`). *Environment claims (not checkable from the repo):* SMTP live on the deployed host; devnet end-to-end verification. ⚠ **Sentinel R3, half-closed:** abuse limb fixed (10 req/60 s per-IP, on-chain Circle-name match, on-chain membership proof for join) — but the mail body still exports `Member wallet: …` to Mailgun/SMTP logs at the most identity-linking moment in onboarding, `indexer/email-indexer.js:110-115` still feeds it `m.account.owner`, a `kind:"join"` POST with **no** `memberAddress` skips verification entirely, and the rate limit is an in-process Map (per-instance only). |
+
+### Assurance & operations
+| # | Epic | Feature | Status | Instructions / files | Notes |
+|---|------|---------|--------|----------------------|-------|
+| F42 | — | Fuzz / property tests of Council vote accounting and nullifier logic | ⬜ | target: `programs/ayni/src/council.rs:141-146` (approvals bitmask), `:157-162` (`arm_if_ready`); nullifier namespaces `nullifier` / `ack_nullifier` / `vote_nullifier` / `personhood` / `faucetnull` | **Not started, and the program has no Rust-level tests at all** — `#[cfg(test)]`, `proptest`, `quickcheck` return zero hits under `programs/ayni/src`, and there is no fuzz target. Every current test is an integration `.ts`. Numbered so Sentinel can hold coverage against it. |
+| F43 | E2 | ZK end-to-end proof tests for the remaining circuits | ⬜ | target: `grant_level`, `issue_acknowledgment`, `verify_disclosure`, `prove_personhood` | Only `member_vote` has a real-proof e2e path (`tests/vote.ts`, `tests/f28-election.ts`), which validates the Poseidon/circom ↔ `solana-poseidon` match and the snarkjs→groth16-solana byte encodings. The other four circuits have no equivalent — grep across `tests/*.ts` returns nothing. E2 cannot ride on an unverified ZK stack. |
+| F44 | E2 · E10 | Multi-party (phase-2) trusted-setup ceremony | ⬜ | artifacts: ceremony transcript, contributor list, regenerated `verifying_key.rs` / `verifying_key_vote.rs` / `verifying_key_ack.rs`; fix `docs/zk-lineage.md` §6 | All three shipped VKs come from a **single-contributor** ceremony — a trust weakness, not a functional one, and a **mainnet blocker** (`circuits/README.md`). Split out of F28's notes and the ZK-test bullet because it is a distinct, high-stakes deliverable with its own artifacts. |
+| F45 | E10 | Program upgrade authority → multisig / MPC | ⬜ | machinery exists: `frontend/lib/multisig.ts`, `scripts/create-multisig.js` | The program's upgrade authority is still **one person's keypair**. This cannot be enforced on-chain by the program (it is a loader setting), so it is a migration with artifacts, not a code change. Pairs with the stewardship ADR (*Open decisions*). |
+| F46 | — | Sentinel per-feature checklist coverage for the whole registry | ⬜ | `tests/sentinel/checklist.yaml` has `features:` entries for **2 of 41** shipped rows (F35 and F25); everything else is covered only implicitly by layer-level commands. CLAUDE.md requires every shipped feature to gain coverage in the round it ships (WARNING in round *n*, FAIL in *n+1*), so the whole back-catalogue is now overdue — in particular F20's "do not remove that test" brand rule and F32b's seat-messaging policy, which have no entry at all. Also create `tests/sentinel/baselines/` (R12) and commit `baselines/npm-audit.json` (R13) so rounds have a comparison point. |
 
 ---
 
-## Backlog (planned / open)
+### Numbering footnote (2026-08-10)
 
-### Security (see SECURITY.md)
-- ✅ Bound `verify_disclosure` policy to the AccessPass (`requirements_hash`) — S1.
-- ✅ Council can rotate a lost/compromised Circle `authority` (4-of-7 + time-lock + contest) — S2.
-- ✅ Council seat uniqueness (no wallet in two seats) — S3.
-- ✅ Pin tree depth to the circuit depth — S4.
-- ⬜ Operational gates before mainnet: real VKs (fail-closed), `authority` = multisig, genesis key in MPC, rent-exempt treasury.
-  - 🟡 **Treasury steward = multisig** is now *enforced on-chain* (`set_treasury_wallet` requires an SPL/Token-2022 `Multisig`, `m ≥ 2`; helper + `docs/multisig.md`). Still ⬜ for the *program upgrade* `authority` and per-Circle `Council` authority to be a multisig/MPC.
-- ⬜ **Deeper audit pass once the toolchain is up** (needs a compiled build):
-  - ⬜ Real **fuzz / property tests** of Council vote accounting (approvals bitmask, threshold, time-lock/contest, quorum + majority) and nullifier logic (no replay across the `nullifier` / `ack_nullifier` / `vote_nullifier` / `personhood` namespaces).
-  - ⬜ Run **`/security-review`** against the compiled build to catch anything static analysis surfaces.
+Three defects were resolved without renumbering anything that was already
+correct. F-numbers are referenced from commit messages, docs and code comments.
 
-### Build & cryptography
-- ✅ **Builds + no-ZK tests pass** on **Anchor 0.31.1 / Agave 2.3.13**. `anchor build` → `.so` + IDL (`ayni.json`) + types; `anchor test` → **7/7** (membership, co-signature/2-guardian, self-recovery, Council 4-of-7, time-lock, contest). Migrated 0.30.1→0.31 (the 0.30.1 IDL builder is incompatible with 2025+ Rust); poseidon now from the `solana-poseidon` crate (moved out of solana-program in 2.x); groth16-solana 0.2.0 (same API).
-- First real compile fixed **4 bugs**: 2 borrow-checker (disjoint borrow through `Account` Deref) + 2 BPF stack-overflow (`Box` the large accounts in `GrantLevel`/`IssueAcknowledgment`). Cargo.lock pins keep edition2024/MSRV crates off the platform-tools cargo (rust 1.79).
-- 🟡 **ZK end-to-end proof test exists** (`tests/vote.ts`): builds a member commitment `Poseidon(secret)`, generates a real proof via `app/voting/prove.ts` (+ snarkjs), casts it through `cast_vote`, asserts the on-chain verifier accepts it, and rejects a double-vote — validating the Poseidon/circom ↔ solana-poseidon match and the snarkjs→groth16-solana byte encodings. (Not re-run in the WSL dev env this session — local `anchor test` validator startup is slow; the deployed devnet program already verifies the real VKs.) Still 🟡 only for the **other** circuits (`grant_level` / `issue_acknowledgment` / `verify_disclosure` / `prove_personhood`) lacking an equivalent e2e test, and mainnet's multi-party ceremony.
+- **`F18b` → `F26`.** The number 18 was claimed by two *unrelated* features:
+  the public Circle directory (`upsert_circle_profile`/`CircleProfile`) and the
+  meeting schedule (`set_meetings`/`CircleMeetings`), in two different sections —
+  so the `b` was not a rider marker, it was a second feature squatting on 18.
+  **F18 keeps the number** (original, matches its section); the meeting schedule
+  takes **F26**, a free number, and moves into *Directory & frontend*. Safe:
+  `git log --all | grep F18b` returns nothing and no code references it; the only
+  two references were `docs/shipped.md:121` and
+  `backlog/AHA_Trust_Platform_GapAnalysis.md:100`, updated in the same commit.
+  The alias *"formerly F18b"* stays on the row for one release.
+- **`F32b` stays `F32b`.** Unlike F18b it is a genuine policy rider on F32 — it
+  exists only because messaging exists — **and it is referenced from commit
+  `a46f0ef`** ("…require seat-holders to enable messaging (F32b)"), so
+  renumbering would break a permanent reference. Legitimised instead by the
+  legend entry `Fn b` = rider/addendum, never an independent feature. F32 and
+  F32b are distinct identifiers and both are correct.
+- **`F26` / `F27` were never issued before 2026-08-10** — verified genuinely
+  unused (zero hits across `*.md`, `*.rs`, `*.ts`, `*.tsx`, and no commit
+  reference); no descoped feature, no orphaned code. Assigned on that date:
+  **F26** = meeting schedule (promoted out of F18b), **F27** = WingPeer bond +
+  ProgressToken chips (shipped since 2026-06 with no number at all). History was
+  not rewritten; a hole was filled.
+- **Registry↔code corrections** made in place, with no number changes: F4
+  ("authority-gated" → Secretary-seat-gated), F7 (dropped the non-existent
+  `appoint_seat`), F9 (dropped the non-existent `ProposalAction::SetAuthority`
+  and the false "authority rotatable" note), F28 (dropped the non-existent
+  `ElectionProposal` / `cast_election_ballot` / `finalize_election`, and
+  re-credited the browser prover to `frontend/lib/zk-vote.ts`), F32b (retargeted
+  the hardening note off `appoint_seat`), F6 (quorum is configurable, not fixed).
 
-### Feature completions
-- ✅ **Membership revocation** — `revoke_membership` (Scribe-Secretary) closes the membership account; wired into the admin "Delete". (No separate *suspend* toggle; and the commitment leaf remains in the append-only member tree until rebuilt — noted in-UI.)
-- ✅ **"Create a Circle" wizard** (F23) — `initialize_circle` + `initialize_member_tree` behind a guided web flow (seat picker, foundation as parent, depth = circuit depth).
-- 🟡 **Per-Circle email provisioning** (F25) — address derivation + provision/registration send path done (`/api/circle-email`); SMTP live (Mailgun) on the deployed host; server-side send hook **built** (`indexer/email-indexer.js`, baseline-safe, verified on devnet). Only mailbox **receive** (MX + Mailgun inbound route) remains — a DNS task, see `indexer/README.md`.
-- ✅ **Solana multisig: docs + helper + treasury enforcement** — `docs/multisig.md` (and a docs.html card) explain SPL Token m-of-n multisigs and how to make one (`spl-token create-multisig`, `scripts/create-multisig.js`, or the in-browser `lib/multisig.ts` `createMultisigWithWallet`). `lib/multisig.ts` also exposes `isMultisig`. The program now **requires** the treasury steward wallet to be a multisig (see F29).
-- ✅ Token-2022 **NonTransferable mint creation** as a program instruction (`create_membership_mint`) — finishes F3. Deployed + verified on devnet.
-- ✅ Enforce **donation-on-renew** — `renew_membership` now CPI-transfers the
-  Circle's `CircleConfig.renew_donation_lamports` into the treasury PDA as the act
-  of renewal (Tradition 7); 0 = free. New per-Circle **`CircleConfig`** sibling
-  PDA (`["config", circle]`, no `Circle` migration) + `set_circle_config` (any
-  seat) holds the renew fee plus reserved fields for member-vote quorum/pass and
-  the treasury allowlist (wired in following waves). Admin console → "Self-support
-  (Tradition 7)". Deployed (upgrade `2sZmGW35…`); verified set + renew on devnet.
-- 🟡 **MACI / coercion-resistant** member voting — **submission layer shipped**:
-  `MaciRound` (`["maci", proposal]`) + `open_maci_round` (any seat, registers the
-  coordinator key) + `MaciMessage` (`["macimsg", round, index]`) + `publish_maci_message`
-  (append-only sealed commands — votes or key-changes, NaCl-boxed to the
-  coordinator, fixed 176 B, ephemeral key so the chain reveals no choice). Client:
-  `frontend/lib/maci.ts`. Deployed (upgrade `5q361Qy2…`); verified on devnet
-  (open round + publish, message_count increments). **Remaining (the large part,
-  see `docs/maci.md`):** coordinator service + `process_messages`/`tally` ZK
-  circuits + `submit_maci_tally` on-chain verification + MPC coordinator key.
-  Until tally ships, a round collects sealed commands but produces no verified
-  result.
-- ✅ Per-Circle **quorum/threshold config** for member voting — `finalize_member_proposal`
-  reads `CircleConfig.vote_quorum_*` / `vote_pass_*` (num/den), defaulting to ⅓
-  quorum + simple majority when unset; the config is seed-bound to the proposal's
-  Circle (init_if_needed) so it can't be swapped/omitted. Admin "Circle policy"
-  sets quorum % and pass % . Deployed (upgrade `5jvJ9EEX…`).
-- ✅ **WingPeer** (mentor) relationship + **progress-token** schema — `WingPeer`
-  PDA (`["wingpeer", circle, mentee]`) set by the mentee (`establish_wing_peer`,
-  controls their membership) / ended by either party (`end_wing_peer`);
-  `ProgressToken` milestone "chip" PDA (`["progress", circle, member, milestone]`)
-  awarded by any seat (`issue_progress_token`, one per member+milestone). Both
-  keyed by membership commitment, so they stay as anonymous as the memberships.
-  UI: admin Members "🏅 Award chip"; /me "Mentorship & progress" (set/end your
-  WingPeer by wallet, see your chips). Deployed (upgrade `2o8PdaZL…`); verified
-  e2e (establish/award/duplicate-rejected/end).
-- ✅ Treasury **mission/spend allowlist** (Traditions 5/6) — when
-  `CircleConfig.treasury_allowlist` is on, `withdraw_treasury` additionally
-  requires the recipient to hold a `TreasuryAllow` entry (`allowed = true`) on top
-  of the 4-of-7 vote. New `set_treasury_allow` (any seat) + admin "Circle policy"
-  allowlist manager. Config is seed-bound + init_if_needed in withdraw so it
-  can't be omitted to bypass. Deployed (upgrade `5Q6yfmMv…`); verified on devnet:
-  allowlist off → withdraw OK, on+unlisted → blocked, on+listed → OK.
+---
 
-### Design decisions (see PROJECT.md §10)
-- ⬜ Harden **RotateSeat** against the "purge before migration" attack (time-lock / freeze during pending migration).
-- ⬜ Council size for small Circles (enforce 7/4 vs smaller m/n until grown).
-- ⬜ Cross-Circle / World Service binding votes vs suggestions only.
-- ⬜ Chain decision: EVM (ZK lego) vs Solana — Ayni is the Solana build; EVM branches are scaffolds only.
+## Epic roadmap (product backlog E0–E10)
 
-### Product layer (not protocol)
-- ⬜ Frontend (Realms-style UI), onboarding flow.
-- ✅ Notifications (Dialect-style) for proposals/votes — in-app notifications
-  center derived entirely from chain (`lib/notifications.ts`): Council votes you
-  must cast/execute, open member votes, memberships expiring < 30 days, and
-  milestone chips earned. Nav 🔔 bell with unread badge + `/notifications` page
-  (viewing marks read, per-device). No external dep; Dialect Cloud / Blinks push
-  remains a future option on the same content model.
-- ⬜ Off-chain mirror linking meetings/material/docs to on-chain proposals.
+Coverage verdicts are from the verified gap analysis, re-checked against the
+code. Every F-number here exists in the registry above.
+
+| Epic | Title | Coverage | Implemented by | Remaining work | Phase |
+|------|-------|----------|----------------|----------------|-------|
+| **E0** | The Faucet — first gas for the neophyte | 🟡 **mostly** (pilot form shipped) | **F35**; rests on F17, F27, F5, F6, F29 | ~~F47 ledger~~ ✅ · ~~F48 jitter~~ ✅ (both pilot-form, same day) · **F49** governed cap account · devnet deploy + recorded upgrade signature for F35 · anonymous relayer-gated activation path (needs **F53**/**F55**) · reach fully-anonymous members (today `activate_faucet` rejects `owner == default`) · make Layer-D assertion 7 (parrain↔neophyte unlinkability) a gating adversarial test | 1 (shipped); anonymous form → 2 |
+| **E1** | Two-sponsor admission *(amended v0.2: parrain = any member; second attestation = one of the 7 trusted servants)* | ⬜ **greenfield** ⚠ | related: F4, F31 ⚠, F5, F1, F27 ⚠, F28 (seat legitimacy) | **F50** `attest_admission` (asymmetric pair) + two-attestation gate on `issue_membership` · **F51** split issuance from member-tree insertion (provisional membership) · **F52** sponsor UI · ADR reconciling F31 open membership with two-sponsor admission · rewrite `docs/sybil.md` (its doctrine equates "authority-gated issuance" with "social vouching") · attestor good-standing checks everywhere sponsors are consumed | 1 (named pilot); anonymous form → 2 |
+| **E2** | Zero-knowledge vouch-proofs | ⬜ **greenfield** | ZK base: F6, F12, F13, F14, F15, F16, F5, F28 | **F53** `vouch_member` circuit + VouchTally · **F54** recent-roots ring buffer + good-standing member set · **F55** relayer service · **F56** fellowship-wide verification anchor · **F43** e2e circuit tests · **F44** multi-party ceremony · ship the vouch wasm+zkey to `frontend/public/zk/` | 2 |
+| **E3** | The Quipu — physical necklace | 🟡 **partial** (wrong data model) | F27 ⚠ (chips are elapsed days, not steps) | **F57** `StepToken` (steps 1–12) + Emerald colour mapping + knot-date encoding + reading guide + step/day-chip distinction in the UI; sponsor-signed rather than `require_any_seat`; drop or blind `ProgressToken.issuer` · ⛔ **externally blocked**: the Emerald correspondence table is not in this repo | 0 (mapping) → 1 (build) |
+| **E4** | The Quipu page (trust page) | ⬜ **greenfield** | related: F33, F20, F26, F30 | **F58** `/member/[commitment]` page (quipu render, bio, service history listed-never-summed) · **F59** ZK presence attestation · stop rendering `Membership.level` on member surfaces (`/me:222`, `CircleAdmin.tsx:1216`) and move it to an F14/F16 disclosure · member-level circle-name/region fields | 3 |
+| **E5** | Per-element visibility settings | ⬜ **greenfield** | related: F14, F15, F16, F6, F32, F2 | **F60** encrypted profile object + per-tier key architecture + off-chain read-path verification · **F61** bare-page rendering + public-surface retrofit · **F71** third-party geo calls · demote F20 to a fallback | 3 (but the key architecture is effectively a **Phase 2** dependency of E4/E6/E9) |
+| **E6** | Avatar / stone-mark | 🟡 **partial** | F33, F20 ⚠ | **F62** stone-mark canvas + avatar moved into the E5 encrypted object + audience selection + a single neutral not-disclosed silhouette (never a lock icon) | 3 (small; fully gated on E5) |
+| **E7** | Encrypted messaging | 🟡 **partial** ⚠ **wrong architecture** | F32 ⚠, F32b, F40 | **F63** off-chain transport (X3DH + double ratchet, real sealed sender, groups) **and an F32 sunset plan** incl. reworking F32b and F40 · **F64** client-side encrypted trust list · interim: relayer fee-payer for `send_message` (**F55**) · record the transport ADR (libsignal + delivery service vs self-hosted relay), with the constraint that the prekey directory must not become an enumerable member list | 2 (a migration, not a greenfield build) |
+| **E8** | Authentication — passkeys | 🟡 **partial** (recovery half only) | F11, F9, F10 | **F65** WebAuthn passkey unlocking a locally-encrypted keystore (zero `webauthn`/`passkey` hits in program, frontend or docs today) · **F66** sponsor-bound recovery via **blinded** keys (raw sponsor pubkeys in `recovery_keys` would publish the sponsor edge E2 forbids) · decide the sponsor-recovery threshold (today guardians are 1-of-2; the epic implies both) · Sentinel assertion "no biometric leaves the device" (currently PASSes only because no biometric code exists) | 1 (passkey/keystore); sponsor-binding → 2 |
+| **E9** | Graphical onboarding | 🟡 **partial** | F22, F23, F31, F33, F35 | **F67** `docs/wallets.json` + shuffled WalletChooser · **F68** `/onboarding` three-step stepper (Wallet → Vouch → Face) with seed-phrase backup · **F69** on-device cartoonisation · **F51** provisional membership · one-way glass needs **F60/F61** · fix the **F25** wallet-in-email leak, which fires at exactly onboarding time · end-to-end timing against the <10-minute target | 3 (F67 + the stepper skeleton can be pulled to **Phase 1**, no dependencies) |
+| **E10** | Open decisions | 📝 **decisions** — 4 of 6 already de-facto taken by shipped code | evidence: F35, F29, F34, F17, F55-gap | **F70** land the six ADRs in `docs/decisions/` · **F45** upgrade authority → multisig/MPC · **F55** relayer (the honest resolution is *hybrid*: faucet for first gas, relayer for proof submission) · genuinely open: **quantum resistance** — nothing decided, nothing written; Ed25519 + BN254 Groth16 throughout with no migration path and no `ProofAnchor` seam | 0 |
+
+### Phased sequence, reconciled with reality
+
+The product document's Sequencing table, adjusted by the gap analysis. Struck
+items are already built.
+
+**Phase 0 — decisions & mappings (days; blocks everything)**
+- ⬜ **F70** — six ADRs in `docs/decisions/`. Four are *ratification of what the
+  code already did*: chain = Solana (+ the real question the epic asks:
+  **scope-of-chain** — the epic wants only proofs and quipu milestones on chain;
+  today it also holds posts, messages, meetings, profiles, WingPeer edges and
+  `member_count`); phone-number registration = dropped; interim-vs-final
+  admission = pilot first, ZK in parallel; faucet-vs-relayer = hybrid. Two are
+  genuinely open: **quantum resistance** and **software stewardship**.
+- ⬜ **F45** — move the program upgrade authority to a multisig/MPC (one M-sized
+  move; this is the only non-writing item in Phase 0).
+- ⬜ **E3 colour mapping + reading guide** — blocked on fellowship input; the
+  Emerald correspondence table is not in this repo (part of **F57**).
+
+**Phase 1 — build (weeks)**
+- ~~E0 faucet core~~ — **shipped as F35** (pilot form). Resized remainder:
+  ~~F47~~, ~~F48~~ (shipped same day, pilot form), **F49** + a recorded devnet deploy.
+- ⬜ **E1 named pilot** — **F50**, **F51**, **F52** + the F31 reconciliation ADR.
+- ⬜ **E3 quipu build** — **F57** (after the Phase 0 mapping).
+- ⬜ **E8 passkeys** — **F65** (the keystore half only; **F66** slips to Phase 2
+  behind E1).
+- ⬜ *pulled forward from Phase 3:* **F67** (wallet chooser) and the **F68**
+  stepper skeleton — no dependencies.
+- ⬜ *assurance, newly numbered:* **F42**, **F43**, **F71**.
+
+**Phase 2 — the anonymity layer (months)**
+- ⬜ **E2** — **F53**, **F54**, **F55**, **F56**, gated by **F44**.
+- ⬜ **E7** in parallel — **F63**, **F64**. Note this is now a **migration** off
+  F32, not a greenfield build.
+- ⬜ *pulled forward from Phase 3:* **F60**, the per-tier key architecture — E4,
+  E6 and E9's one-way glass all depend on it.
+- ⬜ **F66** (sponsor-bound recovery), behind E1.
+- ⬜ E0's anonymous form: relayer-paid, vouch-gated `activate_faucet`.
+
+**Phase 3 — the member surface (weeks)**
+- ⬜ **E5** — **F61** (after F60).
+- ⬜ **E6** — **F62**.
+- ⬜ **E4** — **F58**, **F59** + the `Membership.level` demotion.
+- ⬜ **E9** — **F68** (full), **F69**, and the one-way glass. Last by design: it
+  stitches the others together.
+
+---
+
+## Epic work backlog (planned)
+
+New rows, continuing after F35, so planned epic work lives in the same registry
+as shipped work. All ⬜ unless noted.
+
+### E0 — faucet remainder
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F47 | E0 | Treasurer's encrypted off-chain faucet ledger | ✅ (pilot) | Shipped 2026-08-10 (same day, after this file's audit snapshot): `frontend/lib/faucetLedger.ts` + `/api/faucet-ledger` drop-box + treasurer view in `CircleAdmin.tsx`. One-time codes generated parrain-side, entry (codes, amount, day — nothing else) padded to a fixed size and sealed to the Treasurer's published F32 messaging key with the same `nacl.box` sealed-sender construction; delivered after an independent 1–7 min jitter (localStorage queue if the tab closes). Never an on-chain account, never keyed by WingPeer; treasurer reconciles **by count** against `jar.granted`. Honest limit in `docs/faucet.md`: the drop-box observes arrival order/time — jitter blurs, the E10 relayer erases. Untested yet (see `tests/sentinel/checklist.yaml`). |
+| F48 | E0 | Randomized disbursement timing (jitter queue) | ✅ (pilot) 🟡 | Shipped 2026-08-10: the grant tx waits a random 15–120 s parrain-side (`me/page.tsx firstGas`), and the F47 ledger entry travels on its own independent 1–7 min delay, so tx, ceremony clock, and drop-box cannot be lined up. 🟡 tab-bound and therefore weak — real timing privacy is the E10 relayer; labeled as such in `docs/faucet.md`. |
+| F49 | E0 | Governed faucet cap account (revised by equinox vote) | ⬜ | `FAUCET_MAX_GRANT_LAMPORTS` is a `const` (`state.rs:643`), so the epic's "revised at each equinox by top-circle vote" is currently a **program upgrade, not a vote**. Move the cap into a top-circle-governed account. |
+
+### E1 — two-sponsor admission
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F50 | E1 | `attest_admission` + two-attestation gate on `issue_membership` | ⬜ | **Amended v0.2 (2026-08-10, ElectaZ): the pair is asymmetric.** Attestation A — the **parrain**: any member in good standing; signer holds a key of the attestor's membership, `expires_at > now` (the pattern in `activate_faucet.rs`); PDA `["attest", circle, newcomer_commitment, parrain_commitment]`. Attestation B — a **trusted servant**: signer holds any of the 7 Council seats (`council.require_any_seat`); PDA `["attest2", circle, newcomer_commitment]` (one servant co-attestation per newcomer). **Distinct-persons rule enforced in the program**: the seat signer must not be a key of the parrain's membership. Issuance refused unless both PDAs exist. Continuity: F4's Secretary-gated issuance is already a seat attestation — this generalizes it to any-of-7 and adds the parrain beside it. **No parrain-attestation primitive exists today.** |
+| F51 | E1 · E9 | Split issuance from votable-set insertion (provisional membership) | ⬜ | `issue_membership.rs:71` calls `merkle::insert_leaf` in the same atomic instruction, so a one-attestation newcomer would get immediate full voting power. Provisional must mean *"commitment not yet inserted into the MemberTree"* so every members-only proof fails by construction — never insert-then-remove; the tree is append-only. |
+| F52 | E1 | Sponsor UI — one-tap "attest for this newcomer" in `/me` | ⬜ | For members who met them in circle. |
+
+### E2 — zero-knowledge vouch-proofs
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F53 | E2 | `vouch_member` + VouchTally (the vouch circuit) | ⬜ | Recommended: reuse `circuits/member_vote.circom` with `externalNullifier` = the newcomer's commitment — near-free, and it mirrors `lineage_grant.circom`'s `nullifier = Poseidon(secret, granteeCommitment)`, which already makes "the same sponsor vouching the same newcomer twice" collide, giving two-distinct-sponsors for free. VouchTally counts distinct sponsor nullifiers per newcomer commitment and feeds the **F50** gate. Record the circuit choice; ship its wasm+zkey to `frontend/public/zk/` (only `member_vote` is shipped to the browser today). |
+| F54 | E2 | MemberTree recent-roots ring buffer + good-standing member set | ⬜ | Two defects in one row. (a) Proofs verify only against the **single current root**, so any concurrent admission invalidates an in-flight proof. (b) The tree is **append-only** and `revoke_membership` closes the account but never the leaf, so expired and revoked commitments remain valid members forever — needs epoch snapshots or a second tree. |
+| F55 | E2 · E7 · E10 | Relayer service (fee-payer anonymity) | ⬜ | **The anonymity documented in `docs/member-voting.md` and in the program's own comments is not implemented:** `frontend/lib/zk-vote.ts:158` and `frontend/lib/messaging.ts:191` both set `payer: wallet.publicKey`, so the prover pays and is named. Blocks E0's anonymous form, E2's whole premise, and E7's interim mitigation. Needs the E10 relayer ADR (**F70**) first. |
+| F56 | E2 | Fellowship-wide verification anchor | ⬜ | Every tree is per-Circle today, so a visiting member's proof cannot be checked by another Circle. |
+
+### E3 — the quipu
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F57 | E3 | `StepToken` (steps 1–12) + Emerald colour mapping + reading guide | ⬜ | `StepToken` PDA `["step", circle, member, step]` with `step: u8` (1–12) — **distinct from F27's day-count chips**, which are elapsed days and not the twelve steps. Gate issuance on the **sponsor's** signature (the WingPeer wing) rather than `require_any_seat`, and drop or blind `ProgressToken.issuer`. Also: `docs/quipu.md` with the step→alchemical-stage colour mapping, the Inca-style knot-date encoding, a one-page in-fellowship reading guide, and a UI that distinguishes steps from day-chips so a bare cord reads as a beginning, not an absence. ⛔ **Externally blocked:** the Emerald correspondence table is not in this repo (the epic asserts it exists); "quipu" has zero hits outside `backlog/`. |
+
+### E4 — the quipu page
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F58 | E4 | Member trust page `/member/[commitment]` | ⬜ | The ten frontend routes contain **no per-member page**; `/me` is strictly a self-console. Needs: the quipu render component (cords and knot-dates, **never a fraction or progress bar**, with a no-counts DOM regression test in the Sentinel checklist); the one-line bio ("Who do you think you are?", zero hits in `frontend/` today), stored client-side encrypted under **F60**; per-member service history **listed with dates and never summed**; member-level circle-name and region fields. Depends on F60 for a data layer — F33 lives in per-device localStorage and cannot be served to another viewer. |
+| F59 | E4 | ZK presence attestation ("last stood in circle: March 2026") | ⬜ | No circuit, instruction or account anywhere touches attendance. |
+
+### E5 — per-element visibility
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F60 | E5 | Encrypted profile object + per-tier key architecture | ⬜ | Schema: (avatar \| quipu \| bio) × (all members \| my circle \| chosen ones), **defaulting every element to "my circle"** on day one. Keys: the circle key distributed through the existing sealed X25519 `MessagingKey` registry; a fellowship key released against a membership proof; per-recipient sealed envelopes for chosen-ones. Critically, membership-proof verification must move **off-chain / client-side on the read path** — every proof check in the repo today is a write-path instruction that mints a public record, so reusing the F16 AccessPass pattern would publish the interest graph E5 forbids. **Effectively a Phase 2 item**: E4, E6 and E9 all depend on it. |
+| F61 | E5 | Bare-page rendering + public-surface retrofit | ⬜ | Hidden ≡ absent: no lock icons, no "this is private" indicators, identical layout for a sparse newcomer and a private elder. Retrofit so nothing is readable by an unconnected visitor — today `/board` renders posts and author identicons with no wallet connected (posting is gated, reading is not), `Membership.owner` wallets are enumerable via memcmp, and shared material is served through a public IPFS gateway. |
+
+### E6 — avatar / stone-mark
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F62 | E6 | Stone-mark canvas + private, deliberately-disclosed avatar | ⬜ | Drawing canvas for a personal sign inside an equilateral triangle, as an alternative to photo upload (only upload exists — `frontend/lib/profile.ts` `fileToAvatarDataUrl`, canvas resize to 128 px). Move the avatar out of localStorage into the **F60** object; add audience selection; render **one identical neutral silhouette** when not disclosed, never a lock or placeholder that signals hiddenness. Off-device storage must be ciphertext only — no public IPFS gateway. |
+
+### E7 — encrypted messaging
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F63 | E7 | Off-chain encrypted transport + **F32 sunset plan** | ⬜ | X3DH + double ratchet, real sealed sender, group sessions, entirely off-chain with no record of who wrote to whom or when. Requires an ADR on the transport (libsignal + a minimal delivery service vs a self-hosted relay) with the explicit constraint that **the prekey directory must not become an enumerable member list**. The sunset must also rework **F32b** seat-reachability and **F40** notifications, both built on the on-chain design. Interim while F32 lingers: route `send_message` through a relayer fee-payer (**F55**). |
+| F64 | E7 | Client-side encrypted trust list | ⬜ | Trust / block / mute under a device- or passkey-wrapped key. Today there is only an unencrypted localStorage sent-log and read-markers; **no trust/block/mute concept exists anywhere.** |
+
+### E8 — authentication
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F65 | E8 | Passkey-unlocked local keystore (WebAuthn) | ⬜ | `webauthn` and `passkey` have **zero hits** in program, frontend or docs. The epic assumes a server receiving an attestation; in a serverless wallet-adapter app the least-new-attack-surface shape is a **passkey that unlocks a locally-encrypted keystore** wrapping the wallet, messaging and profile keys. Record that reframing as part of **F70**. Document that no biometric ever leaves the device and add it as a Sentinel Layer-D assertion. |
+| F66 | E8 | Sponsor-bound recovery via blinded one-time keys | ⬜ | The on-chain half exists (`issue_membership` accepts `recovery_keys[2]`, `set_recovery` updates them), but putting **raw sponsor pubkeys** there would record a permanent, public, minable sponsor edge — forbidden by E2 and the Traditions Audit. Must use blinded keys handed over out-of-band, or a ZK co-sign. Also decide the threshold: today 1-of-2, the epic implies both sponsors. Behind **F50**. |
+
+### E9 — graphical onboarding
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F67 | E9 | `docs/wallets.json` + shuffled WalletChooser | ⬜ | Five non-custodial wallets with per-platform deep links, **Fisher-Yates shuffled client-side on every page load** (Tradition 6 — no permanent first position). Today `frontend/app/create/page.tsx:289-290` has two hardcoded anchors in fixed order (Solflare then Phantom): wrong count *and* a permanent first position. No dependencies — pull to Phase 1. |
+| F68 | E9 | `/onboarding` — three-step illustrated stepper | ⬜ | Wallet → Vouch → Face. Arrows, one action per screen, position always visible; unskippable seed-phrase backup guidance with a clear warning in step 1, then sign-in by signing a message with the new address; step 2 wires the **F50** parrain attestation plus the fund-or-faucet choice (`activateFaucet` already exists in `frontend/lib/faucet.ts` and is surfaced in `/me`, so the faucet branch is a small hookup). Measure end-to-end against the **under-ten-minutes** target. Skeleton has no dependencies and can land in Phase 1. |
+| F69 | E9 | On-device photo cartoonisation | ⬜ | Recognisable to the circle, useless to face recognition. **Assert that no original photograph reaches any storage, upload or log** — F33 today stores the resized raw photograph as a data URL in localStorage. |
+
+### E10 — decisions & stewardship
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F70 | E10 | Land the six ADRs in `docs/decisions/` | ⬜ | (1) **Chain + scope-of-chain** — Solana is decided de facto (a 58-instruction devnet-deployed Anchor program); the open half is what belongs on chain at all. (2) **Quantum resistance** — genuinely undecided: Ed25519 + BN254 Groth16 throughout, no migration path, no `ProofAnchor` seam; Poseidon commitments are the only hash-based piece. Needs at minimum an exposure document and a migration trigger. (3) **Phone-number registration** — dropped de facto (zero hits repo-wide; auth is wallet-signature only); ratify in a paragraph. (4) **Interim vs final admission** — pilot first, ZK in parallel; but the shipped pilot is **not** the epic's named-two-sponsor pilot, it is zero-sponsor (F31) or one-role-key (Secretary) admission, so the cutover plan and the F31 reconciliation are unresolved. (5) **Faucet vs relayer** — hybrid (**F35** + **F55**). (6) **Software stewardship** — AGPL-3.0, `CODE_OF_CONDUCT.md`, `SECURITY.md`, F29 and F34 point the right way; the service-committee model is unwritten and the upgrade authority is one keypair (**F45**). Also covers the E8 passkey reframing and the E7 transport choice. |
+
+---
+
+## Known issues (Sentinel findings)
+
+Source: `reports/sentinel/NRR-2026-08-10-1.md` and the round-2 pass.
+**`architectural`** means it cannot be patched — the epic named against it is the
+redesign that fixes it.
+
+| ID | Issue | F-number / Epic | State |
+|----|-------|-----------------|-------|
+| R0 | Working tree changed mid-round; the audited artefact was not a commit | F35 / E0 (process) | **fixed this round** (`31f2b6d`) — but **recurred**: `Anchor.toml`, `docs/faucet.md`, `tests/README.md`, `tests/ayni.ts`, `tests/cosign.ts`, `tests/faucet.ts` are modified-uncommitted right now and reflected in no status doc |
+| R1 | **A Circle's full roster and the wallet behind each member are publicly enumerable** — `Membership` stores `commitment` and `owner` in one public account (`state.rs:57-80`, owner at offset 89), the join flow always binds the wallet, and `zk-vote.ts` fetches the whole roster to rebuild the tree | F1 / F2 / F22 → **E2 + E5** | **architectural** — this is what E2 exists to fix; a ZK vouch proof over a publicly enumerable set leaks far more than the epic assumes |
+| R2 | **The sponsor edge is public** — `WingPeer` (`state.rs:396-406`) names both sides by commitment, `LevelGrant.issuer_commitment` names the granting teacher, and `activate_faucet` puts parrain and neophyte in one transaction with a lamport transfer between them | F27 / F35 → **E2 + E10** | **architectural** — the Traditions Audit rejects named/recorded sponsor edges; acknowledged in `activate_faucet.rs:23-26` as a pilot limitation deferred to E2 + the relayer decision |
+| R3 | Circle-email endpoint: **abuse limb fixed** (per-IP 10/60 s, on-chain name match, on-chain membership proof). **Privacy limb open** — the mail body still exports the member wallet to Mailgun/SMTP logs, `indexer/email-indexer.js:110-115` still supplies it, a `kind:"join"` POST with no `memberAddress` skips verification entirely, and the rate limit is per-instance | F25 → E9 / E10 | **still open** (half-closed) |
+| R4 | Message metadata is public — PDA `["msg", recipient, id]` + a plain `recipient` field expose who received mail and when; the fee-payer identifies the sender. Content confidentiality is sound (NaCl box, sealed sender, fixed `CT_LEN` 1040) | F32 → **E7** | **architectural** — the code itself (`state.rs:539-543`) states true sender anonymity needs a relayer/mixnet (**F55**, then **F63**) |
+| R5 | Publishing a Post is a permanent public proof that a named wallet is a member (`create_post.rs:27`, `Post.author` is a public field and a PDA seed); owner-less anonymous memberships cannot post at all | F30 → **E5** | **architectural** |
+| R6 | The client sends the visitor's IP to two third-party geolocation APIs and precise coordinates to Nominatim | **F71** (F18/F23) | **still open** — *not* architectural; fixable by self-hosting/proxying |
+| R7 | Publicly comparable per-member achievement and rank — `ProgressToken` chips are enumerable (members orderable by chip count *and* by awarding seat) and `Membership.level` is a public integer rank rendered beside identities. **The required written justification was never produced** (zero "justif" hits in `docs/`, `BACKLOG.md`, `PROJECT.md`, `tests/sentinel/checklist.yaml`) | F27 + F12 → **E3 + E4** | **still open, escalating** — round-1 WARNING becomes a round-2 FAIL unless justified or descoped (**F57** replaces the model; E4 demands the level demotion) |
+| R8 | MACI advertises coercion resistance it cannot deliver — no coordinator, no process/tally circuits, no `submit_maci_tally`; `tally_hash` unused; the doc-comment describes the full receipt-free flow in the present tense | **F39** → E2 / E10 | **still open** |
+| R9 | The **root** TypeScript project does not typecheck — `tsconfig.json` is `"target": "es6"` / `"lib": ["es2015"]`, below the ES2020 needed for BigInt literals in `app/**`; tests importing `../target/types/ayni` resolve only after `anchor build`. `frontend/` typechecks clean | build health (no F-number) | **still open** |
+| R10 | Root formatting check red — `npm run lint` is `prettier --check` over `app/*.ts` and `tests/*.ts`, 12 files reported; no prettier config, no formatting commit, and `tests/*.ts` were edited again this round | build health (no F-number) | **still open** (unverified by execution — `npm` not on `PATH`) |
+| R11 | Documentation drift in `BACKLOG.md` | this file | **fixed this round** for the original three sub-items; the replacement drift (`appoint_seat` in F7, F28's phantom instructions, "Agave 2.3.13", the 7/7 baseline, the "no native toolchain" claim) is **fixed in this rewrite** |
+| R12 | No host toolchain, so BPF build and validator tests were unverifiable | build health / CI (no F-number) | **fixed this round** — `cargo`/`anchor`/`solana-cli` on `PATH`, CI pins corrected. **Remaining:** no BPF/validator result recorded in any status document; `tests/sentinel/baselines/` still does not exist |
+| R13 | Dependency audit baseline: root 31 findings (10 high, 0 critical), frontend 28 (10 high, 0 critical) — `ws`, `sharp/libvips`, `underscore`, `elliptic` (transitive via `@solana/web3.js` → `@coral-xyz/anchor`, no fix available) | dependencies (no F-number) | **still open** (informational) — no `baselines/npm-audit.json` was ever committed, so round 2 has no comparison point |
+
+### Documentation drift to reconcile (same commit as this file)
+
+- `docs/shipped.md:143-149` claims the faucet has "no dedicated test suite or UI"
+  — **wrong**: `tests/faucet.ts` (15 cases) and `frontend/lib/faucet.ts` shipped
+  in the *same* commit that created `shipped.md`. §6's test inventory also omits
+  `tests/faucet.ts`; §7 declares `tests/sentinel/` and
+  `.github/workflows/sentinel.yml` absent when both exist; §7 says the product
+  backlog is untracked when `git ls-files backlog/` lists all four files; and the
+  "(see §4)" cross-references for circuit evidence point at §4 (Frontend) instead
+  of §3 (Circuits).
+- `tests/README.md` repeats the phantom `appoint_seat` in its wallet/role table,
+  claims `build/` artifacts are git-ignored (**15 are tracked**: all three
+  `*_final.zkey`, all three `*_vkey.json`, the `*_js/` witness wasm and
+  calculators), and its suite table omits `profile.ts`, `jazzicon.ts` and
+  `faucet.ts`.
+- `SECURITY.md:13` cites the non-existent `SetAuthority` — same correction as F9.
+- `docs/zk-lineage.md` §6 still calls the verifying key a placeholder.
+- `tests/sentinel/checklist.yaml` has per-feature coverage for **2 of 41**
+  features (F35 and F25 only). CLAUDE.md requires every shipped feature to appear
+  in the round it ships. F20's "do not remove that test" brand rule and F32b's
+  seat-messaging policy have no entry at all.
+
+---
+
+## Open decisions (ADRs, not F-numbers)
+
+These are governance/policy questions. Write the ADR in `docs/decisions/` first
+(**F70**); only spawn an F-number if the answer is "implement something".
+
+- **Mainnet operational gates.** Still open: the program upgrade authority is one
+  keypair (**F45**); the genesis key is not in MPC; `withdraw_treasury` has **no
+  rent-exempt floor**, so a 4-of-7 vote can drain the treasury PDA to 0 (F17).
+  *Closed:* real (non-placeholder) VKs shipped — the remaining VK gate is the
+  multi-party ceremony (**F44**), not "real VKs"; and the treasury steward is
+  already enforced on-chain as an m≥2 multisig (F29).
+- **Council size for small Circles** (7/4 vs a smaller m/n until grown).
+  `initialize_circle.rs:22-28` hard-requires 7 filled distinct seats and
+  `council.rs:42` pins the threshold to `DEFAULT_THRESHOLD` (4); nothing supports
+  a smaller Council. Genuinely open, with a Traditions dimension.
+- **Cross-Circle / World Service: binding votes vs suggestions only.** Partly
+  pre-empted: **F34** already makes the foundation Council's rotate/close of a
+  child Circle **binding**, and member votes are binding for
+  `install_elected_seat` and `refill_faucet`. `SECURITY_REVIEW.md`'s headline
+  concept finding ("the Council is the authority, member votes are advisory") is
+  the same question. Ratify the sovereignty model against what already shipped.
+- **F31 open membership vs E1 two-sponsor admission.** Decide whether zero-vouch
+  self-admission survives at all, or is restricted to explicitly-labelled pilot
+  circles.
+- **Chain decision (EVM vs Solana)** — *no longer open*: decided de facto, the
+  EVM branches are scaffolds. The open half is **scope-of-chain** (see F70).
+  The stale ⬜ row that used to sit here has been removed.
+- **Re-run `/security-review` against the current 58-instruction build.**
+  `SECURITY_REVIEW.md` exists (multi-agent adversarial review, 22 candidates → 16
+  confirmed) but is dated 2026-06-10 and predates ~15 instructions (faucet, MACI,
+  child-federation, messaging, posts, config/allowlist). Process task, not a
+  feature.
+- **Off-chain mirror linking meetings / material / docs to on-chain proposals.**
+  The pieces exist on chain (F26 `set_meetings`, F18 doc CIDs,
+  `Proposal`/`MemberProposal`) but nothing links them. Too under-specified for an
+  F-number; number it once the scope-of-chain ADR lands. Overlaps E10, E5, E4.
+
+### Removed from this backlog (shipped; kept here only as a pointer)
+
+- **S1** bound `verify_disclosure` policy to the `AccessPass` — shipped
+  (`verify_disclosure.rs:51-59`, hash is also a PDA seed). Historical record →
+  `SECURITY.md`.
+- **S2** "Council can rotate a compromised Circle `authority`" — **the risk was
+  removed by design, not implemented**: there is no authority field and no
+  `SetAuthority` action; the Council *is* the authority. Wallet compromise →
+  `MigrateWallet` (time-locked, contestable), seat compromise → `RotateSeat` /
+  `install_elected_seat`. `SECURITY.md:13` must be corrected, not just ticked.
+- **S3** Council seat uniqueness — shipped on all three write paths
+  (`initialize_circle.rs:23-28`, `execute_proposal.rs:34-38`,
+  `install_elected_seat.rs:27`, plus the child-rotation paths).
+- **S4** member-tree depth pinned to circuit depth — shipped
+  (`initialize_member_tree.rs:11`).
+- **RotateSeat "purge before migration" hardening** — shipped: `arm_if_ready`
+  (`council.rs:148-162`) applies the uniform contest window to every action,
+  which makes the alternative "freeze during pending migration" redundant.
+- **Membership revocation** — shipped (`revoke_membership`, credited in F24).
+- **"Create a Circle" wizard** — shipped (F23).
+- **Solana multisig docs + helper + treasury enforcement** — shipped (F29).
+- **Token-2022 NonTransferable mint creation** — shipped (F3).
+- **Frontend (Realms-style UI)** — shipped across F18/F22/F23/F24/F30/F32/F40.
+  *Onboarding was the only genuinely open half; it is now E9 / **F67**–**F69**.*
+- **Per-Circle email provisioning** duplicate bullet — folded into F25, which
+  carries the identical 🟡 status and the residual DNS task.
+- **Build changelog** (first-compile bug fixes, `Cargo.lock` MSRV pins, the
+  0.30.1→0.31 migration) — not backlog; belongs in `BUILD.md`.
 
 ---
 
 ## Instruction index (58)
 
-One file per instruction under `programs/ayni/src/instructions/` (58 files
-excluding `mod.rs`), matching 58 `pub fn` entry points in `lib.rs`. (The old
-"25" index was stale and also listed `appoint_seat`, which is not an entry
-point — seats are installed via proposals / `install_elected_seat`.)
+Derived, not a backlog item: one file per instruction under
+`programs/ayni/src/instructions/` (58 files excluding `mod.rs`), 58 `pub fn`
+entry points in `lib.rs`, and 58 entries in `target/idl/ayni.json`. **Verified
+2026-08-10: the three sets are identical — zero in one and not the others.**
+`appoint_seat` is **not** an entry point and never was; seats are set at
+`initialize_circle` and changed via `ProposalAction::RotateSeat` or
+`install_elected_seat`. *This list should be generated from the IDL so it cannot
+drift.*
 
 `activate_faucet` · `approve` · `approve_child_close` · `approve_child_rotation` ·
 `cancel_proposal` · `cast_vote` · `close_circle_profile` ·
@@ -210,3 +486,25 @@ point — seats are installed via proposals / `install_elected_seat`.)
 `set_recovery` · `set_treasury_allow` · `set_treasury_wallet` ·
 `update_circle_location` · `upsert_circle_profile` · `verify_disclosure` ·
 `withdraw_treasury`
+
+### Instruction → F-number coverage
+
+Every entry point now maps to a registry row: F1 (`issue_membership`,
+`renew_membership`) · F3 (`create_membership_mint`, `set_membership_mint`,
+`mint_membership_token`) · F5 (`set_personhood`, `prove_personhood`) ·
+F6 (`initialize_member_tree`, `create_member_proposal`, `cast_vote`,
+`finalize_member_proposal`) · F7 (`propose`, `approve`, `execute_proposal`,
+`cancel_proposal`) · F8 (`initialize_circle`) · F9/F11 (`recover_membership`,
+`member_migrate`, `set_recovery`) · F12 (`initialize_lineage`, `grant_level`) ·
+F13 (`issue_acknowledgment`) · F16 (`verify_disclosure`) · F17 (`donate`,
+`donate_token`, `withdraw_treasury`) · F18/F19/F21 (`upsert_circle_profile`,
+`update_circle_location`, `close_circle_profile`) · F24 (`revoke_membership`) ·
+F26 (`set_meetings`) · F27 (`establish_wing_peer`, `end_wing_peer`,
+`issue_progress_token`) · F28 (`link_seat_election`, `install_elected_seat`) ·
+F29 (`set_treasury_wallet`) · F30 (`create_post`, `delete_post`) ·
+F31 (`set_open_membership`) · F32 (`register_messaging_key`, `send_message`,
+`delete_message`) · F34 (`propose/approve/execute_child_rotation`,
+`propose/approve/execute_child_close`) · F35 (`init_faucet`, `set_faucet_amount`,
+`activate_faucet`, `refill_faucet`) · F36/F37/F38 (`set_circle_config`,
+`set_treasury_allow`) · F39 (`open_maci_round`, `publish_maci_message`) ·
+F41 (`set_circle_country`).
