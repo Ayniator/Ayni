@@ -35,6 +35,7 @@ every member stays **anonymous by default** through zero-knowledge proofs.
   recovery — no owner, no admin key.
 - **Who it's for** — fellowships, mutual-aid groups, anonymous communities, DAOs that want
   *belonging* instead of speculation, and anyone who needs **real privacy** for members.
+- **What is it great for** — Ayni is the platform of Trust for fellows. First and foremost because of its lineage chain that ensure that only reputable person can be onboarded, then the achievements and karma is the and additional guaranty that you are safely surrounded by real peers. The second is the anonymity ensured at each level. Third is our proof of humanity (under development) that prevent any bot/IA to infiltrate. Ayni is all about Trust, Trust and Trust. Its native Trust is what it makes it outstanding.
 - **How to use it** — fork the template, seat a Council, open a Circle, and members join as private
   commitments. See [Quick start](#-quick-start).
 
