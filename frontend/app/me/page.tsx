@@ -35,7 +35,8 @@ import { emailNote, notifyCircleEmail } from "../../lib/circleEmail";
 import CircleAdmin from "../admin/CircleAdmin";
 import { fileToAvatarDataUrl, getUserProfile, listTimezones, setUserProfile } from "../../lib/profile";
 import { Chip, WingPeerInfo, endWingPeer, establishWingPeer, getWingPeer, listProgressTokens, memberCommitmentOf, milestoneLabel } from "../../lib/peers";
-import { MemberProposal, SeatElectionInfo, SEAT_ROLES, listMemberProposals, listSeatElections } from "../../lib/admin";
+import { MemberProposal, SeatElectionInfo, SEAT_ROLES, listCircleMembers, listMemberProposals, listSeatElections } from "../../lib/admin";
+import { activateFaucet, getFaucet, hasFaucetGrant, listMenteesOf } from "../../lib/faucet";
 import { castMemberVote, haveVotingKey, newMemberIdentity } from "../../lib/zk-vote";
 
 const sol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(4).replace(/\.?0+$/, "") || "0";
@@ -306,6 +307,8 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
   const [wings, setWings] = useState<Record<string, WingPeerInfo | null>>({});
   const [chips, setChips] = useState<Record<string, Chip[]>>({});
   const [wingInput, setWingInput] = useState<Record<string, string>>({});
+  // Neophytes I sponsor who can still receive the one-time first-gas grant.
+  const [neophytes, setNeophytes] = useState<Record<string, { commitment: string }[]>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
@@ -313,9 +316,39 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
     for (const m of memberships) {
       getWingPeer(m.circle, m.commitment).then((w) => setWings((p) => ({ ...p, [m.circle]: w }))).catch(() => {});
       listProgressTokens(m.circle).then((all) => setChips((p) => ({ ...p, [m.circle]: all.filter((c) => c.member === m.commitment) }))).catch(() => {});
+      // Parrain action (Epic 0): if I'm someone's wing, their faucet grant is
+      // unspent, and they have a wallet — offer the one-time activation.
+      getFaucet(new PublicKey(m.circle))
+        .then(async (jar) => {
+          if (!jar.exists) return setNeophytes((p) => ({ ...p, [m.circle]: [] }));
+          const mentees = await listMenteesOf(m.circle, m.commitment);
+          if (mentees.length === 0) return setNeophytes((p) => ({ ...p, [m.circle]: [] }));
+          const members = await listCircleMembers(m.circle);
+          const byCommit = new Map(members.map((x) => [x.commitment, x]));
+          const eligible: { commitment: string }[] = [];
+          for (const t of mentees) {
+            const mem = byCommit.get(t.commitment);
+            if (!mem?.owner || !mem.active) continue;
+            if (await hasFaucetGrant(new PublicKey(m.circle), t.commitment)) continue;
+            eligible.push({ commitment: t.commitment });
+          }
+          setNeophytes((p) => ({ ...p, [m.circle]: eligible }));
+        })
+        .catch(() => {});
     }
   }, [memberships]);
   useEffect(load, [load]);
+
+  async function firstGas(m: MyMembership, menteeCommitment: string) {
+    if (!wallet) return;
+    setBusy("gas-" + menteeCommitment); setNote(null);
+    try {
+      await activateFaucet(wallet, new PublicKey(m.circle), m.commitment, menteeCommitment);
+      setNote({ kind: "ok", text: "First-gas grant sent to your neophyte's wallet — welcome them." });
+      load();
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
 
   async function setWing(m: MyMembership) {
     const w = (wingInput[m.circle] ?? "").trim();
@@ -365,6 +398,14 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
               <input className="mono" value={wingInput[m.circle] ?? ""} onChange={(e) => setWingInput((p) => ({ ...p, [m.circle]: e.target.value }))} placeholder="WingPeer's wallet address" style={{ flex: 1, minWidth: 180 }} />
               <button className="btn btn-sm" disabled={busy === "set-" + m.circle} onClick={() => setWing(m)}>{busy === "set-" + m.circle ? "…" : (w && w.active ? "Change" : "Set WingPeer")}</button>
             </div>
+            {(neophytes[m.circle] ?? []).map((t) => (
+              <div className="row" key={t.commitment} style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                <span className="sub">You sponsor <span className="mono">{t.commitment.slice(0, 8)}…</span></span>
+                <button className="btn btn-sm" disabled={busy === "gas-" + t.commitment} onClick={() => firstGas(m, t.commitment)}>
+                  {busy === "gas-" + t.commitment ? "Sending…" : "Activate first-gas faucet"}
+                </button>
+              </div>
+            ))}
           </div>
         );
       })}

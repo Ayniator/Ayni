@@ -1,0 +1,71 @@
+name: sentinel
+
+# Sentinel's safety net (spec §6 in backlog/sentinel-agent.md). This runs the
+# MECHANICAL half of the non-regression round on every PR and nightly; the rich
+# interactive round is Sentinel-in-Claude-Code, which also writes the dated
+# report under reports/sentinel/.
+#
+# The privacy sweep is a hard gate: a Layer D violation is CRITICAL and fails
+# the job, which blocks the merge. Do not add continue-on-error to it.
+
+on:
+  push:
+    branches: [solana]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *" # nightly
+
+jobs:
+  privacy-invariants:
+    name: Layer D — privacy & Traditions sweep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbidden-pattern sweep
+        run: bash tests/sentinel/privacy-sweep.sh
+
+  build-health:
+    name: Layer E — build health
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo check (program compiles)
+        run: cargo check --workspace --all-targets
+
+      - name: Frontend typecheck
+        working-directory: frontend
+        run: npm ci && npx tsc --noEmit
+
+      - name: Dependency audit (new criticals fail)
+        run: |
+          npm audit --audit-level=critical || exit 1
+          cd frontend && npm audit --audit-level=critical || exit 1
+
+  proof-integrity:
+    name: Layer C — verifying-key integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Committed VKs match the zkeys and the in-tree Rust
+        run: bash tests/sentinel/zk-integrity.sh
+
+  report:
+    name: Publish non-regression report
+    runs-on: ubuntu-latest
+    needs: [privacy-invariants, build-health, proof-integrity]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-reports
+          path: reports/sentinel/
+          if-no-files-found: warn

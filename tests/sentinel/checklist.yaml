@@ -1,0 +1,113 @@
+# Sentinel master checklist (spec §1, backlog/sentinel-agent.md).
+#
+# Every shipped feature must appear here in the SAME round it ships. Missing
+# coverage is a WARNING in round n and a FAIL in round n+1.
+#
+# `runnable` is what actually exists today, not what the spec assumes. The spec
+# was written against an assumed layout (packages/proofs, test:e2e/test:api/
+# test:adversarial, Playwright); none of that exists in this repo, so the layers
+# are mapped onto what is real here. Do not delete a gap to make a round pass.
+
+round: 2
+established: 2026-08-10
+baseline_report: reports/sentinel/NRR-2026-08-10-1.md
+
+layers:
+  E_build_health:
+    runnable:
+      - name: program compiles
+        cmd: cargo check --workspace --all-targets
+        note: needs a C toolchain; on this host run it in the rust:1-slim container
+      - name: BPF build + IDL
+        cmd: anchor build
+        note: containerized (ubuntu:24.04 or rust:1-slim + platform-tools cache)
+      - name: frontend typecheck
+        cmd: cd frontend && npx tsc --noEmit
+      - name: dependency audit
+        cmd: npm audit --audit-level=critical
+    gaps:
+      - root `tsc` fails (pre-ES2020 target); frontend is clean — see NRR round 1 R9
+      - prettier fails on 12 files (R10)
+
+  D_privacy_invariants:
+    runnable:
+      - name: forbidden-pattern sweep (hard gate)
+        cmd: bash tests/sentinel/privacy-sweep.sh
+        gates:
+          - no analytics/telemetry SDK
+          - no tracking pixels
+          - no logging macros in the Anchor program
+          - no console.* of identity material
+          - no score/rating/rank/karma/reputation field on a member
+        verified: positive (clean tree passes) and negative (injected violations fail)
+    # The seven Layer D assertions. These are ARCHITECTURAL: greps cannot decide
+    # them, and no adversarial suite exists yet, so they are tracked, not gated.
+    assertions:
+      1_sponsor_edge: VIOLATED       # WingPeer is public; activate_faucet rides it
+      2_trust_list: n/a              # feature not built
+      3_message_metadata: VIOLATED   # content sealed, recipient+timing public
+      4_biometric: PASS              # no biometric/WebAuthn code exists
+      5_circle_roster: VIOLATED      # Membership stores commitment + owner publicly
+      6_hidden_content: untestable   # per-element visibility not built
+      7_faucet_parrain_link: VIOLATED # pilot: activation tx links parrain↔neophyte
+    gaps:
+      - "no adversarial suite (npm run test:adversarial) — the only thing that can
+         PROVE assertions 1/3/5/7 rather than argue them. Highest-value gap."
+
+  C_proof_layer:
+    runnable:
+      - name: verifying-key integrity
+        cmd: bash tests/sentinel/zk-integrity.sh
+        checks: [vkey matches zkey, rust matches vkey, no placeholder keys]
+      - name: program suites against a local validator
+        cmd: anchor test --skip-build
+        suites: [tests/ayni.ts, tests/resilience.ts, tests/cosign.ts, tests/faucet.ts]
+    gaps:
+      - grant_level / issue_acknowledgment / verify_disclosure / prove_personhood
+        have no end-to-end proof test
+      - no CLI-vs-browser verifier parity check
+
+  B_api_contract:
+    runnable: []
+    gaps:
+      - "no API contract suite. One route exists: frontend/app/api/circle-email.
+         Round 2 hardened it (on-chain verification of every claim + rate limit);
+         that hardening is UNTESTED — first thing to cover."
+
+  A_ux_e2e:
+    runnable:
+      - name: unit tests
+        cmd: npx ts-mocha tests/jazzicon.ts
+    gaps:
+      - "no Playwright/e2e suite, so the spec's DOM assertion (no fraction,
+         percentage, 'of 12', progress bar, star, score) never runs anywhere"
+
+features:
+  # id, what Sentinel checks, where it is covered today.
+  - id: F35
+    name: Epic 0 — gas faucet
+    shipped_round: 2
+    covered_by: [tests/faucet.ts, tests/sentinel/privacy-sweep.sh]
+    cases:
+      - init by seat / refused to non-seat
+      - Treasurer tunes within cap; above cap, zero, non-Treasurer, non-seat refused
+      - one uniform grant paid to the neophyte's own wallet, parrain-triggered
+      - second grant for the same commitment refused (nullifier init collision)
+      - non-wing member and non-wing seat both refused
+      - owner-less neophyte and wrong recipient refused
+      - underfunded jar refused, rent floor preserved
+      - refill refused when the vote is unfinalized or the hash does not match
+      - jar isolation across two circles
+      - Treasurer cannot aim a distinctive amount at one neophyte (cooldown)
+    uncovered:
+      - "refill ceiling (FaucetRefillTooLarge) and the happy-path refill: both sit
+         behind `finalized && passed`, which needs a real Groth16 ballot — belongs
+         to the devnet flow in tests/f28-election.ts"
+      - no UI-level test of the treasurer panel or the parrain button
+
+  - id: F25
+    name: Circle email notifications
+    covered_by: []
+    uncovered:
+      - "the round-2 hardening of app/api/circle-email (chain verification of
+         circleName/membership, IP rate limit) has no test — see layer B"

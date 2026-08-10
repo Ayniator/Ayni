@@ -601,6 +601,58 @@ impl TreasuryConfig {
     pub const SPACE: usize = 8 + 32 + 32 + 1;
 }
 
+/// A Circle's gas faucet — first-transaction-fee mutual aid for newly admitted
+/// members (Trust Platform Epic 0, Tradition 7). The jar's lamports live ON this
+/// account; anyone may top it up by plain transfer, but treasury→jar refills
+/// require a passed anonymous member vote (`refill_faucet`), and outflows happen
+/// only through `activate_faucet` — one uniform grant per neophyte, ever,
+/// triggered by the neophyte's designated parrain (their WingPeer).
+///
+/// `grant_lamports` is Treasurer-tunable but the program itself enforces the
+/// absolute cap `FAUCET_MAX_GRANT_LAMPORTS` — the cap is revised at the equinox
+/// by governance (a program upgrade), never by a price oracle.
+///
+/// Every grant pays exactly `grant_lamports`, and uniformity is enforced rather
+/// than merely intended: a retune stamps `amount_changed_at`, and no grant may
+/// be paid until `FAUCET_AMOUNT_COOLDOWN` has elapsed. Without that wait a
+/// Treasurer could set a distinctive amount immediately before one neophyte's
+/// activation and restore it after, tagging that person's wallet with a
+/// correlatable transfer — exactly the fingerprint uniform amounts exist to
+/// prevent. PDA: ["faucet", circle].
+#[account]
+pub struct FaucetJar {
+    pub circle: Pubkey,
+    /// Lamports paid out per grant (Treasurer-set, ≤ FAUCET_MAX_GRANT_LAMPORTS).
+    pub grant_lamports: u64,
+    /// Jar-level accounting: how many grants this jar has ever paid. Jar-level,
+    /// never member-level — nothing here counts or ranks a person.
+    pub granted: u64,
+    /// Unix time `grant_lamports` was last changed (0 = never). Grants wait out
+    /// `FAUCET_AMOUNT_COOLDOWN` after a change, so an amount can never be aimed
+    /// at an individual.
+    pub amount_changed_at: i64,
+    pub bump: u8,
+}
+
+impl FaucetJar {
+    pub const SPACE: usize = 8 + 32 + 8 + 8 + 8 + 1;
+}
+
+/// Absolute on-chain ceiling for a faucet grant (≈ USD 0.25; revised each
+/// equinox by top-circle vote via program upgrade — see Epic 0 analysis).
+pub const FAUCET_MAX_GRANT_LAMPORTS: u64 = 2_000_000; // 0.002 SOL
+/// Default grant: rent-exempt minimum for a fresh wallet + >100 tx fees.
+pub const FAUCET_DEFAULT_GRANT_LAMPORTS: u64 = 1_500_000; // 0.0015 SOL
+/// How long grants pause after the Treasurer retunes the amount (24h), so a
+/// change applies to everyone alike instead of to one targeted neophyte.
+pub const FAUCET_AMOUNT_COOLDOWN: i64 = 24 * 60 * 60;
+/// A single refill vote may move at most this many grants' worth into the jar.
+/// The jar is a second treasury outflow, guarded only by a member vote whose
+/// amount lives in an opaque hash — without a ceiling one ballot could commit
+/// the entire treasury. Bounding it keeps the jar mutual aid, not a back door
+/// around `withdraw_treasury`'s 4-of-7 + time-lock + allowlist.
+pub const FAUCET_MAX_REFILL_GRANTS: u64 = 100;
+
 /// A member-authored post / bulletin for a Circle (F30). Text and/or an IPFS
 /// image, shown only within [start_date, end_date]. Authored by a member (a
 /// wallet that owns a live membership in the Circle); deletable by ANY of the 7

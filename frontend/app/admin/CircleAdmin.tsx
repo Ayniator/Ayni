@@ -47,6 +47,18 @@ import {
   setOpenMembership,
 } from "../../lib/admin";
 import { emailNote, notifyCircleEmail } from "../../lib/circleEmail";
+import {
+  FAUCET_MAX_GRANT_LAMPORTS,
+  FaucetInfo,
+  getFaucet,
+  hasFaucetFill,
+  initFaucet,
+  proposeFaucetRefill,
+  recallRefillAmount,
+  refillFaucet,
+  setFaucetAmount,
+  FAUCET_MAX_REFILL_GRANTS,
+} from "../../lib/faucet";
 
 const short = (s: string) => `${s.slice(0, 4)}…${s.slice(-4)}`;
 const day = (u: number) => new Date(u * 1000).toLocaleDateString();
@@ -139,6 +151,7 @@ export default function CircleAdmin() {
       <PolicySection circle={circle} wallet={wallet ?? null} onChanged={refresh} />
       <ConfigSection circle={circle} wallet={wallet ?? null} />
       <CouncilSection circle={circle} wallet={wallet ?? null} me={me!} />
+      <FaucetSection circle={circle} wallet={wallet ?? null} isTreasurer={mySeatIdx.includes(0)} anySeat={mySeatIdx.length > 0} />
       <MemberVotesSection circle={circle} wallet={wallet ?? null} />
       <SeatElectionsSection circle={circle} wallet={wallet ?? null} anySeat={mySeatIdx.length > 0} />
       <MembersSection circle={circle} wallet={wallet ?? null} amSecretary={amSecretary} anySeat={mySeatIdx.length > 0} />
@@ -670,6 +683,162 @@ function NewCouncilProposal({
       </div>
       <p className="muted sm">High-stakes actions wait out a contest window; any seat can cancel before execution.</p>
     </div>
+  );
+}
+
+// ===========================================================================
+// Gas faucet (Epic 0) — first gas for neophytes, parrain-triggered
+// ===========================================================================
+
+function FaucetSection({ circle, wallet, isTreasurer, anySeat }: { circle: CircleInfo; wallet: any; isTreasurer: boolean; anySeat: boolean }) {
+  const [jar, setJar] = useState<FaucetInfo | null>(null);
+  const [grantSol, setGrantSol] = useState("");
+  const [refillSol, setRefillSol] = useState("0.05");
+  const [period, setPeriod] = useState(86400);
+  const [refills, setRefills] = useState<{ proposal: string; lamports: number; status: string; filled: boolean }[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<TxNote>(null);
+
+  const load = useCallback(() => {
+    getFaucet(new PublicKey(circle.pubkey))
+      .then((f) => {
+        setJar(f);
+        setGrantSol((f.grantLamports / LAMPORTS_PER_SOL).toString());
+      })
+      .catch(() => {});
+    // Refill proposals are ordinary member votes whose hash commits to (circle, amount);
+    // the amount is only known to the browser that proposed it (local store).
+    listMemberProposals(circle.pubkey)
+      .then(async (ps) => {
+        const known = ps
+          .map((p) => ({ p, lamports: recallRefillAmount(p.descriptionHash) }))
+          .filter((x): x is { p: MemberProposal; lamports: number } => x.lamports !== null);
+        const rows = await Promise.all(
+          known.map(async ({ p, lamports }) => ({
+            proposal: p.pubkey,
+            lamports,
+            status: p.status,
+            filled: p.status === "passed" ? await hasFaucetFill(new PublicKey(p.pubkey)) : false,
+          }))
+        );
+        setRefills(rows);
+      })
+      .catch(() => {});
+  }, [circle.pubkey]);
+  useEffect(load, [load]);
+
+  async function act(label: string, run: () => Promise<string>, okText: string) {
+    if (!wallet) return;
+    setBusy(label); setNote(null);
+    try {
+      const sig = await run();
+      setNote({ kind: "ok", text: okText, sig });
+      load();
+    } catch (e: any) {
+      setNote({ kind: "err", text: String(e?.message || e) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveAmount() {
+    const lamports = Math.round(parseFloat(grantSol || "0") * LAMPORTS_PER_SOL);
+    if (!(lamports > 0)) return setNote({ kind: "err", text: "Enter a grant amount in SOL." });
+    const clamped = Math.min(lamports, FAUCET_MAX_GRANT_LAMPORTS); // the program enforces the cap anyway
+    await act("amount", () => setFaucetAmount(wallet, new PublicKey(circle.pubkey), clamped),
+      `Per-grant amount set to ${clamped / LAMPORTS_PER_SOL} SOL.`);
+  }
+
+  async function proposeRefill() {
+    const lamports = Math.round(parseFloat(refillSol || "0") * LAMPORTS_PER_SOL);
+    if (!(lamports > 0)) return setNote({ kind: "err", text: "Enter a refill amount in SOL." });
+    await act("refill", async () => (await proposeFaucetRefill(wallet, new PublicKey(circle.pubkey), lamports, period)).signature,
+      "Refill vote opened — the members decide (anonymous one-member-one-vote).");
+  }
+
+  return (
+    <section className="card">
+      <SectionHead
+        title="Gas faucet"
+        sub="First gas for neophytes: the parrain (their WingPeer) triggers a one-time uniform grant to their wallet. One grant per member, per Circle; refills only by member vote."
+      />
+
+      {jar === null ? (
+        <p className="muted">Loading faucet…</p>
+      ) : !jar.exists ? (
+        anySeat ? (
+          <button className="btn btn-sm" disabled={busy === "init"}
+            onClick={() => act("init", () => initFaucet(wallet, new PublicKey(circle.pubkey)), "Faucet opened — fund the jar by donation or a voted treasury refill.")}>
+            {busy === "init" ? "Opening…" : "Open the faucet"}
+          </button>
+        ) : (
+          <p className="muted sm">No faucet jar yet — any Council seat can open one.</p>
+        )
+      ) : (
+        <>
+          <p className="muted sm" style={{ marginTop: -6 }}>
+            Jar balance <strong>{(jar.balanceLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL</strong> ·{" "}
+            grant <strong>{jar.grantLamports / LAMPORTS_PER_SOL} SOL</strong> ·{" "}
+            {jar.granted} grant{jar.granted === 1 ? "" : "s"} paid
+          </p>
+
+          {isTreasurer && (
+            <div className="form-row" style={{ flexWrap: "wrap", gap: 8 }}>
+              <label>Per-grant amount</label>
+              <input type="number" min="0" step="0.0001" value={grantSol} onChange={(e) => setGrantSol(e.target.value)} style={{ maxWidth: 120 }} />
+              <span className="sm muted">SOL · max {FAUCET_MAX_GRANT_LAMPORTS / LAMPORTS_PER_SOL}</span>
+              <button className="btn btn-sm" disabled={busy === "amount"} onClick={saveAmount}>{busy === "amount" ? "…" : "Set"}</button>
+              {jar.granted > 0 && (
+                <p className="sm muted" style={{ flexBasis: "100%", margin: "4px 0 0" }}>
+                  Grants pause for 24 hours after a change, so every member receives the
+                  same amount and no single wallet can be marked out by its size.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="form-row" style={{ flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+            <label>Propose refill</label>
+            <input type="number" min="0" step="0.01" value={refillSol} onChange={(e) => setRefillSol(e.target.value)} style={{ maxWidth: 120 }} />
+            <span className="sm muted">
+              SOL from the treasury · max {((jar.grantLamports * FAUCET_MAX_REFILL_GRANTS) / LAMPORTS_PER_SOL).toFixed(2)} per vote
+            </span>
+            <select value={period} onChange={(e) => setPeriod(Number(e.target.value))}>
+              {PERIODS.map((p) => <option key={p.secs} value={p.secs}>{p.label}</option>)}
+            </select>
+            <button className="btn btn-sm" disabled={busy === "refill"} onClick={proposeRefill}>{busy === "refill" ? "Opening…" : "Open refill vote"}</button>
+          </div>
+
+          {refills.length > 0 && (
+            <div className="votes" style={{ marginTop: 8 }}>
+              {refills.map((r) => (
+                <div className="vote" key={r.proposal}>
+                  <div className="vote-main">
+                    <StatusDot status={r.filled ? "executed" : r.status} />
+                    <div>
+                      <div className="name">Refill {r.lamports / LAMPORTS_PER_SOL} SOL into the jar</div>
+                      <div className="sub">{r.filled ? "refilled ✓" : r.status}</div>
+                    </div>
+                  </div>
+                  <div className="vote-actions">
+                    {r.status === "passed" && !r.filled && (
+                      <button className="btn btn-sm" disabled={busy === "fill" + r.proposal}
+                        onClick={() => act("fill" + r.proposal,
+                          () => refillFaucet(wallet, new PublicKey(circle.pubkey), new PublicKey(r.proposal), r.lamports),
+                          "Treasury moved the voted amount into the faucet jar.")}>
+                        {busy === "fill" + r.proposal ? "…" : "Execute refill"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      <TxNoteView note={note} />
+    </section>
   );
 }
 

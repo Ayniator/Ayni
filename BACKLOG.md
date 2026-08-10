@@ -15,8 +15,10 @@ Solana implementation.
 > the same commit whenever a feature is added, finished, or descoped.
 
 **Status legend:** ✅ implemented (code-complete) · 🟡 partial / stubbed · ⬜ planned
-**Caveat (whole repo):** nothing is compiled yet — no Solana/Anchor/circom
-toolchain present. **Update (2026-06):** the circuits were compiled and a
+**Toolchain status (2026-08):** the Rust program **compiles clean** —
+`cargo check --workspace --all-targets` passes with 0 errors — and `anchor build`
+runs in Docker on this machine (no native Solana/Anchor/circom toolchain on the
+host `PATH`; builds are containerized). **Update (2026-06):** the circuits were compiled and a
 **single-contributor** phase-2 ceremony was run — `verifying_key*.rs` for
 `member_vote`, `lineage_grant`, and `ack_disclose` now hold **real** Groth16
 keys (not placeholders), and the deployed devnet program verifies against them.
@@ -70,6 +72,7 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
 |---|---------|--------|----------------------|-------|
 | F17 | Self-supporting donation treasury | ✅ | `donate`, `donate_token` (any SPL/Token-2022), `withdraw_treasury` (treasury PDA) | `app/treasury/fund.ts` (`fundFoundation`); `docs/treasury.md` |
 | F29 | **Change the Circle treasury wallet (4-of-7) — must be a multisig** | ✅ | `ProposalAction::SetTreasuryWallet`, `propose`/`execute_proposal`/`set_treasury_wallet`, `TreasuryConfig` PDA; admin console "Council votes" + "Apply"; `frontend/lib/multisig.ts`, `scripts/create-multisig.js`, `docs/multisig.md` | Council **4-of-7** designates/rotates the treasury steward wallet. New time-locked, contestable proposal action (same machinery as `WithdrawTreasury`): `execute_proposal` authorizes, `set_treasury_wallet` writes the wallet into a separate `TreasuryConfig` PDA (`["treasurycfg", circle]` — migration-safe, no `Circle` layout change). **The steward wallet MUST be a multisig** (Tradition 7 — money held in common, never by one key): `set_treasury_wallet` re-checks on-chain that the passed account is an initialized SPL Token / Token-2022 `Multisig` with `m ≥ 2` (`TreasuryNotMultisig` otherwise); the admin console validates the same before proposing, and ships a create-a-multisig helper. Deployed to devnet (upgrade `cDX8sWiJ…`); helper verified against a real 2-of-3 multisig (`AHvaueFp…`). |
+| F35 | **Gas faucet — first gas for the neophyte** (Trust Platform Epic 0) | ✅ (program + frontend + `tests/faucet.ts`; adversarially reviewed, 3 findings fixed) | `init_faucet` (any seat), `set_faucet_amount` (Treasurer, ≤ on-chain cap), `activate_faucet` (parrain one-shot per identity), `refill_faucet` (passed member vote, one-shot); `instructions/{init_faucet,set_faucet_amount,activate_faucet,refill_faucet}.rs`, `FaucetJar` in `state.rs`; `docs/faucet.md` | Per-Circle jar PDA (`["faucet", circle]`, lamports on the account). Parrain attestation = the existing **WingPeer** bond; **one grant per membership commitment** (i.e. per member per Circle) via nullifier `["faucetnull", circle, commitment]` — fellowship-wide dedup would need a linkable commitment, so it is left to proof-of-personhood (F5). Uniform grant = `jar.grant_lamports` (default 1_500_000, cap `FAUCET_MAX_GRANT_LAMPORTS = 2_000_000` enforced by the program); uniformity is enforced — once a jar has paid, a retune pauses grants for `FAUCET_AMOUNT_COOLDOWN` (24h) so an amount cannot be aimed at one neophyte. Refill is capped on-chain at `FAUCET_MAX_REFILL_GRANTS` (100) grants' worth, so one ballot cannot move the treasury. Refill only via a passed F6 member vote whose `description_hash = sha256("AHA-faucet-refill" ‖ circle ‖ amount_le)`, then permissionless one-shot execution. Pilot limits (see `docs/faucet.md`): activation tx links parrain↔neophyte wallets (anonymous form = Epic 2 + Epic 10 relayer decision); treasurer one-time-code ledger not built. |
 
 ### Directory & frontend
 | # | Feature | Status | Instructions / files | Notes |
@@ -182,12 +185,28 @@ Functional for devnet; **mainnet still needs a proper multi-party ceremony**
 
 ---
 
-## Instruction index (25)
+## Instruction index (58)
 
-`initialize_circle` · `issue_membership` · `renew_membership` ·
-`initialize_member_tree` · `create_member_proposal` · `cast_vote` ·
-`finalize_member_proposal` · `set_personhood` · `prove_personhood` · `donate` ·
-`withdraw_treasury` · `set_membership_mint` · `create_membership_mint` · `mint_membership_token` ·
-`appoint_seat` · `propose` · `approve` · `execute_proposal` · `cancel_proposal` ·
-`recover_membership` · `set_recovery` · `member_migrate` · `initialize_lineage` ·
-`grant_level` · `issue_acknowledgment` · `verify_disclosure`
+One file per instruction under `programs/ayni/src/instructions/` (58 files
+excluding `mod.rs`), matching 58 `pub fn` entry points in `lib.rs`. (The old
+"25" index was stale and also listed `appoint_seat`, which is not an entry
+point — seats are installed via proposals / `install_elected_seat`.)
+
+`activate_faucet` · `approve` · `approve_child_close` · `approve_child_rotation` ·
+`cancel_proposal` · `cast_vote` · `close_circle_profile` ·
+`create_member_proposal` · `create_membership_mint` · `create_post` ·
+`delete_message` · `delete_post` · `donate` · `donate_token` · `end_wing_peer` ·
+`establish_wing_peer` · `execute_child_close` · `execute_child_rotation` ·
+`execute_proposal` · `finalize_member_proposal` · `grant_level` · `init_faucet` ·
+`initialize_circle` · `initialize_lineage` · `initialize_member_tree` ·
+`install_elected_seat` · `issue_acknowledgment` · `issue_membership` ·
+`issue_progress_token` · `link_seat_election` · `member_migrate` ·
+`mint_membership_token` · `open_maci_round` · `propose` · `propose_child_close` ·
+`propose_child_rotation` · `prove_personhood` · `publish_maci_message` ·
+`recover_membership` · `refill_faucet` · `register_messaging_key` ·
+`renew_membership` · `revoke_membership` · `send_message` · `set_circle_config` ·
+`set_circle_country` · `set_faucet_amount` · `set_meetings` ·
+`set_membership_mint` · `set_open_membership` · `set_personhood` ·
+`set_recovery` · `set_treasury_allow` · `set_treasury_wallet` ·
+`update_circle_location` · `upsert_circle_profile` · `verify_disclosure` ·
+`withdraw_treasury`

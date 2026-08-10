@@ -66,4 +66,16 @@ pub enum AyniError {
     TreasuryNotMultisig,
     #[msg("Failed to initialize the membership mint")]
     MintInitFailed,
+    #[msg("Faucet grant amount exceeds the absolute on-chain cap")]
+    FaucetCapExceeded,
+    #[msg("Faucet jar has insufficient funds for the grant")]
+    FaucetInsufficient,
+    #[msg("Signer is not the neophyte's designated parrain (WingPeer)")]
+    NotParrain,
+    #[msg("Neophyte membership has no owner wallet to receive the grant")]
+    NeophyteWalletUnset,
+    #[msg("Faucet grant amount changed recently; grants resume after the cooldown")]
+    FaucetAmountCooling,
+    #[msg("Faucet refill exceeds the maximum a single vote may move")]
+    FaucetRefillTooLarge,
 }

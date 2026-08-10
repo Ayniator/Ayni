@@ -8,6 +8,212 @@
   },
   "instructions": [
     {
+      "name": "activate_faucet",
+      "docs": [
+        "The neophyte's parrain (their WingPeer) triggers the one-time gas grant —",
+        "one grant per identity commitment, ever, enforced by nullifier."
+      ],
+      "discriminator": [
+        11,
+        211,
+        216,
+        47,
+        253,
+        70,
+        190,
+        253
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "parrain_membership",
+            "neophyte_membership",
+            "wing_peer",
+            "jar"
+          ]
+        },
+        {
+          "name": "parrain_membership",
+          "docs": [
+            "The sponsor's membership (the wing side of the WingPeer bond)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "parrain_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "neophyte_membership",
+          "docs": [
+            "The newcomer's membership; the grant goes to its `owner` wallet."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "neophyte_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wing_peer",
+          "docs": [
+            "The neophyte's designated sponsor bond — seed-bound to the neophyte, so",
+            "it can't be swapped for someone else's."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  103,
+                  112,
+                  101,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "neophyte_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "grant_nullifier",
+          "docs": [
+            "One grant per membership commitment — `init` collision IS the refusal.",
+            "Circle-scoped: see the scope note above; cross-Circle dedup belongs to",
+            "personhood, not to a commitment that must stay unlinkable."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  117,
+                  99,
+                  101,
+                  116,
+                  110,
+                  117,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "neophyte_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "jar",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  117,
+                  99,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "parrain",
+          "docs": [
+            "The parrain (signs + pays the nullifier's rent — part of the welcome)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "approve",
       "docs": [
         "A Council seat approves a pending proposal."
@@ -1339,6 +1545,63 @@
           }
         }
       ]
+    },
+    {
+      "name": "init_faucet",
+      "docs": [
+        "Create the Circle's faucet jar (any Council seat; default grant amount)."
+      ],
+      "discriminator": [
+        122,
+        64,
+        137,
+        151,
+        7,
+        139,
+        100,
+        57
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "jar",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  117,
+                  99,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (signs + pays the jar's rent)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "initialize_circle",
@@ -2770,6 +3033,134 @@
       "args": []
     },
     {
+      "name": "refill_faucet",
+      "docs": [
+        "Move treasury funds into the jar under a passed anonymous member vote",
+        "whose description_hash commits to exactly (circle, amount). One-shot."
+      ],
+      "discriminator": [
+        240,
+        95,
+        108,
+        246,
+        152,
+        65,
+        78,
+        95
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "proposal",
+            "jar"
+          ]
+        },
+        {
+          "name": "proposal",
+          "docs": [
+            "The passed member vote committing to exactly (circle, amount)."
+          ]
+        },
+        {
+          "name": "fill_marker",
+          "docs": [
+            "One-shot marker: a passed refill vote moves funds exactly once."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  117,
+                  99,
+                  101,
+                  116,
+                  102,
+                  105,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "jar",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  117,
+                  99,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "docs": [
+            "Whoever triggers the (permissionless) refill; pays the marker's rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "register_messaging_key",
       "docs": [
         "Publish the caller's x25519 messaging public key."
@@ -3228,6 +3619,66 @@
         {
           "name": "code",
           "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "set_faucet_amount",
+      "docs": [
+        "Treasurer tunes the per-grant amount, within the absolute on-chain cap."
+      ],
+      "discriminator": [
+        71,
+        253,
+        201,
+        122,
+        23,
+        204,
+        237,
+        221
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "jar"
+          ]
+        },
+        {
+          "name": "jar",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  117,
+                  99,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasurer",
+          "docs": [
+            "The Treasurer seat (seat 0)."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "lamports",
+          "type": "u64"
         }
       ]
     },
@@ -4187,6 +4638,19 @@
       ]
     },
     {
+      "name": "FaucetJar",
+      "discriminator": [
+        167,
+        164,
+        162,
+        162,
+        138,
+        174,
+        129,
+        213
+      ]
+    },
+    {
       "name": "LevelGrant",
       "discriminator": [
         69,
@@ -4594,6 +5058,36 @@
       "code": 6031,
       "name": "MintInitFailed",
       "msg": "Failed to initialize the membership mint"
+    },
+    {
+      "code": 6032,
+      "name": "FaucetCapExceeded",
+      "msg": "Faucet grant amount exceeds the absolute on-chain cap"
+    },
+    {
+      "code": 6033,
+      "name": "FaucetInsufficient",
+      "msg": "Faucet jar has insufficient funds for the grant"
+    },
+    {
+      "code": 6034,
+      "name": "NotParrain",
+      "msg": "Signer is not the neophyte's designated parrain (WingPeer)"
+    },
+    {
+      "code": 6035,
+      "name": "NeophyteWalletUnset",
+      "msg": "Neophyte membership has no owner wallet to receive the grant"
+    },
+    {
+      "code": 6036,
+      "name": "FaucetAmountCooling",
+      "msg": "Faucet grant amount changed recently; grants resume after the cooldown"
+    },
+    {
+      "code": 6037,
+      "name": "FaucetRefillTooLarge",
+      "msg": "Faucet refill exceeds the maximum a single vote may move"
     }
   ],
   "types": [
@@ -5152,6 +5646,66 @@
                 32
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "FaucetJar",
+      "docs": [
+        "A Circle's gas faucet — first-transaction-fee mutual aid for newly admitted",
+        "members (Trust Platform Epic 0, Tradition 7). The jar's lamports live ON this",
+        "account; anyone may top it up by plain transfer, but treasury→jar refills",
+        "require a passed anonymous member vote (`refill_faucet`), and outflows happen",
+        "only through `activate_faucet` — one uniform grant per neophyte, ever,",
+        "triggered by the neophyte's designated parrain (their WingPeer).",
+        "",
+        "`grant_lamports` is Treasurer-tunable but the program itself enforces the",
+        "absolute cap `FAUCET_MAX_GRANT_LAMPORTS` — the cap is revised at the equinox",
+        "by governance (a program upgrade), never by a price oracle.",
+        "",
+        "Every grant pays exactly `grant_lamports`, and uniformity is enforced rather",
+        "than merely intended: a retune stamps `amount_changed_at`, and no grant may",
+        "be paid until `FAUCET_AMOUNT_COOLDOWN` has elapsed. Without that wait a",
+        "Treasurer could set a distinctive amount immediately before one neophyte's",
+        "activation and restore it after, tagging that person's wallet with a",
+        "correlatable transfer — exactly the fingerprint uniform amounts exist to",
+        "prevent. PDA: [\"faucet\", circle]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "grant_lamports",
+            "docs": [
+              "Lamports paid out per grant (Treasurer-set, ≤ FAUCET_MAX_GRANT_LAMPORTS)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "granted",
+            "docs": [
+              "Jar-level accounting: how many grants this jar has ever paid. Jar-level,",
+              "never member-level — nothing here counts or ranks a person."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "amount_changed_at",
+            "docs": [
+              "Unix time `grant_lamports` was last changed (0 = never). Grants wait out",
+              "`FAUCET_AMOUNT_COOLDOWN` after a change, so an amount can never be aimed",
+              "at an individual."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

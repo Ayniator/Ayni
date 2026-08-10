@@ -96,6 +96,30 @@ pub mod ayni {
         instructions::set_meetings(ctx, data)
     }
 
+    // --- The gas faucet: first gas for the neophyte (Trust Platform Epic 0) ---
+
+    /// Create the Circle's faucet jar (any Council seat; default grant amount).
+    pub fn init_faucet(ctx: Context<InitFaucet>) -> Result<()> {
+        instructions::init_faucet(ctx)
+    }
+
+    /// Treasurer tunes the per-grant amount, within the absolute on-chain cap.
+    pub fn set_faucet_amount(ctx: Context<SetFaucetAmount>, lamports: u64) -> Result<()> {
+        instructions::set_faucet_amount(ctx, lamports)
+    }
+
+    /// The neophyte's parrain (their WingPeer) triggers the one-time gas grant —
+    /// one grant per identity commitment, ever, enforced by nullifier.
+    pub fn activate_faucet(ctx: Context<ActivateFaucet>) -> Result<()> {
+        instructions::activate_faucet(ctx)
+    }
+
+    /// Move treasury funds into the jar under a passed anonymous member vote
+    /// whose description_hash commits to exactly (circle, amount). One-shot.
+    pub fn refill_faucet(ctx: Context<RefillFaucet>, amount: u64) -> Result<()> {
+        instructions::refill_faucet(ctx, amount)
+    }
+
     // --- Member posts / bulletins (F30) ---
 
     /// A member publishes a time-boxed post (text and/or IPFS image).

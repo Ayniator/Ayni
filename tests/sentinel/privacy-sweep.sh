@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Sentinel Layer D — the mechanical half: forbidden-pattern sweep.
+#
+# This is a REGRESSION GATE, not an audit. It enforces only the invariants that
+# were verified clean in Round 1 (see reports/sentinel/NRR-2026-08-10-1.md), so
+# any hit here is something new that a commit introduced. Exit 1 on any hit.
+#
+# Architectural privacy findings (public roster, public sponsor edge, message
+# metadata) are NOT grep-detectable and are deliberately NOT gated here — they
+# live in the report and in tests/sentinel/checklist.yaml as known exceptions.
+# Do not weaken this script to make a round pass (Sentinel spec §4).
+
+set -uo pipefail
+cd "$(dirname "$0")/../.."
+
+EX="--exclude-dir=node_modules --exclude-dir=.git --exclude-dir=build --exclude-dir=target --exclude-dir=.next --exclude-dir=reports"
+SRC="--include=*.ts --include=*.tsx --include=*.js --include=*.jsx --include=*.rs --include=*.circom"
+fails=0
+
+report() { # name, hits
+  if [ -n "$2" ]; then
+    echo "✘ FAIL — $1"
+    echo "$2" | head -30
+    fails=$((fails + 1))
+  else
+    echo "✔ pass — $1"
+  fi
+}
+
+echo "=== Sentinel Layer D — forbidden-pattern sweep ==="
+
+# 1. Analytics / telemetry SDKs and tracking pixels. Nothing may phone home.
+hits=$(grep -rniE '(google-analytics|googletagmanager|gtag\(|mixpanel|segment\.(com|io)|amplitude|posthog|hotjar|fullstory|sentry\.io|datadog|newrelic|plausible|fathom|matomo|facebook\.net|fbq\(|doubleclick\.net)' $SRC $EX . 2>/dev/null | grep -viE 'onDoubleClick|handleDoubleClick')
+report "no analytics/telemetry SDK" "$hits"
+
+hits=$(grep -rniE '<img[^>]+(1x1|pixel\.gif|track\.(gif|png))' --include=*.tsx --include=*.ts --include=*.html $EX . 2>/dev/null)
+report "no tracking pixels" "$hits"
+
+# 2. Identity material must never reach a log. The program is silent by design
+#    (zero msg!/println!) — keep it that way; a msg! of a commitment or
+#    nullifier would publish it in every validator's log forever.
+hits=$(grep -rnE 'msg!|println!|eprintln!|dbg!|sol_log' --include=*.rs $EX programs/ 2>/dev/null)
+report "no logging macros in the Anchor program" "$hits"
+
+hits=$(grep -rniE 'console\.[a-z]+\([^)]*(secret|privkey|private_?key|mnemonic|trapdoor|nullifier|commitment|witness)' $SRC $EX frontend/ app/ indexer/ scripts/ 2>/dev/null)
+report "no console.* of identity material" "$hits"
+
+# 3. Traditions: nothing may rank, score, or compare a member (T11/T12). The
+#    backlog's audit rejects karma/ratings outright. `level` (shamanic lineage)
+#    and vote tallies are legitimate and excluded by name.
+# Matched the way a field is actually written — snake_case/standalone
+# (`member_score`, `karma`) or camelCase (`memberScore`, `trustRating`). A plain
+# \b pattern misses `memberScore`; a plain substring pattern hits
+# `saturating_add` and `celebrating`. Case-sensitive on purpose.
+RANK='score|rating|ranking|karma|reputation|leaderboard|streak'
+RANK_UC='Score|Rating|Ranking|Karma|Reputation|Leaderboard|Streak'
+hits=$(grep -rnE "(^|[^a-zA-Z])($RANK|$RANK_UC)|[a-z_]($RANK_UC)" $SRC $EX programs/ frontend/lib/ frontend/components/ frontend/app/ 2>/dev/null \
+  | grep -viE 'underscore|scorecard')
+report "no score/rating/rank/karma/reputation field" "$hits"
+
+echo
+if [ "$fails" -gt 0 ]; then
+  echo "RESULT: $fails privacy/Traditions invariant(s) BROKEN — this is CRITICAL, the round FAILS."
+  exit 1
+fi
+echo "RESULT: all Layer D mechanical invariants hold."

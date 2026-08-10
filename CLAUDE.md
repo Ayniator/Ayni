@@ -31,3 +31,22 @@ files as needed without asking.
 (Enforced via `.claude/settings.local.json` permissions; this file records the
 standing intent. Prefer `git -C <dir> …` where convenient, but `cd … && git …`
 is approved.)
+
+## Non-regression (mandatory)
+
+**After every implementation round, run Sentinel** — the non-regression agent
+defined in `backlog/sentinel-agent.md` (installed at `.claude/agents/sentinel.md`;
+if the `sentinel` agent type isn't registered in the session, run it as a
+general-purpose agent instructed to read and follow that spec). An
+"implementation round" is any change to `programs/`, `circuits/`, `frontend/`,
+`indexer/`, `scripts/`, or `tests/` — before its commit is considered done.
+
+- Sentinel writes `reports/sentinel/NRR-<date>-<round>.md` (+ `latest.md`) and
+  never modifies application code; fixing is the main agent's job.
+- A CRITICAL finding (privacy invariant, Traditions violation, silent baseline
+  change) means the round FAILS: report it and address it (or get an explicit
+  written waiver from the user) before moving to the next feature.
+- New features must gain Sentinel coverage in the same round they ship —
+  missing coverage is a WARNING in round n and a FAIL in round n+1.
+- The current shipped-feature inventory lives in `docs/shipped.md`; keep it and
+  `BACKLOG.md` reconciled in the same commit as the change.
