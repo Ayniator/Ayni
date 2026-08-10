@@ -60,6 +60,7 @@ import {
   FAUCET_MAX_REFILL_GRANTS,
 } from "../../lib/faucet";
 import { LedgerEntry, readLedger } from "../../lib/faucetLedger";
+import { PendingAdmission, confirmAdmission, getTwoSponsorPolicy, listProvisionals, setTwoSponsorAdmission } from "../../lib/admission";
 
 const short = (s: string) => `${s.slice(0, 4)}…${s.slice(-4)}`;
 const day = (u: number) => new Date(u * 1000).toLocaleDateString();
@@ -150,12 +151,97 @@ export default function CircleAdmin() {
 
       <SeatsSection circle={circle} wallet={wallet ?? null} me={me!} />
       <PolicySection circle={circle} wallet={wallet ?? null} onChanged={refresh} />
+      <AdmissionsSection circle={circle} wallet={wallet ?? null} anySeat={mySeatIdx.length > 0} />
       <ConfigSection circle={circle} wallet={wallet ?? null} />
       <CouncilSection circle={circle} wallet={wallet ?? null} me={me!} />
       <FaucetSection circle={circle} wallet={wallet ?? null} isTreasurer={mySeatIdx.includes(0)} anySeat={mySeatIdx.length > 0} />
       <MemberVotesSection circle={circle} wallet={wallet ?? null} />
       <SeatElectionsSection circle={circle} wallet={wallet ?? null} anySeat={mySeatIdx.length > 0} />
       <MembersSection circle={circle} wallet={wallet ?? null} amSecretary={amSecretary} anySeat={mySeatIdx.length > 0} />
+    </section>
+  );
+}
+
+// ===========================================================================
+// Two-sponsor admission (Epic 1, amended v0.2) — policy + pending confirmations
+// ===========================================================================
+
+function AdmissionsSection({ circle, wallet, anySeat }: { circle: CircleInfo; wallet: any; anySeat: boolean }) {
+  const [required, setRequired] = useState<boolean | null>(null);
+  const [pending, setPending] = useState<PendingAdmission[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<TxNote>(null);
+
+  const load = useCallback(() => {
+    getTwoSponsorPolicy(new PublicKey(circle.pubkey)).then(setRequired).catch(() => {});
+    listProvisionals(circle.pubkey).then(setPending).catch(() => {});
+  }, [circle.pubkey]);
+  useEffect(load, [load]);
+
+  async function act(label: string, run: () => Promise<string>, okText: string) {
+    if (!wallet) return;
+    setBusy(label); setNote(null);
+    try {
+      const sig = await run();
+      setNote({ kind: "ok", text: okText, sig });
+      load();
+    } catch (e: any) {
+      setNote({ kind: "err", text: String(e?.message || e) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (required === null) return null;
+  return (
+    <section className="card">
+      <SectionHead
+        title="Two-sponsor admission"
+        sub="Epic 1: a parrain (any member in good standing) attests, the newcomer enters provisionally, and a trusted servant — a different person — confirms. Until confirmation they cannot vote or hold a role: their commitment simply is not in the member tree."
+      />
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <span className={`pill ${required ? "" : "pill-dim"}`}>
+          {required ? "Required — the two-sponsor flow is the only door" : "Off — legacy admission applies"}
+        </span>
+        {anySeat && (
+          <button className="btn btn-sm" disabled={busy === "toggle"}
+            onClick={() => act("toggle", () => setTwoSponsorAdmission(wallet, new PublicKey(circle.pubkey), !required),
+              required ? "Two-sponsor admission disabled." : "Two-sponsor admission is now required.")}>
+            {busy === "toggle" ? "…" : required ? "Disable" : "Require two sponsors"}
+          </button>
+        )}
+      </div>
+
+      {pending.length > 0 && (
+        <div className="votes" style={{ marginTop: 8 }}>
+          {pending.map((p) => (
+            <div className="vote" key={p.commitment}>
+              <div className="vote-main">
+                <Identicon seed={p.commitment} size={26} />
+                <div>
+                  <div className="name">Provisional member <code>{p.commitment.slice(0, 8)}…</code></div>
+                  <div className="sub">parrain <code>{p.parrain.slice(0, 8)}…</code> · since {day(p.issuedAt)}</div>
+                </div>
+              </div>
+              <div className="vote-actions">
+                {anySeat && (
+                  <button className="btn btn-sm" disabled={busy === "confirm" + p.commitment}
+                    onClick={() => act("confirm" + p.commitment,
+                      () => confirmAdmission(wallet, new PublicKey(circle.pubkey), p.commitment, p.parrain),
+                      "Admission confirmed — the newcomer is now a full member of the votable set.")}>
+                    {busy === "confirm" + p.commitment ? "…" : "Co-attest & confirm"}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {pending.length === 0 && required && (
+        <p className="muted sm" style={{ marginBottom: 0 }}>No admissions awaiting confirmation.</p>
+      )}
+
+      <TxNoteView note={note} />
     </section>
   );
 }

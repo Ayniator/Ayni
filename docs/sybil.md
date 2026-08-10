@@ -4,16 +4,28 @@ Anonymity + one-member-one-vote + permissionless can't all hold without
 **proof-of-unique-personhood**. Without it, one human mints many anonymous
 commitments → many votes. Ayni closes this *while keeping anonymity*.
 
-## Two layers
+## Three layers
 
-1. **Social vouching (always on).** `issue_membership` is gated by the Circle
-   `authority` (a trusted servant). A human admits a human — the real-world AA
-   mechanism, and the natural reading of Tradition 3 (only a desire is required,
-   but someone still admits you). Cheap, trust-based.
-2. **Anonymous proof-of-personhood (optional, cryptographic).** When
+1. **Seat-gated admission (the default).** `issue_membership` is gated by the
+   Scribe-Secretary seat (or open, per-Circle policy F31). A human admits a
+   human — cheap, trust-based. Note precisely what this is: a *service-role*
+   gate, not peer sponsorship; the seat records the rolls, it does not vouch
+   from having met you.
+2. **Two-sponsor admission (Epic 1, amended v0.2 — opt-in per Circle).** The
+   real sponsorship layer: the **parrain** (any member in good standing who has
+   met the newcomer) attests, the newcomer enters *provisionally* (their
+   commitment is not yet in the member tree, so every members-only proof fails
+   by construction), and a **trusted servant** (any of the 7 seats, a different
+   person than the parrain — program-enforced) confirms. Forging an admission
+   now requires capturing an elected service role, not just any wallet. This is
+   the fellowship's humanity check: bots do not attend ceremonies.
+3. **Anonymous proof-of-personhood (optional, cryptographic).** When
    `circle.require_personhood` is on, a member must present a one-per-human
-   `PersonhoodCredential` to join. This gives **one human → one membership per
-   Circle** without revealing identity.
+   `PersonhoodCredential` to join (either admission path consumes it). This
+   gives **one human → one membership per Circle** without revealing identity —
+   and it is the only correct tool for *cross-Circle* uniqueness (e.g. "one
+   faucet grant per human"), because commitments are deliberately unlinkable
+   across Circles (Tradition 12).
 
 ## How the cryptographic gate works
 

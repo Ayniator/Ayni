@@ -38,7 +38,8 @@ import { Chip, WingPeerInfo, endWingPeer, establishWingPeer, getWingPeer, listPr
 import { MemberProposal, SeatElectionInfo, SEAT_ROLES, listCircleMembers, listMemberProposals, listSeatElections } from "../../lib/admin";
 import { activateFaucet, getFaucet, hasFaucetGrant, listMenteesOf } from "../../lib/faucet";
 import { flushLedgerQueue, recordGrantInLedger } from "../../lib/faucetLedger";
-import { castMemberVote, haveVotingKey, newMemberIdentity } from "../../lib/zk-vote";
+import { attestAdmission, getTwoSponsorPolicy, hasAttestation, issueProvisionalMembership } from "../../lib/admission";
+import { attestAdmissionAnonymously, castMemberVote, haveVotingKey, newMemberIdentity } from "../../lib/zk-vote";
 
 const sol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(4).replace(/\.?0+$/, "") || "0";
 const day = (unix: number) => new Date(unix * 1000).toLocaleDateString();
@@ -308,6 +309,7 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
   const [wings, setWings] = useState<Record<string, WingPeerInfo | null>>({});
   const [chips, setChips] = useState<Record<string, Chip[]>>({});
   const [wingInput, setWingInput] = useState<Record<string, string>>({});
+  const [attestInput, setAttestInput] = useState<Record<string, string>>({});
   // Neophytes I sponsor who can still receive the one-time first-gas grant.
   const [neophytes, setNeophytes] = useState<Record<string, { commitment: string }[]>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -380,6 +382,28 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
     finally { setBusy(null); }
   }
 
+  // Epic 1: I (a member in good standing) attest as parrain for a newcomer who
+  // handed me their join code — one action after meeting them in circle.
+  async function attestFor(m: MyMembership) {
+    const code = (attestInput[m.circle] ?? "").trim().replace(/^0x/, "");
+    if (!/^[0-9a-fA-F]{64}$/.test(code)) { setNote({ kind: "err", text: "A join code is 64 hex characters." }); return; }
+    if (!wallet) return;
+    setBusy("attest-" + m.circle); setNote(null);
+    try {
+      // Epic 2: prefer the anonymous vouch-proof (no sponsor edge on-chain) when
+      // this device holds the voting key; fall back to the named pilot form.
+      if (haveVotingKey(m.commitment)) {
+        await attestAdmissionAnonymously(wallet, m.circle, m.commitment, code);
+        setNote({ kind: "ok", text: "Attested anonymously — your neophyte can join provisionally; nothing on-chain links you to them." });
+      } else {
+        await attestAdmission(wallet, new PublicKey(m.circle), m.commitment, code);
+        setNote({ kind: "ok", text: "Attested (named pilot) — your neophyte can now join provisionally; a trusted servant completes their admission." });
+      }
+      setAttestInput((p) => ({ ...p, [m.circle]: "" }));
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
+
   async function setWing(m: MyMembership) {
     const w = (wingInput[m.circle] ?? "").trim();
     if (!w || !wallet) return;
@@ -436,6 +460,12 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
                 </button>
               </div>
             ))}
+            <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+              <input className="mono" value={attestInput[m.circle] ?? ""} onChange={(e) => setAttestInput((p) => ({ ...p, [m.circle]: e.target.value }))} placeholder="Newcomer's join code (commitment)" style={{ flex: 1, minWidth: 180 }} />
+              <button className="btn btn-sm" disabled={busy === "attest-" + m.circle} onClick={() => attestFor(m)}>
+                {busy === "attest-" + m.circle ? "…" : "Attest as parrain"}
+              </button>
+            </div>
           </div>
         );
       })}
@@ -547,6 +577,35 @@ function JoinCard({
     try {
       onHome(circle.pubkey);
       const commitment = await newMemberIdentity(); // votable identity: commitment = Poseidon(secret), secret kept on this device
+
+      // Epic 1: in a two-sponsor Circle the door is the parrain's attestation.
+      // If one exists for this commitment, enter provisionally; otherwise hand
+      // the commitment to your parrain (same share flow as a join request).
+      if (await getTwoSponsorPolicy(new PublicKey(circle.pubkey))) {
+        if (await hasAttestation(new PublicKey(circle.pubkey), hex(commitment))) {
+          const tx = await issueProvisionalMembership(wallet, new PublicKey(circle.pubkey), commitment, owner);
+          setSig(tx);
+          setNote(
+            `Welcome — you are a provisional member of “${circle.name}”. Your page is live and your parrain can ` +
+              "activate first gas; voting and roles open when a trusted servant confirms your admission."
+          );
+        } else {
+          saveJoinRequest({
+            circle: circle.pubkey,
+            circleName: circle.name,
+            commitment: hex(commitment),
+            owner: owner.toBase58(),
+            createdAt: Date.now(),
+          });
+          setNote(
+            `“${circle.name}” admits by two sponsors. Share the request below with your parrain — ` +
+              "once they attest, press Join again to enter provisionally."
+          );
+        }
+        onChanged();
+        return;
+      }
+
       if (canSelfIssue) {
         // Permissionless circle → self-admit (open marker sent). Otherwise the
         // connected wallet is the Scribe-Secretary, who admits directly.

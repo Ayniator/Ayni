@@ -56,6 +56,54 @@ pub mod ayni {
         instructions::issue_membership(ctx, commitment, owner, recovery_keys, require_cosign)
     }
 
+    // --- Two-sponsor admission (Trust Platform Epic 1, amended v0.2) ---
+
+    /// Any Council seat toggles the two-sponsor admission policy: parrain (any
+    /// member in good standing) + trusted servant (any of the 7 seats).
+    pub fn set_two_sponsor_admission(ctx: Context<SetTwoSponsorAdmission>, required: bool) -> Result<()> {
+        instructions::set_two_sponsor_admission(ctx, required)
+    }
+
+    /// Attestation A: the parrain attests for the newcomer they sponsor — one
+    /// action, one attestation per newcomer, self-attestation refused.
+    pub fn attest_admission(ctx: Context<AttestAdmission>, newcomer_commitment: [u8; 32]) -> Result<()> {
+        instructions::attest_admission(ctx, newcomer_commitment)
+    }
+
+    /// Attestation A, anonymous form (Epic 2): a Groth16 proof that SOME member
+    /// of the tree attests for this newcomer — the sponsor edge never exists.
+    /// Reuses the member_vote circuit + ceremony key, like prove_personhood.
+    pub fn attest_admission_zk(
+        ctx: Context<AttestAdmissionZk>,
+        newcomer_commitment: [u8; 32],
+        nullifier: [u8; 32],
+        proof_a: [u8; 64],
+        proof_b: [u8; 128],
+        proof_c: [u8; 64],
+    ) -> Result<()> {
+        instructions::attest_admission_zk(ctx, newcomer_commitment, nullifier, proof_a, proof_b, proof_c)
+    }
+
+    /// Provisional admission on the parrain's attestation: membership exists
+    /// (page live, faucet usable) but the commitment is NOT in the member tree,
+    /// so every members-only proof fails by construction.
+    pub fn issue_provisional_membership(
+        ctx: Context<IssueProvisionalMembership>,
+        commitment: [u8; 32],
+        owner: Pubkey,
+        recovery_keys: [Pubkey; crate::state::Membership::MAX_GUARDIANS],
+        require_cosign: bool,
+    ) -> Result<()> {
+        instructions::issue_provisional_membership(ctx, commitment, owner, recovery_keys, require_cosign)
+    }
+
+    /// Attestation B: a trusted servant (distinct person from the parrain)
+    /// co-attests — the commitment enters the votable set and the provisional
+    /// marker closes. Admission complete.
+    pub fn confirm_admission(ctx: Context<ConfirmAdmission>) -> Result<()> {
+        instructions::confirm_admission(ctx)
+    }
+
     /// Renew (extend) a membership for another term on donation.
     pub fn renew_membership(ctx: Context<RenewMembership>) -> Result<()> {
         instructions::renew_membership(ctx)

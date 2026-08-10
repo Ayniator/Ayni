@@ -78,4 +78,12 @@ pub enum AyniError {
     FaucetAmountCooling,
     #[msg("Faucet refill exceeds the maximum a single vote may move")]
     FaucetRefillTooLarge,
+    #[msg("This Circle admits by two-sponsor attestation — use the provisional admission flow")]
+    TwoSponsorRequired,
+    #[msg("Two-sponsor admission is not enabled for this Circle")]
+    TwoSponsorNotEnabled,
+    #[msg("A member cannot attest for their own admission")]
+    SelfAttestation,
+    #[msg("The trusted servant must be a different person than the parrain")]
+    ParrainCannotConfirm,
 }

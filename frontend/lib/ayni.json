@@ -313,6 +313,294 @@
       "args": []
     },
     {
+      "name": "attest_admission",
+      "docs": [
+        "Attestation A: the parrain attests for the newcomer they sponsor — one",
+        "action, one attestation per newcomer, self-attestation refused."
+      ],
+      "discriminator": [
+        253,
+        13,
+        241,
+        49,
+        116,
+        202,
+        217,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "parrain_membership"
+          ]
+        },
+        {
+          "name": "parrain_membership",
+          "docs": [
+            "The parrain's own membership — in good standing, in this Circle."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "parrain_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attestation",
+          "docs": [
+            "One per newcomer — `init` collision IS the refusal of a second parrain."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  116,
+                  116,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "newcomer_commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "parrain",
+          "docs": [
+            "A key the parrain's membership recognises (owner or guardian)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "newcomer_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "attest_admission_zk",
+      "docs": [
+        "Attestation A, anonymous form (Epic 2): a Groth16 proof that SOME member",
+        "of the tree attests for this newcomer — the sponsor edge never exists.",
+        "Reuses the member_vote circuit + ceremony key, like prove_personhood."
+      ],
+      "discriminator": [
+        16,
+        164,
+        92,
+        214,
+        210,
+        3,
+        237,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "member_tree"
+          ]
+        },
+        {
+          "name": "member_tree",
+          "docs": [
+            "The votable set the parrain proves membership of (current root)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attestation",
+          "docs": [
+            "One parrain attestation per newcomer — shared PDA with the named form,",
+            "so the two forms cannot be stacked."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  116,
+                  116,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "newcomer_commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vouch_nullifier",
+          "docs": [
+            "Replay guard on the vouch nullifier itself."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  117,
+                  99,
+                  104,
+                  110,
+                  117,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "nullifier"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "A relayer pays, so the parrain's wallet never appears — the same rule",
+            "as `cast_vote`."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "newcomer_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nullifier",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "cancel_proposal",
       "docs": [
         "Any single Council seat cancels a pending proposal (the contest tripwire)."
@@ -508,6 +796,180 @@
           "name": "seat",
           "docs": [
             "Any Council seat (receives the reclaimed rent)."
+          ],
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "confirm_admission",
+      "docs": [
+        "Attestation B: a trusted servant (distinct person from the parrain)",
+        "co-attests — the commitment enters the votable set and the provisional",
+        "marker closes. Admission complete."
+      ],
+      "discriminator": [
+        74,
+        92,
+        150,
+        82,
+        192,
+        69,
+        161,
+        35
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "writable": true,
+          "relations": [
+            "membership",
+            "provisional",
+            "attestation",
+            "parrain_membership",
+            "member_tree"
+          ]
+        },
+        {
+          "name": "membership",
+          "docs": [
+            "The newcomer's (provisional) membership."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "provisional",
+          "docs": [
+            "The provisional marker — closed here, one-shot: a second confirmation",
+            "has no marker left to close and fails at the constraint."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  118,
+                  105,
+                  115,
+                  105,
+                  111,
+                  110,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attestation",
+          "docs": [
+            "The parrain's attestation for this newcomer, and through it the",
+            "parrain's membership — both needed for the distinct-persons rule."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  116,
+                  116,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "parrain_membership",
+          "docs": [
+            "Required for a NAMED attestation (checked in the handler against",
+            "`attestation.parrain`); pass null for an anonymous one."
+          ],
+          "optional": true
+        },
+        {
+          "name": "member_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "servant",
+          "docs": [
+            "Any Council seat (signs; receives the marker's rent)."
           ],
           "writable": true,
           "signer": true
@@ -2216,6 +2678,39 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "two_sponsor",
+          "docs": [
+            "Epic 1 policy ([\"twosponsor\", circle]) — required and created on first",
+            "use with `required = false`, so it can never be omitted to dodge an",
+            "enabled two-sponsor rule (the withdraw_treasury/config pattern).",
+            "Appended last so existing clients' account ordering is unchanged."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  119,
+                  111,
+                  115,
+                  112,
+                  111,
+                  110,
+                  115,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -2351,6 +2846,206 @@
         {
           "name": "milestone",
           "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "issue_provisional_membership",
+      "docs": [
+        "Provisional admission on the parrain's attestation: membership exists",
+        "(page live, faucet usable) but the commitment is NOT in the member tree,",
+        "so every members-only proof fails by construction."
+      ],
+      "discriminator": [
+        67,
+        77,
+        226,
+        204,
+        168,
+        154,
+        114,
+        244
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "policy",
+            "attestation"
+          ]
+        },
+        {
+          "name": "policy",
+          "docs": [
+            "The Circle must have opted into two-sponsor admission."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  119,
+                  111,
+                  115,
+                  112,
+                  111,
+                  110,
+                  115,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attestation",
+          "docs": [
+            "The parrain's attestation for exactly this newcomer — the authorization."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  116,
+                  116,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "provisional",
+          "docs": [
+            "The provisional marker — its existence IS the status; closed on confirm."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  118,
+                  105,
+                  115,
+                  105,
+                  111,
+                  110,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "personhood",
+          "docs": [
+            "Required only when `circle.require_personhood` — consumed here."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Whoever pays the rent — typically the newcomer's fresh wallet (first",
+            "gas may come from the parrain or the faucet right after)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "type": "pubkey"
+        },
+        {
+          "name": "recovery_keys",
+          "type": {
+            "array": [
+              "pubkey",
+              2
+            ]
+          }
+        },
+        {
+          "name": "require_cosign",
+          "type": "bool"
         }
       ]
     },
@@ -4085,6 +4780,73 @@
       "args": []
     },
     {
+      "name": "set_two_sponsor_admission",
+      "docs": [
+        "Any Council seat toggles the two-sponsor admission policy: parrain (any",
+        "member in good standing) + trusted servant (any of the 7 seats)."
+      ],
+      "discriminator": [
+        108,
+        86,
+        230,
+        81,
+        95,
+        226,
+        87,
+        221
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  119,
+                  111,
+                  115,
+                  112,
+                  111,
+                  110,
+                  115,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (signs + pays the marker's rent on first use)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "required",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "update_circle_location",
       "docs": [
         "Update only a Circle's location (coordinates + city + address) on its",
@@ -4547,6 +5309,19 @@
       ]
     },
     {
+      "name": "AdmissionAttestation",
+      "discriminator": [
+        227,
+        184,
+        244,
+        106,
+        194,
+        120,
+        212,
+        99
+      ]
+    },
+    {
       "name": "ChildCloseVote",
       "discriminator": [
         77,
@@ -4846,6 +5621,19 @@
       ]
     },
     {
+      "name": "ProvisionalMember",
+      "discriminator": [
+        188,
+        11,
+        51,
+        83,
+        124,
+        246,
+        94,
+        71
+      ]
+    },
+    {
       "name": "SeatElection",
       "discriminator": [
         213,
@@ -4882,6 +5670,19 @@
         189,
         168,
         41
+      ]
+    },
+    {
+      "name": "TwoSponsorAdmission",
+      "discriminator": [
+        62,
+        239,
+        140,
+        157,
+        39,
+        51,
+        213,
+        159
       ]
     },
     {
@@ -5088,6 +5889,26 @@
       "code": 6037,
       "name": "FaucetRefillTooLarge",
       "msg": "Faucet refill exceeds the maximum a single vote may move"
+    },
+    {
+      "code": 6038,
+      "name": "TwoSponsorRequired",
+      "msg": "This Circle admits by two-sponsor attestation — use the provisional admission flow"
+    },
+    {
+      "code": 6039,
+      "name": "TwoSponsorNotEnabled",
+      "msg": "Two-sponsor admission is not enabled for this Circle"
+    },
+    {
+      "code": 6040,
+      "name": "SelfAttestation",
+      "msg": "A member cannot attest for their own admission"
+    },
+    {
+      "code": 6041,
+      "name": "ParrainCannotConfirm",
+      "msg": "The trusted servant must be a different person than the parrain"
     }
   ],
   "types": [
@@ -5189,6 +6010,67 @@
           {
             "name": "issuer_attested",
             "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AdmissionAttestation",
+      "docs": [
+        "The parrain's attestation for one newcomer (Epic 1, attestation A). One per",
+        "newcomer — the PDA seed is the refusal of a second. Two forms:",
+        "",
+        "* **Named (pilot)** — `attest_admission`: `parrain` records the attesting",
+        "membership's commitment (needed for the distinct-persons rule; no more",
+        "linkable than the WingPeer bond the pilot already accepts), `nullifier`",
+        "is zero.",
+        "* **Anonymous (Epic 2)** — `attest_admission_zk`: `parrain` is zero and",
+        "`nullifier = Poseidon(secret, newcomer)` from a Groth16 proof that SOME",
+        "member of the tree attested — the sponsor edge never exists on-chain.",
+        "",
+        "PDA: [\"attest\", circle, newcomer_commitment] — one parrain either way."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "newcomer",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "parrain",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "nullifier",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "attested_at",
+            "type": "i64"
           },
           {
             "name": "bump",
@@ -6483,6 +7365,45 @@
       }
     },
     {
+      "name": "ProvisionalMember",
+      "docs": [
+        "Marks a membership as provisional (Epic 1 / Epic 9): admitted on the",
+        "parrain's attestation alone, awaiting the trusted servant's co-attestation.",
+        "While this marker exists the commitment is NOT in the MemberTree, so every",
+        "members-only proof (votes, elections) fails by construction — the one-way",
+        "glass is structural, not cosmetic. The faucet still works: `activate_faucet`",
+        "checks the membership account, not the tree. `confirm_admission` inserts the",
+        "commitment into the tree and closes this marker.",
+        "PDA: [\"provisional\", circle, commitment]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "commitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "issued_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "SeatElection",
       "docs": [
         "Binds a member proposal (F6 anonymous ZK ballot) to a seat election: if the",
@@ -6568,6 +7489,35 @@
           {
             "name": "wallet",
             "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TwoSponsorAdmission",
+      "docs": [
+        "Per-Circle two-sponsor admission policy (Trust Platform Epic 1, amended",
+        "v0.2). Absent or `required == false` ⇒ admission works as before (F4",
+        "Secretary-gated, or F31 open). Present with `required == true` ⇒ every",
+        "admission needs the asymmetric attestation pair: the **parrain** (any member",
+        "in good standing) and a **trusted servant** (any of the 7 Council seats),",
+        "two different people. Sibling PDA so the `Circle` layout is untouched.",
+        "PDA: [\"twosponsor\", circle]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "required",
+            "type": "bool"
           },
           {
             "name": "bump",

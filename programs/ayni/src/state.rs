@@ -601,6 +601,74 @@ impl TreasuryConfig {
     pub const SPACE: usize = 8 + 32 + 32 + 1;
 }
 
+/// Per-Circle two-sponsor admission policy (Trust Platform Epic 1, amended
+/// v0.2). Absent or `required == false` ⇒ admission works as before (F4
+/// Secretary-gated, or F31 open). Present with `required == true` ⇒ every
+/// admission needs the asymmetric attestation pair: the **parrain** (any member
+/// in good standing) and a **trusted servant** (any of the 7 Council seats),
+/// two different people. Sibling PDA so the `Circle` layout is untouched.
+/// PDA: ["twosponsor", circle].
+#[account]
+pub struct TwoSponsorAdmission {
+    pub circle: Pubkey,
+    pub required: bool,
+    pub bump: u8,
+}
+
+impl TwoSponsorAdmission {
+    pub const SPACE: usize = 8 + 32 + 1 + 1;
+}
+
+/// The parrain's attestation for one newcomer (Epic 1, attestation A). One per
+/// newcomer — the PDA seed is the refusal of a second. Two forms:
+///
+/// * **Named (pilot)** — `attest_admission`: `parrain` records the attesting
+///   membership's commitment (needed for the distinct-persons rule; no more
+///   linkable than the WingPeer bond the pilot already accepts), `nullifier`
+///   is zero.
+/// * **Anonymous (Epic 2)** — `attest_admission_zk`: `parrain` is zero and
+///   `nullifier = Poseidon(secret, newcomer)` from a Groth16 proof that SOME
+///   member of the tree attested — the sponsor edge never exists on-chain.
+///
+/// PDA: ["attest", circle, newcomer_commitment] — one parrain either way.
+#[account]
+pub struct AdmissionAttestation {
+    pub circle: Pubkey,
+    pub newcomer: [u8; 32],
+    pub parrain: [u8; 32],   // named form: attesting commitment; zero if anonymous
+    pub nullifier: [u8; 32], // anonymous form: vouch nullifier; zero if named
+    pub attested_at: i64,
+    pub bump: u8,
+}
+
+impl AdmissionAttestation {
+    pub const SPACE: usize = 8 + 32 + 32 + 32 + 32 + 8 + 1;
+
+    pub fn is_anonymous(&self) -> bool {
+        self.parrain == [0u8; 32]
+    }
+}
+
+/// Marks a membership as provisional (Epic 1 / Epic 9): admitted on the
+/// parrain's attestation alone, awaiting the trusted servant's co-attestation.
+/// While this marker exists the commitment is NOT in the MemberTree, so every
+/// members-only proof (votes, elections) fails by construction — the one-way
+/// glass is structural, not cosmetic. The faucet still works: `activate_faucet`
+/// checks the membership account, not the tree. `confirm_admission` inserts the
+/// commitment into the tree and closes this marker.
+/// PDA: ["provisional", circle, commitment].
+#[account]
+pub struct ProvisionalMember {
+    pub circle: Pubkey,
+    pub commitment: [u8; 32],
+    pub issued_at: i64,
+    pub bump: u8,
+}
+
+impl ProvisionalMember {
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 1;
+}
+
 /// A Circle's gas faucet — first-transaction-fee mutual aid for newly admitted
 /// members (Trust Platform Epic 0, Tradition 7). The jar's lamports live ON this
 /// account; anyone may top it up by plain transfer, but treasury→jar refills

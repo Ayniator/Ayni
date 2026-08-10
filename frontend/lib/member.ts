@@ -37,6 +37,9 @@ export const memberTreePda = (circle: PublicKey) =>
   PublicKey.findProgramAddressSync([seed("members"), circle.toBytes()], PROGRAM_ID)[0];
 
 /** The membership-policy marker PDA: ["openjoin", circle]. */
+export const twoSponsorPda = (circle: PublicKey) =>
+  PublicKey.findProgramAddressSync([seed("twosponsor"), circle.toBytes()], PROGRAM_ID)[0];
+
 export const openMembershipPda = (circle: PublicKey) =>
   PublicKey.findProgramAddressSync([seed("openjoin"), circle.toBytes()], PROGRAM_ID)[0];
 
@@ -254,6 +257,7 @@ export async function issueMembership(
       memberTree: memberTreePda(circle),
       personhood: null,
       openMembership: open ? openMembershipPda(circle) : null,
+      twoSponsor: twoSponsorPda(circle),
       secretary: wallet.publicKey,
     } as any)
     .rpc();

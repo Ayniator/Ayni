@@ -113,6 +113,38 @@ features:
          delivery jitter (1-7 min) — assert decorrelation in the adversarial
          suite when it exists"
 
+  - id: F50-F52
+    name: Epic 1 — two-sponsor admission (amended v0.2)
+    shipped_round: 2
+    covered_by: [tests/epic1.ts]
+    cases:
+      - legacy issuance auto-creates the policy PDA with required=false
+      - policy toggle seat-gated; legacy door closes when required
+      - attestation refused from non-member / self
+      - provisional issuance requires the attestation PDA
+      - provisional leaves the member tree and member_count untouched
+      - one parrain attestation per newcomer (PDA collision)
+      - confirm is seat-gated; distinct-persons rule (parrain's seat refused)
+      - confirm inserts into the tree, increments count, closes the marker (one-shot)
+      - policy off restores the legacy door
+    uncovered:
+      - "the structural 'provisional cannot vote' half needs a real ZK ballot
+         attempt against a tree that lacks the commitment — devnet flow"
+      - no UI-level test of the attest input / AdmissionsSection
+
+  - id: F53
+    name: Epic 2 — anonymous vouch-proof (attest_admission_zk)
+    shipped_round: 2
+    covered_by: []
+    uncovered:
+      - "END-TO-END ZK TEST MISSING: a real member_vote Groth16 proof →
+         attest_admission_zk → issue_provisional → confirm_admission with a null
+         parrain. Needs the browser/devnet proving flow (like tests/vote.ts,
+         which cannot run headless). Until then attest_admission_zk is verified
+         only by construction (reuses the F28-proven VK + public-signal order)."
+      - "Layer D: assert a dump of the attestation + vouchnull accounts yields no
+         parrain identity and no parrain→newcomer edge (the whole point of E2)."
+
   - id: F25
     name: Circle email notifications
     covered_by: []

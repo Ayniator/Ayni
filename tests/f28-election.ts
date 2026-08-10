@@ -34,7 +34,7 @@ const log = (...a: any[]) => { console.log(a.join(" ")); };
   const commitment = tree.h1(secret);
   const leafIndex = tree.insert(commitment);
   const cBytes = Buffer.from(to32BE(commitment));
-  await program.methods.issueMembership([...cBytes], PublicKey.default, [PublicKey.default, PublicKey.default], false).accounts({ circle, membership: pda(enc("membership"), circle.toBuffer(), cBytes), memberTree: tree2, personhood: null, openMembership: null, secretary: dep.publicKey }).rpc();
+  await program.methods.issueMembership([...cBytes], PublicKey.default, [PublicKey.default, PublicKey.default], false).accounts({ circle, membership: pda(enc("membership"), circle.toBuffer(), cBytes), memberTree: tree2, personhood: null, openMembership: null, twoSponsor: pda(enc("twosponsor"), circle.toBuffer()), secretary: dep.publicKey }).rpc();
   log("member issued, eligible=1");
   const candidate = Keypair.generate().publicKey;
   const seatIdx = 3;

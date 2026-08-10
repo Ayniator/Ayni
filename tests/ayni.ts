@@ -78,6 +78,7 @@ describe("ayni — AHA on Solana", () => {
         memberTree: memberTreePda,
         personhood: null, // sybil gate off in this Circle
         openMembership: null, // gated Circle: omit the marker explicitly
+        twoSponsor: anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("twosponsor"), circlePda.toBuffer()], program.programId)[0],
         secretary: seats[SECRETARY].publicKey,
       })
       .signers([seats[SECRETARY]])
@@ -109,6 +110,7 @@ describe("ayni — AHA on Solana", () => {
           memberTree: memberTreePda,
           personhood: null,
           openMembership: null, // gated Circle: omit the marker explicitly
+        twoSponsor: anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("twosponsor"), circlePda.toBuffer()], program.programId)[0],
           secretary: seats[RHYTHM].publicKey, // not the Secretary seat
         })
         .signers([seats[RHYTHM]])

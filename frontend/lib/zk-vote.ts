@@ -158,3 +158,47 @@ export async function castMemberVote(wallet: SigningWallet, circle: string, prop
     .accounts({ proposal, voteNullifier, payer: wallet.publicKey })
     .rpc();
 }
+
+/**
+ * Epic 2 — attest for a newcomer ANONYMOUSLY. Proves (member_vote circuit,
+ * reused exactly as voting does) that the caller's membership is in the Circle's
+ * current member tree, with the newcomer's commitment as the external
+ * nullifier. Emits `nullifier = Poseidon(secret, newcomer)` — deterministic per
+ * (parrain, newcomer), so one member cannot double-attest. NO parrain identity
+ * touches the chain: the sponsor edge never exists. Submit via the relayer so
+ * the fee-payer does not reintroduce the link.
+ */
+export async function attestAdmissionAnonymously(
+  wallet: SigningWallet,
+  circle: string,
+  parrainCommitmentHex: string,
+  newcomerCommitmentHex: string
+): Promise<string> {
+  const secret = getSecretFor(parrainCommitmentHex);
+  if (secret === null) throw new Error("Your membership key isn't on this device — attest from the device you joined on.");
+
+  const order = await orderedCommitments(circle);
+  const tree = await MemberTree.create(20);
+  let myIndex = -1;
+  for (const c of order) {
+    const idx = tree.insert(beToBig(fromHex(c)));
+    if (c === parrainCommitmentHex) myIndex = idx;
+  }
+  if (myIndex < 0) throw new Error("Your membership isn't in the current member tree (still provisional?).");
+
+  const newcomerId = beToBig(fromHex(newcomerCommitmentHex)); // external nullifier = newcomer commitment
+  const { nullifier, proofA, proofB, proofC } = await proveVote(tree, secret, myIndex, newcomerId, true);
+
+  const circlePk = new PublicKey(circle);
+  const newcomer = [...fromHex(newcomerCommitmentHex)];
+  const attestation = PublicKey.findProgramAddressSync(
+    [seed("attest"), circlePk.toBytes(), Uint8Array.from(newcomer)], PROGRAM_ID)[0];
+  const vouchNull = PublicKey.findProgramAddressSync(
+    [seed("vouchnull"), circlePk.toBytes(), Uint8Array.from(nullifier)], PROGRAM_ID)[0];
+  const memberTree = PublicKey.findProgramAddressSync([seed("members"), circlePk.toBytes()], PROGRAM_ID)[0];
+
+  return programWith(wallet)
+    .methods.attestAdmissionZk(newcomer, nullifier, proofA, proofB, proofC)
+    .accounts({ circle: circlePk, memberTree, attestation, vouchNullifier: vouchNull, payer: wallet.publicKey })
+    .rpc();
+}

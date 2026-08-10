@@ -68,6 +68,9 @@ describe("ayni — anonymous member voting (ZK)", () => {
         membership: membershipPda,
         memberTree: memberTreePda,
         personhood: null,
+        openMembership: null,
+        twoSponsor: anchor.web3.PublicKey.findProgramAddressSync(
+          [Buffer.from("twosponsor"), circlePda.toBuffer()], program.programId)[0],
         secretary: seats[SECRETARY].publicKey,
       })
       .signers([seats[SECRETARY]])

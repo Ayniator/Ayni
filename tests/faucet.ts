@@ -119,6 +119,7 @@ describe("ayni — gas faucet (Epic 0)", () => {
         memberTree: memberTreeA,
         personhood: null,
         openMembership: null, // gated Circle: omit the marker explicitly
+        twoSponsor: pda(Buffer.from("twosponsor"), circleA.toBuffer()),
         secretary: seats[SECRETARY].publicKey,
       })
       .signers([seats[SECRETARY]])
@@ -242,67 +243,8 @@ describe("ayni — gas faucet (Epic 0)", () => {
     assert.equal(jar.granted.toNumber(), 0);
   });
 
-  // --- 2. set_faucet_amount ---------------------------------------------------
-
-  it("lets the Treasurer tune the grant within the cap — and only the Treasurer, only within it", async () => {
-    // Treasurer, at the cap: allowed.
-    await program.methods
-      .setFaucetAmount(new anchor.BN(CAP))
-      .accounts({ circle: circleA, jar: jarA, treasurer: seats[TREASURER].publicKey })
-      .signers([seats[TREASURER]])
-      .rpc();
-    let jar = await program.account.faucetJar.fetch(jarA);
-    assert.equal(jar.grantLamports.toNumber(), CAP);
-
-    // One lamport above the absolute on-chain maximum: refused by the program.
-    await expectFail(
-      program.methods
-        .setFaucetAmount(new anchor.BN(CAP + 1))
-        .accounts({ circle: circleA, jar: jarA, treasurer: seats[TREASURER].publicKey })
-        .signers([seats[TREASURER]])
-        .rpc(),
-      "FaucetCapExceeded"
-    );
-
-    // Zero: also refused (0 < lamports <= cap).
-    await expectFail(
-      program.methods
-        .setFaucetAmount(new anchor.BN(0))
-        .accounts({ circle: circleA, jar: jarA, treasurer: seats[TREASURER].publicKey })
-        .signers([seats[TREASURER]])
-        .rpc(),
-      "FaucetCapExceeded"
-    );
-
-    // A non-Treasurer seat: refused.
-    await expectFail(
-      program.methods
-        .setFaucetAmount(new anchor.BN(1_000_000))
-        .accounts({ circle: circleA, jar: jarA, treasurer: seats[SECRETARY].publicKey })
-        .signers([seats[SECRETARY]])
-        .rpc(),
-      "Unauthorized"
-    );
-
-    // A non-seat: refused.
-    await expectFail(
-      program.methods
-        .setFaucetAmount(new anchor.BN(1_000_000))
-        .accounts({ circle: circleA, jar: jarA, treasurer: stranger.publicKey })
-        .signers([stranger])
-        .rpc(),
-      "Unauthorized"
-    );
-
-    // Restore the default for the grant tests below.
-    await program.methods
-      .setFaucetAmount(new anchor.BN(DEFAULT_GRANT))
-      .accounts({ circle: circleA, jar: jarA, treasurer: seats[TREASURER].publicKey })
-      .signers([seats[TREASURER]])
-      .rpc();
-    jar = await program.account.faucetJar.fetch(jarA);
-    assert.equal(jar.grantLamports.toNumber(), DEFAULT_GRANT);
-  });
+  // (set_faucet_amount tuning tests moved to the end — a successful amount
+  // change stamps the cooldown clock, which must not precede the grant tests.)
 
   // --- 7 (runs before funding). Underfunded jar --------------------------------
 
@@ -475,6 +417,59 @@ describe("ayni — gas faucet (Epic 0)", () => {
     assert.equal(await balance(jarB), jarBBefore, "circle B's jar untouched");
     assert.equal(await balance(treasuryA), treasuryABefore, "circle A treasury untouched");
     assert.equal(await balance(treasuryB), treasuryBBefore, "circle B treasury untouched");
+  });
+
+  // --- 2. set_faucet_amount ---------------------------------------------------
+
+  it("lets the Treasurer tune the grant within the cap — and only the Treasurer, only within it", async () => {
+    // Treasurer, at the cap: allowed.
+    await program.methods
+      .setFaucetAmount(new anchor.BN(CAP))
+      .accounts({ circle: circleA, jar: jarA, treasurer: seats[TREASURER].publicKey })
+      .signers([seats[TREASURER]])
+      .rpc();
+    const jar = await program.account.faucetJar.fetch(jarA);
+    assert.equal(jar.grantLamports.toNumber(), CAP);
+
+    // One lamport above the absolute on-chain maximum: refused by the program.
+    await expectFail(
+      program.methods
+        .setFaucetAmount(new anchor.BN(CAP + 1))
+        .accounts({ circle: circleA, jar: jarA, treasurer: seats[TREASURER].publicKey })
+        .signers([seats[TREASURER]])
+        .rpc(),
+      "FaucetCapExceeded"
+    );
+
+    // Zero: also refused (0 < lamports <= cap).
+    await expectFail(
+      program.methods
+        .setFaucetAmount(new anchor.BN(0))
+        .accounts({ circle: circleA, jar: jarA, treasurer: seats[TREASURER].publicKey })
+        .signers([seats[TREASURER]])
+        .rpc(),
+      "FaucetCapExceeded"
+    );
+
+    // A non-Treasurer seat: refused.
+    await expectFail(
+      program.methods
+        .setFaucetAmount(new anchor.BN(1_000_000))
+        .accounts({ circle: circleA, jar: jarA, treasurer: seats[SECRETARY].publicKey })
+        .signers([seats[SECRETARY]])
+        .rpc(),
+      "Unauthorized"
+    );
+
+    // A non-seat: refused.
+    await expectFail(
+      program.methods
+        .setFaucetAmount(new anchor.BN(1_000_000))
+        .accounts({ circle: circleA, jar: jarA, treasurer: stranger.publicKey })
+        .signers([stranger])
+        .rpc(),
+      "Unauthorized"
+    );
   });
 
   // --- 10. Grant uniformity is enforced, not merely intended -------------------

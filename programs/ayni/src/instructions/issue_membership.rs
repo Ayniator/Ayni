@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 use crate::council::SEAT_SECRETARY;
 use crate::errors::AyniError;
 use crate::merkle;
-use crate::state::{Circle, Membership, MemberTree, OpenMembership, PersonhoodCredential};
+use crate::state::{Circle, Membership, MemberTree, OpenMembership, PersonhoodCredential, TwoSponsorAdmission};
 
 pub fn issue_membership(
     ctx: Context<IssueMembership>,
@@ -22,6 +22,14 @@ pub fn issue_membership(
     // (toggled by any seat via `set_open_membership`), anyone may self-admit and
     // the Scribe-Secretary check is skipped. The marker's `has_one = circle`
     // constraint binds it to this Circle, so it cannot be forged.
+    // Epic 1 (two-sponsor admission): when the Circle has opted in, this
+    // legacy path is closed — admission goes attest_admission →
+    // issue_provisional_membership → confirm_admission. The policy account is
+    // REQUIRED and seed-bound (init_if_needed, default off), NOT optional: an
+    // optional restriction could be dodged by omitting the account — the same
+    // trap withdraw_treasury's allowlist config already defends against.
+    require!(!ctx.accounts.two_sponsor.required, AyniError::TwoSponsorRequired);
+
     let is_open = ctx
         .accounts
         .open_membership
@@ -121,4 +129,17 @@ pub struct IssueMembership<'info> {
     pub secretary: Signer<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Epic 1 policy (["twosponsor", circle]) — required and created on first
+    /// use with `required = false`, so it can never be omitted to dodge an
+    /// enabled two-sponsor rule (the withdraw_treasury/config pattern).
+    /// Appended last so existing clients' account ordering is unchanged.
+    #[account(
+        init_if_needed,
+        payer = secretary,
+        space = TwoSponsorAdmission::SPACE,
+        seeds = [b"twosponsor", circle.key().as_ref()],
+        bump
+    )]
+    pub two_sponsor: Account<'info, TwoSponsorAdmission>,
 }
