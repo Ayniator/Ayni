@@ -1,5 +1,11 @@
 AHA Trust Platform — Product Backlog
 Version 0.1 — August 2026 — Working draft for the Ascend Team
+> **Amendment v0.2 (2026-08-10, per ElectaZ):** Epic 1 refined — the two sponsors
+> are now asymmetric: the **main sponsor (parrain)** may be any member in good
+> standing, while the **second attestation must come from one of the Circle's
+> seven trusted servants** (a Council seat holder). Epic 1 below carries the
+> amended text; everything else is the faithful extraction of the v0.1 .docx.
+
 # 0. Guiding Principle
 “The chain proves, the device knows, the circle sees.” Public infrastructure holds only anonymous proofs; relationships live encrypted on the member’s device; faces and stories are disclosed deliberately, person by person. Nothing comparative, nothing aggregated, nothing a newcomer lacks in a way that ranks them. Trust must be verifiable in ten seconds before you meet a stranger — but through vouching and presence, never through ratings.
 ## Epic 0 — The Faucet — First Gas for the Neophyte
@@ -19,18 +25,24 @@ Analysis:
 - Traditions check: the faucet is circle-level mutual aid (T7, self-supporting circles); the vote-to-refill keeps the treasurer a trusted servant, not a governor (T2, T9).
 Effort: Medium — the program is small but must be audit-grade; the treasurer view and vote flow are straightforward.
 Depends on: Epic 1 (parrain attestation), Epic 2 (nullifiers) for the anonymous form; a pilot version can use named-pilot attestations. First epic in build order: nothing else on chain works for a new member until they can pay gas.
-## Epic 1 — Two-Sponsor Admission
-Goal: Every member enters through two existing members who have met them in person. Sponsorship is the fellowship’s proof of humanity and its Sybil resistance.
+## Epic 1 — Two-Sponsor Admission *(amended v0.2)*
+Goal: Every member enters through two attestations from people who have met them in person — one from their **main sponsor (parrain)**, who may be any member in good standing, and one from a **trusted servant**: any holder of one of the Circle’s seven service roles (the Council seats). Sponsorship is the fellowship’s proof of humanity and its Sybil resistance; the servant’s co-attestation anchors every admission in the Circle’s service structure.
 User stories:
-- As a newcomer, I can be admitted when two members in good standing attest for me, without their names being recorded anywhere visible.
-- As a sponsor, I can attest for a newcomer with one action after meeting them in a circle.
+- As a newcomer, I am admitted when my parrain and one of the Circle’s seven trusted servants have both attested for me, without either name being recorded anywhere visible.
+- As a parrain (any member in good standing), I can attest for the newcomer I sponsor with one action after meeting them in a circle.
+- As a trusted servant (any of the seven seats), I can co-attest a newcomer’s admission with one action — as a service function, not a worthiness screen; and I cannot be the same person as the parrain.
 - As a circle, we can verify a visiting member holds a valid admission without learning who sponsored them.
 Analysis:
 - Human vouching is how AA solved trust for ninety years; bots do not attend ceremonies.
-- The sponsor relationship also has a ceremonial expression: the sponsor ties the quipu knot, not the wearer.
-- Traditions check: consistent with Tradition 3 (only requirement is the desire to ask the question) — sponsorship verifies humanity, it does not screen worthiness.
+- The asymmetric pair strengthens Sybil resistance beyond two free-choice sponsors: forging an admission now requires capturing a **service role**, and seats are circle-elected (anonymous ballot, F28) and rotatable — collusion must go through the group conscience. It also matches lived onboarding (Epic 9): the parrain attests live; the servant’s co-attestation arrives asynchronously, and until it does the newcomer is a provisional member.
+- **Distinct-persons rule:** a parrain who also holds a seat cannot self-co-attest; the two attestations must come from two different memberships, enforced in the program.
+- The sponsor relationship keeps its ceremonial expression: the parrain ties the quipu knot, not the wearer.
+- Anonymity note for the ZK form (Epic 2): the vouch-proof becomes two proofs — "a member in good standing attested" (anonymity set: the whole membership) and "a trusted servant attested" (anonymity set: the 7 seats). Seven is a small set; the proof must name the *role class*, never the seat index, and seat rotation over time further blurs it. This is an accepted, honest trade: the servant edge is what makes admissions legible to the circle’s structure.
+- Continuity with what is built: the Scribe-Secretary-gated `issue_membership` (F4) is already a seat attestation — Epic 1 generalizes it to any-of-7 and adds the parrain’s attestation beside it, rather than replacing the model.
+- Recovery synergy (Epic 8): "recover through my two sponsors" becomes parrain + any current holder of a service role — more robust than a named second person, because the role persists even when its holder rotates out.
+- Traditions check: consistent with Tradition 3 (only requirement is the desire to ask the question) — sponsorship verifies humanity, it does not screen worthiness; the servant co-attests as a **trusted servant, not a governor** (T2), and the service structure remains directly responsible to those it serves (T9).
 Effort: Medium — the flow is simple; the anonymity of it depends on Epic 2.
-Depends on: Epic 2 (ZK vouch-proofs) for the anonymous form; a named interim version could ship earlier for pilot circles.
+Depends on: Epic 2 (ZK vouch-proofs) for the anonymous form; a named interim version could ship earlier for pilot circles. Seat elections (F28, shipped) give the servant attestation its legitimacy.
 ## Epic 2 — Zero-Knowledge Vouch-Proofs
 Goal: Prove “this member was vouched by two members in good standing” cryptographically, revealing nothing about who the sponsors are.
 User stories:

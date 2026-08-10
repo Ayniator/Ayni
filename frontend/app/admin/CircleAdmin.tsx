@@ -59,6 +59,7 @@ import {
   setFaucetAmount,
   FAUCET_MAX_REFILL_GRANTS,
 } from "../../lib/faucet";
+import { LedgerEntry, readLedger } from "../../lib/faucetLedger";
 
 const short = (s: string) => `${s.slice(0, 4)}…${s.slice(-4)}`;
 const day = (u: number) => new Date(u * 1000).toLocaleDateString();
@@ -691,11 +692,13 @@ function NewCouncilProposal({
 // ===========================================================================
 
 function FaucetSection({ circle, wallet, isTreasurer, anySeat }: { circle: CircleInfo; wallet: any; isTreasurer: boolean; anySeat: boolean }) {
+  const { signMessage } = useWallet();
   const [jar, setJar] = useState<FaucetInfo | null>(null);
   const [grantSol, setGrantSol] = useState("");
   const [refillSol, setRefillSol] = useState("0.05");
   const [period, setPeriod] = useState(86400);
   const [refills, setRefills] = useState<{ proposal: string; lamports: number; status: string; filled: boolean }[]>([]);
+  const [ledger, setLedger] = useState<LedgerEntry[] | null>(null); // null = not opened yet
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<TxNote>(null);
 
@@ -754,6 +757,20 @@ function FaucetSection({ circle, wallet, isTreasurer, anySeat }: { circle: Circl
     if (!(lamports > 0)) return setNote({ kind: "err", text: "Enter a refill amount in SOL." });
     await act("refill", async () => (await proposeFaucetRefill(wallet, new PublicKey(circle.pubkey), lamports, period)).signature,
       "Refill vote opened — the members decide (anonymous one-member-one-vote).");
+  }
+
+  // The encrypted ledger (Epic 0): sealed drop-box entries only the treasurer's
+  // derived key can open. One wallet signature unlocks the session.
+  async function openLedger() {
+    if (!wallet || !signMessage) return setNote({ kind: "err", text: "This wallet cannot sign messages." });
+    setBusy("ledger"); setNote(null);
+    try {
+      setLedger(await readLedger(new PublicKey(circle.pubkey), wallet.publicKey, signMessage));
+    } catch (e: any) {
+      setNote({ kind: "err", text: String(e?.message || e) });
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
@@ -832,6 +849,40 @@ function FaucetSection({ circle, wallet, isTreasurer, anySeat }: { circle: Circl
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {isTreasurer && (
+            <div style={{ marginTop: 10 }}>
+              {ledger === null ? (
+                <button className="btn btn-sm btn-ghost" disabled={busy === "ledger"} onClick={openLedger}>
+                  {busy === "ledger" ? "Decrypting…" : "Open encrypted ledger"}
+                </button>
+              ) : (
+                <>
+                  <p className="muted sm" style={{ margin: "0 0 4px" }}>
+                    Faucet ledger — codes only, decrypted with your key, never identities.{" "}
+                    {ledger.length} entr{ledger.length === 1 ? "y" : "ies"} vs {jar.granted} grant
+                    {jar.granted === 1 ? "" : "s"} on-chain
+                    {ledger.length === jar.granted ? " — reconciled ✓" : " — entries may still be in transit (delivery is deliberately delayed)"}
+                  </p>
+                  {ledger.length > 0 && (
+                    <table className="sm" style={{ width: "100%" }}>
+                      <thead><tr><th align="left">Day</th><th align="left">Parrain code</th><th align="left">Neophyte code</th><th align="right">Amount</th></tr></thead>
+                      <tbody>
+                        {ledger.map((e, i) => (
+                          <tr key={i}>
+                            <td>{e.day}</td>
+                            <td><code>{e.codeParrain}</code></td>
+                            <td><code>{e.codeNeophyte}</code></td>
+                            <td align="right">{e.amountLamports / LAMPORTS_PER_SOL} SOL</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </>
+              )}
             </div>
           )}
         </>

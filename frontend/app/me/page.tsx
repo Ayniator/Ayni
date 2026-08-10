@@ -37,6 +37,7 @@ import { fileToAvatarDataUrl, getUserProfile, listTimezones, setUserProfile } fr
 import { Chip, WingPeerInfo, endWingPeer, establishWingPeer, getWingPeer, listProgressTokens, memberCommitmentOf, milestoneLabel } from "../../lib/peers";
 import { MemberProposal, SeatElectionInfo, SEAT_ROLES, listCircleMembers, listMemberProposals, listSeatElections } from "../../lib/admin";
 import { activateFaucet, getFaucet, hasFaucetGrant, listMenteesOf } from "../../lib/faucet";
+import { flushLedgerQueue, recordGrantInLedger } from "../../lib/faucetLedger";
 import { castMemberVote, haveVotingKey, newMemberIdentity } from "../../lib/zk-vote";
 
 const sol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(4).replace(/\.?0+$/, "") || "0";
@@ -313,6 +314,9 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
   const [note, setNote] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   const load = useCallback(() => {
+    // Deliver any ledger entries a previous visit sealed but never sent
+    // (their jitter window elapsed while the tab was closed).
+    flushLedgerQueue().catch(() => {});
     for (const m of memberships) {
       getWingPeer(m.circle, m.commitment).then((w) => setWings((p) => ({ ...p, [m.circle]: w }))).catch(() => {});
       listProgressTokens(m.circle).then((all) => setChips((p) => ({ ...p, [m.circle]: all.filter((c) => c.member === m.commitment) }))).catch(() => {});
@@ -343,8 +347,34 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
     if (!wallet) return;
     setBusy("gas-" + menteeCommitment); setNote(null);
     try {
+      // Anonymity mitigation (Epic 0): a short random pause before the transfer,
+      // so grant transactions don't land at humanly-predictable moments (right
+      // after a ceremony ends, the second a page loads). Weak by itself — real
+      // timing privacy is the Epic 10 relayer — but free, and honest about it.
+      const waitS = 15 + Math.floor(Math.random() * 105); // 15–120 s
+      setNote({ kind: "ok", text: `Sending in about ${waitS}s (randomized timing) — keep this tab open.` });
+      await new Promise((r) => setTimeout(r, waitS * 1000));
+
       await activateFaucet(wallet, new PublicKey(m.circle), m.commitment, menteeCommitment);
-      setNote({ kind: "ok", text: "First-gas grant sent to your neophyte's wallet — welcome them." });
+
+      // Treasurer's ledger (Epic 0): a sealed, codes-only entry, delivered to
+      // the drop-box after its own independent random delay. Codes are shown
+      // exactly once — the parrain keeps theirs, hands the neophyte the other.
+      let tail = "";
+      try {
+        const circleInfo = (await listCircles()).find((c) => c.pubkey === m.circle);
+        const treasurer = circleInfo?.seats?.[0];
+        const jar = await getFaucet(new PublicKey(m.circle));
+        const codes = treasurer && treasurer !== "11111111111111111111111111111111"
+          ? await recordGrantInLedger(new PublicKey(m.circle), treasurer, jar.grantLamports)
+          : null;
+        tail = codes
+          ? ` Ledger codes — yours: ${codes.codeParrain} · neophyte's: ${codes.codeNeophyte} (write them down; they are shown only once, and the treasurer sees only codes).`
+          : " No ledger entry: the treasurer has not published a messaging key yet.";
+      } catch {
+        tail = " Ledger entry could not be prepared (the grant itself succeeded).";
+      }
+      setNote({ kind: "ok", text: "First-gas grant sent to your neophyte's wallet — welcome them." + tail });
       load();
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(null); }

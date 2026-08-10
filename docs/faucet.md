@@ -108,11 +108,11 @@ built yet.
 | Treasurer is the only role able to modify the amount, within the absolute on-chain maximum | ✅ | `set_faucet_amount` gates on seat 0; `FAUCET_MAX_GRANT_LAMPORTS = 2_000_000` enforced by the program, not the UI |
 | Cap set at top-circle level, revised each equinox by top-circle vote | 🟡 | The cap is a program constant; revision = a governed program upgrade rather than a top-circle vote account. Same authority in practice (the upgrade key is governance-held); a dedicated top-circle cap PDA is future work if the fellowship wants vote-legibility for cap changes |
 | Treasurer sees jar balance anytime; calls a circle vote to refill from treasury | ✅ | Balance is the jar PDA's lamports (admin panel shows it); refill only via a passed anonymous member vote (F6) hash-bound to `(circle, amount)`, one-shot, and additionally capped at `FAUCET_MAX_REFILL_GRANTS` grants' worth |
-| Treasurer reviews transactions via one-time pseudonymous codes, encrypted off-chain, treasurer-only | ⬜ | Not built. Today the treasurer sees the jar balance and jar-level `granted` counter only. The coded ledger is the conditional-pass item in the Traditions audit and remains open work |
+| Treasurer reviews transactions via one-time pseudonymous codes, encrypted off-chain, treasurer-only | ✅ (pilot) | Built: at activation the parrain's client generates two one-time codes, seals a fixed-size entry (codes, amount, day — nothing else) to the treasurer's published messaging key, and delivers it to the `/api/faucet-ledger` drop-box after an independent random delay. Only the treasurer's signature-derived key opens entries; the panel reconciles by count against the jar's `granted`. See `lib/faucetLedger.ts` for the model and its honest limits (drop-box arrival times exist server-side; jitter blurs, the Epic 10 relayer erases) |
 | Default 0.0015 SOL, max ≈ USD 0.25 | ✅ | `FAUCET_DEFAULT_GRANT_LAMPORTS = 1_500_000`, cap 2_000_000 |
 | Per-circle jar caps the blast radius; a compromised faucet loses one jar, not the treasury | ✅ | Jar lamports live on the jar PDA; `tests/faucet.ts` proves jar isolation across two circles and that treasuries are untouched |
 | Uniform grant size (anonymity mitigation) | ✅+ | Enforced beyond the spec: once a jar has paid, an amount retune pauses grants for 24h (`FAUCET_AMOUNT_COOLDOWN`), so a Treasurer cannot aim a distinctive amount at one neophyte |
-| Randomized disbursement timing (anonymity mitigation) | ⬜ | Not built — a client/relayer concern, folded into the Epic 10 relayer decision |
+| Randomized disbursement timing (anonymity mitigation) | 🟡 | Pilot form: the parrain's client waits a random 15–120 s before sending the grant, and the ledger entry travels on its own independent 1–7 min delay, so tx and ledger cannot be lined up. Tab-bound and therefore weak — real timing privacy is the Epic 10 relayer |
 | Audited and fuzzed before mainnet (fold into Sentinel Layer C) | 🟡 | Three-lens adversarial review done this round (3 findings fixed: refill ceiling, cooldown, nullifier scope); formal audit + fuzzing before mainnet still required, tracked in `tests/sentinel/checklist.yaml` |
 | Parrain attestation via Epic 1; "a pilot version can use named-pilot attestations" | ✅ (pilot) | Exactly the sanctioned pilot: the named WingPeer bond is the attestation until Epic 1's two-sponsor admission and Epic 2's ZK vouch-proofs replace it |
 
@@ -124,10 +124,12 @@ built yet.
   naming anyone, submitted via a relayer) arrives with **Epic 2**; whether the
   circle instead pays gas through a fee-payer relayer — so no funding transfer
   ever appears on chain — is the **Epic 10** open decision.
-- **No treasurer one-time-code ledger yet.** Epic 0 specifies an encrypted
-  off-chain ledger where the Treasurer reviews faucet activity under one-time
-  pseudonymous codes (codes, never identities). That is future frontend work;
-  today the Treasurer sees the jar balance and the `granted` counter on-chain.
+- **The ledger drop-box is a trusted-but-blind server.** Entries are sealed
+  end-to-end (the server cannot read codes or amounts) and carry no identities,
+  but the server process necessarily observes arrival order and times. The
+  client-side delivery jitter blurs that channel; the Epic 10 relayer decision
+  is what would remove it. The treasurer-key model also trusts seat 0's wallet
+  (rotatable by circle vote, as the epic requires).
 - **Faucet-funded wallets are visibly fellowship-adjacent** to any outside
   observer of the chain. Uniform grant size blunts fingerprinting; the clean
   fix is the same Epic 10 relayer decision.

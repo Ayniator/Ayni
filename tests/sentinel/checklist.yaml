@@ -104,6 +104,14 @@ features:
          behind `finalized && passed`, which needs a real Groth16 ballot — belongs
          to the devnet flow in tests/f28-election.ts"
       - no UI-level test of the treasurer panel or the parrain button
+      - "NEW this round: the encrypted treasurer ledger (lib/faucetLedger.ts +
+         /api/faucet-ledger) — needs tests: fixed-size blob validation on the
+         route, seal/open round-trip, non-treasurer cannot decrypt, queue flush,
+         and the Layer D assertion that a dumped drop-box file yields no
+         identity and no tx linkage"
+      - "NEW this round: activation timing jitter (15-120s) + independent ledger
+         delivery jitter (1-7 min) — assert decorrelation in the adversarial
+         suite when it exists"
 
   - id: F25
     name: Circle email notifications
