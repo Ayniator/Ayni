@@ -77,6 +77,7 @@ describe("ayni — AHA on Solana", () => {
         membership: membershipPda,
         memberTree: memberTreePda,
         personhood: null, // sybil gate off in this Circle
+        openMembership: null, // gated Circle: omit the marker explicitly
         secretary: seats[SECRETARY].publicKey,
       })
       .signers([seats[SECRETARY]])
@@ -107,6 +108,7 @@ describe("ayni — AHA on Solana", () => {
           membership: membershipPda,
           memberTree: memberTreePda,
           personhood: null,
+          openMembership: null, // gated Circle: omit the marker explicitly
           secretary: seats[RHYTHM].publicKey, // not the Secretary seat
         })
         .signers([seats[RHYTHM]])

@@ -44,6 +44,7 @@ describe("ayni — member co-signature & self-recovery", () => {
         membership: membershipPda(commitment),
         memberTree: memberTreePda,
         personhood: null,
+        openMembership: null, // gated Circle: omit the marker explicitly
         secretary: seats[SECRETARY].publicKey,
       })
       .signers([seats[SECRETARY]])

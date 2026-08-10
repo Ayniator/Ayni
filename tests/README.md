@@ -18,6 +18,36 @@ make test         # anchor test   → local validator + all suites
 runs `tests/**/*.ts`. On slow machines (WSL2) the validator boot is covered by
 `[test] startup_wait` in `Anchor.toml`.
 
+Two things worth knowing, both learned the first time these suites were actually
+executed (2026-08-10 — before that the repo had no toolchain, so none of them
+had ever run):
+
+- **`f28-election.ts` is a devnet script, not a suite.** It executes on import
+  against the deployed program using the real deployer key, so the glob in
+  `Anchor.toml` skips it (`--ignore`); otherwise `anchor test` reaches for devnet
+  in the middle of a local run and stalls. Run it explicitly, as its own header
+  documents.
+- **Optional accounts must be passed as `null`.** `issue_membership` takes
+  `open_membership: Option<Account<..>>`; if the client omits the key entirely,
+  Anchor derives the PDA from its seeds and the instruction fails with
+  `AccountNotInitialized` (3012). Every call therefore passes both
+  `personhood: null` and `openMembership: null` for a gated Circle.
+
+If the machine has no Solana/Anchor toolchain, run the suite in a container —
+the toolchain needs GLIBC ≥ 2.39, so `ubuntu:24.04` works and `node:20-bookworm`
+does not:
+
+```bash
+docker run --rm -v "$PWD":/work -w /work \
+  -v ~/.local/share/solana/install/active_release:/opt/solana \
+  -v ~/.local/bin/anchor:/usr/local/bin/anchor:ro \
+  -v ~/.cache/solana:/root/.cache/solana \
+  ubuntu:24.04 bash -c 'apt-get update -qq && apt-get install -y -qq curl &&
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&
+    apt-get install -y -qq nodejs && export PATH=/opt/solana/bin:$PATH &&
+    npm install && anchor test --skip-build'
+```
+
 ## Suites & what they verify
 
 | File | Verifies | ZK? |

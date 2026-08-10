@@ -118,6 +118,7 @@ describe("ayni — gas faucet (Epic 0)", () => {
         membership: membershipPda(commitment),
         memberTree: memberTreeA,
         personhood: null,
+        openMembership: null, // gated Circle: omit the marker explicitly
         secretary: seats[SECRETARY].publicKey,
       })
       .signers([seats[SECRETARY]])

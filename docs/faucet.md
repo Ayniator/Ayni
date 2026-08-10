@@ -95,6 +95,27 @@ neophyte membership's `owner` (`WalletMismatch` otherwise).
   moving common funds is the whole membership's group conscience, one member one
   anonymous ballot.
 
+## Epic 0 conformance
+
+Checked story-by-story against `backlog/AHA_Trust_Platform_Backlog.md` (v0.1,
+August 2026). ✅ = in line, 🟡 = deliberate deviation (reason given), ⬜ = not
+built yet.
+
+| Epic 0 requirement | Status | How / why |
+|---|---|---|
+| Parrain activates, exactly once, no one else | ✅ | `activate_faucet` requires a signer holding the wing membership of the neophyte's own `WingPeer`; verified by `tests/faucet.ts` (imposter member, non-wing seat both refused) |
+| One grant enforced on-chain via nullifier tied to the identity commitment | 🟡 | Enforced (`init` collision is the refusal) — but scoped `["faucetnull", circle, commitment]`, i.e. **one grant per membership per Circle**, not "ever" fellowship-wide. The epic's "ever" is unimplementable without a linkable cross-Circle identifier, which is exactly what Tradition 12 / Epic 2 forbid; fellowship-wide dedup belongs to proof-of-personhood (F5, `require_personhood`) |
+| Treasurer is the only role able to modify the amount, within the absolute on-chain maximum | ✅ | `set_faucet_amount` gates on seat 0; `FAUCET_MAX_GRANT_LAMPORTS = 2_000_000` enforced by the program, not the UI |
+| Cap set at top-circle level, revised each equinox by top-circle vote | 🟡 | The cap is a program constant; revision = a governed program upgrade rather than a top-circle vote account. Same authority in practice (the upgrade key is governance-held); a dedicated top-circle cap PDA is future work if the fellowship wants vote-legibility for cap changes |
+| Treasurer sees jar balance anytime; calls a circle vote to refill from treasury | ✅ | Balance is the jar PDA's lamports (admin panel shows it); refill only via a passed anonymous member vote (F6) hash-bound to `(circle, amount)`, one-shot, and additionally capped at `FAUCET_MAX_REFILL_GRANTS` grants' worth |
+| Treasurer reviews transactions via one-time pseudonymous codes, encrypted off-chain, treasurer-only | ⬜ | Not built. Today the treasurer sees the jar balance and jar-level `granted` counter only. The coded ledger is the conditional-pass item in the Traditions audit and remains open work |
+| Default 0.0015 SOL, max ≈ USD 0.25 | ✅ | `FAUCET_DEFAULT_GRANT_LAMPORTS = 1_500_000`, cap 2_000_000 |
+| Per-circle jar caps the blast radius; a compromised faucet loses one jar, not the treasury | ✅ | Jar lamports live on the jar PDA; `tests/faucet.ts` proves jar isolation across two circles and that treasuries are untouched |
+| Uniform grant size (anonymity mitigation) | ✅+ | Enforced beyond the spec: once a jar has paid, an amount retune pauses grants for 24h (`FAUCET_AMOUNT_COOLDOWN`), so a Treasurer cannot aim a distinctive amount at one neophyte |
+| Randomized disbursement timing (anonymity mitigation) | ⬜ | Not built — a client/relayer concern, folded into the Epic 10 relayer decision |
+| Audited and fuzzed before mainnet (fold into Sentinel Layer C) | 🟡 | Three-lens adversarial review done this round (3 findings fixed: refill ceiling, cooldown, nullifier scope); formal audit + fuzzing before mainnet still required, tracked in `tests/sentinel/checklist.yaml` |
+| Parrain attestation via Epic 1; "a pilot version can use named-pilot attestations" | ✅ (pilot) | Exactly the sanctioned pilot: the named WingPeer bond is the attestation until Epic 1's two-sponsor admission and Epic 2's ZK vouch-proofs replace it |
+
 ## Pilot limitations (honest)
 
 - **The activation tx publicly links the parrain's wallet to the neophyte's
