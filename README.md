@@ -1,6 +1,7 @@
 <div align="center">
 
 <img src="images/AHA.png" alt="AHA — Ancestral Humanity Anonymous" width="220" />
+Beta Version 0.1.0
 
 # Ayni
 
