@@ -119,7 +119,7 @@ describe("ayni — sponsor recovery, key shards (Epic 11)", () => {
 
   it("the recovery + custody + sharding modules contain NO network sink", () => {
     // Sentinel Layer F asserts this adversarially; a fast static guard here too.
-    const forbidden = /\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon|navigator\.credentials|programWith|\.rpc\s*\(/;
+    const forbidden = /\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon|navigator\.credentials|programWith|\.rpc\s*\(|sendTransaction|new Connection|@solana\/web3/;
     for (const f of ["frontend/lib/recovery.ts", "frontend/lib/shardCustody.ts", "frontend/lib/sharding.ts"]) {
       const src = fs.readFileSync(path.join(__dirname, "..", f), "utf8");
       assert.notMatch(src, forbidden, `${f} must have no network/chain sink a shard could take`);

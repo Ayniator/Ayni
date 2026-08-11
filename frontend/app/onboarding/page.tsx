@@ -274,6 +274,13 @@ function StepFace() {
           roles, and no access to other members&apos; data. This is the fellowship&apos;s way of
           welcoming you quickly while keeping everyone safe.
         </p>
+        {/* Epic 11 / F78 — say this BEFORE the member finishes, not after they lose a device. */}
+        <p className="sm muted" style={{ margin: "8px 0 0" }}>
+          One more thing to know now: <strong>sponsor recovery is not available while you are
+          provisional</strong>. It needs your two sponsors&apos; key-shards, and until your second
+          sponsor confirms you, only one shard exists — so no recovery split is possible yet. Back up
+          your seed phrase carefully in the meantime.
+        </p>
       </div>
     </section>
   );

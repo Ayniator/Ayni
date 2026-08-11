@@ -13,6 +13,11 @@ established: 2026-08-10
 baseline_report: reports/sentinel/NRR-2026-08-10-2.md
 previous_baseline_report: reports/sentinel/NRR-2026-08-10-1.md
 
+# Focused addendum, not a full round bump: Round F (2026-08-11) added Layer F
+# (Epic 11 sponsor recovery) coverage only, on top of whatever round: 3 ends up
+# being when a full A-E re-execution happens. See reports/sentinel/NRR-2026-08-11-F.md.
+layer_F_report: reports/sentinel/NRR-2026-08-11-F.md
+
 layers:
   E_build_health:
     runnable:
@@ -260,3 +265,47 @@ features:
          circleName/membership, IP rate limit) has no test — see layer B.
          Round 2 Sentinel confirmed by reading route.ts that the hardening is
          still present and not regressed."
+
+  - id: F72-F79
+    name: Epic 11 — Sponsor Recovery (two-of-three key shards)
+    shipped_round: F (2026-08-11, focused Layer F round)
+    covered_by: [tests/sharding.ts, reports/sentinel/NRR-2026-08-11-F.md]
+    cases:
+      - any TWO of three Shamir shards reconstruct the master exactly
+      - any ONE shard reconstructs nothing
+      - a corrupted shard fails loudly, never returns garbage-as-success
+      - one master secret derives distinct zk-secret and wallet-seed (domain-separated)
+      - member-present fast path requires a genuine member-role shard; two
+        sponsor shards cannot masquerade as member-present
+      - "sponsor-only recovery — refused before the 7-day window elapses,
+         refused if the member cancelled, succeeds after the window if not
+         cancelled"
+      - re-sharing cuts a fresh incompatible set; an old shard + a new shard
+        does not reconstruct
+      - provisional members (one sponsor) have no sponsor recovery
+        (sponsorRecoveryAvailable(1) === false)
+      - "static — recovery/shardCustody/sharding contain no network/chain sink"
+      - "static — ShardCustody exposes no enumeration path (no list/keys/count/
+         entries/iterate/has, code-only, comments excluded)"
+    layer_F_result: "all 9 Layer F assertions HOLD — see NRR-2026-08-11-F.md
+      for file:line evidence per assertion. One architectural note (not a
+      fail): the member-present role guard (recovery.ts:29-33) is a
+      caller-declared-role check, not cryptographic — shard roles are
+      indistinguishable by design (sharding.ts:36-38); real strength depends
+      on F74 (in-person handover, not yet built) correctly gating which shard
+      a device may call 'the member's own'."
+    uncovered:
+      - "F74 in-person QR/NFC handover not built — no network path exists
+         today because there is no handover code at all yet, not because it
+         was proven safe under load"
+      - "not wired into any UI: no onboarding disclosure
+         (sponsorRecoveryAvailable unused in frontend/app/onboarding/page.tsx),
+         no handover screen, no recovery screen — F79's 'honest handover UI'
+         explicitly remains per BACKLOG.md"
+      - "tests/sharding.ts:122's no-network-sink regex omits sendTransaction
+         and bare Connection( — narrower than the full pattern list Sentinel
+         checked manually; recommend widening"
+      - "no adversarial dump-simulation test (Layer D style) specifically for
+         shard custody storage — assertion 3 (no structure links a shard to a
+         member) was verified by Sentinel code-reading this round, not by an
+         automated dump-and-inspect test"
