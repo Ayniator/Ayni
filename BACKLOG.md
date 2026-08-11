@@ -16,7 +16,7 @@ Solana implementation.
 >
 > 1. the **implementation registry** (F-numbers, formerly this file alone), and
 > 2. the **product backlog** — `backlog/AHA_Trust_Platform_Backlog.docx` and its
->    text extraction `backlog/AHA_Trust_Platform_Backlog.md` (Epics **E0–E10**,
+>    text extraction `backlog/AHA_Trust_Platform_Backlog.md` (Epics **E0–E11**,
 >    the Sequencing table and the Traditions Audit), which remains the
 >    **authoritative source of product intent**. Nothing here overrides it; this
 >    file records what has actually been built against it.
@@ -201,7 +201,7 @@ correct. F-numbers are referenced from commit messages, docs and code comments.
 
 ---
 
-## Epic roadmap (product backlog E0–E10)
+## Epic roadmap (product backlog E0–E11)
 
 Coverage verdicts are from the verified gap analysis, re-checked against the
 code. Every F-number here exists in the registry above.
@@ -219,6 +219,7 @@ code. Every F-number here exists in the registry above.
 | **E8** | Authentication — passkeys | 🟡 **partial** (recovery half only) | F11, F9, F10 | **F65** WebAuthn passkey unlocking a locally-encrypted keystore (zero `webauthn`/`passkey` hits in program, frontend or docs today) · **F66** sponsor-bound recovery via **blinded** keys (raw sponsor pubkeys in `recovery_keys` would publish the sponsor edge E2 forbids) · decide the sponsor-recovery threshold (today guardians are 1-of-2; the epic implies both) · Sentinel assertion "no biometric leaves the device" (currently PASSes only because no biometric code exists) | 1 (passkey/keystore); sponsor-binding → 2 |
 | **E9** | Graphical onboarding | 🟡 **partial** | F22, F23, F31, F33, F35 | **F67** `docs/wallets.json` + shuffled WalletChooser · **F68** `/onboarding` three-step stepper (Wallet → Vouch → Face) with seed-phrase backup · **F69** on-device cartoonisation · **F51** provisional membership · one-way glass needs **F60/F61** · fix the **F25** wallet-in-email leak, which fires at exactly onboarding time · end-to-end timing against the <10-minute target | 3 (F67 + the stepper skeleton can be pulled to **Phase 1**, no dependencies) |
 | **E10** | Open decisions | 📝 **decisions** — 4 of 6 already de-facto taken by shipped code | evidence: F35, F29, F34, F17, F55-gap | **F70** land the six ADRs in `docs/decisions/` · **F45** upgrade authority → multisig/MPC · **F55** relayer (the honest resolution is *hybrid*: faucet for first gas, relayer for proof submission) · genuinely open: **quantum resistance** — nothing decided, nothing written; Ed25519 + BN254 Groth16 throughout with no migration path and no `ProofAnchor` seam | 0 |
+| **E11** | Sponsor Recovery — two-of-three key shards *(added v0.2)* | ⬜ **greenfield** ⚠ | related: F1, F11 ⚠ (existing on-chain recovery is a **different** model), F50-F52 (two sponsors), F65-F66 (passkey unlock) | **F72** Shamir 2-of-3 core · **F73** blinding + `ShardCustody` (no enumeration) · **F74** in-person handover (no network path) · **F75** member-present recovery · **F76** sponsor-only recovery (challenge window + burn) · **F77** shard lifecycle (burn/re-issue/holder-replace) · **F78** provisional-member guard + onboarding disclosure · **F79** honest handover UI + Sentinel **Layer F** · ⚠ **recovery emits NOTHING on chain** — the whole point; assert in a test · prerequisites: a **unified master-secret derivation** (wallet ⊕ commitment from one secret — today they are independent), the `ShardCustody` interface, and CLAUDE.md locked positions — **all must be authored first** | 2 (after E1 + E8) |
 
 ### Phased sequence, reconciled with reality
 
@@ -339,6 +340,20 @@ as shipped work. All ⬜ unless noted.
 | # | Epic | Item | Status | Notes |
 |---|------|------|--------|-------|
 | F70 | E10 | Land the six ADRs in `docs/decisions/` | ⬜ | (1) **Chain + scope-of-chain** — Solana is decided de facto (a 58-instruction devnet-deployed Anchor program); the open half is what belongs on chain at all. (2) **Quantum resistance** — genuinely undecided: Ed25519 + BN254 Groth16 throughout, no migration path, no `ProofAnchor` seam; Poseidon commitments are the only hash-based piece. Needs at minimum an exposure document and a migration trigger. (3) **Phone-number registration** — dropped de facto (zero hits repo-wide; auth is wallet-signature only); ratify in a paragraph. (4) **Interim vs final admission** — pilot first, ZK in parallel; but the shipped pilot is **not** the epic's named-two-sponsor pilot, it is zero-sponsor (F31) or one-role-key (Secretary) admission, so the cutover plan and the F31 reconciliation are unresolved. (5) **Faucet vs relayer** — hybrid (**F35** + **F55**). (6) **Software stewardship** — AGPL-3.0, `CODE_OF_CONDUCT.md`, `SECURITY.md`, F29 and F34 point the right way; the service-committee model is unwritten and the upgrade authority is one keypair (**F45**). Also covers the E8 passkey reframing and the E7 transport choice. |
+
+### E11 — sponsor recovery (two-of-three key shards)
+Builds on E1 (the two sponsors) and E8 (the passkey device-local unlock). **Distinct from the existing on-chain recovery** (F9/F10 Council 4-of-7 wallet migration, F11 guardian co-sign): those rebind the *owner wallet* in a visible transaction; E11 reconstructs the *master secret itself*, bit-identically and **entirely off chain** — recovery emits nothing on the anchor, which is the whole point. Everything here is client + off-chain; the program is not touched.
+
+| # | Epic | Item | Status | Notes |
+|---|------|------|--------|-------|
+| F72 | E11 | Shamir 2-of-3 sharding core | ⬜ | Split the member's **master secret** (from which both the Solana keypair and the Semaphore commitment derive) into 3 shards, 2-of-3 to reconstruct, using a **vetted constant-time Shamir library — no hand-written field arithmetic**. Property-test: any two reconstruct exactly; any one yields nothing; a corrupted shard fails loudly, never returns garbage. **Prerequisite:** a unified master-secret derivation (today the wallet is external + independent of the on-device `Poseidon(secret)` commitment — `zk-vote.ts`). |
+| F73 | E11 | Shard blinding + `ShardCustody` (no enumeration) | ⬜ | A shard at rest is an opaque blob encrypted under a key the sponsor does not hold, indexed by a one-time code the member supplies at recovery. Custodian storage holds **no** name, address, public key, identity commitment, or admission-correlated timestamp, and offers **no enumeration path** — no list, count, iteration, or debug view. Implement the `ShardCustody` interface exactly, including its omissions (**the interface must be authored first**). |
+| F74 | E11 | In-person device-to-device handover | ⬜ | QR or NFC at a circle meeting. A shard must **never** appear in a request body, server relay, cloud backup, or log — built so there is **no network code path** a shard could take, not a promised-unused one. **Open decision:** QR vs NFC vs both (raise, do not pick). |
+| F75 | E11 | Member-present recovery (fast path) | ⬜ | Own shard + one sponsor shard → immediate reconstruction, no waiting. **Must require a genuine member shard** — two sponsor shards must not masquerade as member-present. |
+| F76 | E11 | Sponsor-only recovery (challenge window) | ⬜ | Two sponsor shards → publish a recovery **intent**, then wait out a challenge window (**7-day working default, configurable, never client-shortenable**); a valid cancellation signature from the member's existing device aborts the recovery and **burns the shards**. **Open decision:** confirm the window length. NB "publish a recovery intent" must itself not become an on-chain, member-linkable event — resolve where the intent lives (off-chain custody signal). |
+| F77 | E11 | Shard lifecycle — burn / re-issue / holder-replace | ⬜ | Burn and re-issue **all** shards after any recovery that consumed a sponsor shard, after key rotation, and after a shard-holder replacement — a stale shard is worse than none because it looks like protection. Includes the flow to replace a holder when a sponsor leaves or loses their device. |
+| F78 | E11 | Provisional-member guard + onboarding disclosure | ⬜ | A provisional member has only one sponsor, so no valid 2-of-3 split exists → **no sponsor recovery**. Onboarding (E9) must say this **before** the member finishes, not after they lose a device. |
+| F79 | E11 | Honest handover UI + Sentinel **Layer F** | ⬜ | On the handover screen itself (not a help article): state that two sponsors acting together can reconstruct the secret without the member. Extend `.claude/agents/sentinel.md` with a **Layer F** whose assertions cover what the existing layers do not reach — **recovery emits nothing on chain** (assert in a test, not review), **no shard (blinded or otherwise) on any server**, **no structure links a shard to a member**, **no enumeration path**, the fast path requires a real member shard, and the passkey never gates recovery on its own. Close only on Sentinel PASS; relaxing any assertion requires a commit note citing the backlog line that authorises it. |
 
 ---
 
