@@ -57,7 +57,13 @@ New this round:
   rows (F54/F55/F56/F63/F71 entries added this round); `tests/sentinel/baselines/`
   created.
 
-Still funding-blocked: no devnet deploy (deployer < program rent).
+**Devnet deploy — LIVE (2026-08-11).** Program `AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG`
+deployed to devnet at slot 482959561; ProgramData `3insiXJ8bGaeLjkGFNYdM6AmdP4DQsd1ejkSrFCMcp3p`;
+upgrade authority `AHAimdiM1YwRDzbY9htW8WcDmz831C6Va6QXNQHs1nYk`; 1,309,528 bytes;
+9.11520576 SOL rent-exempt; deploy tx
+`2Zwwp4YAp9QjDYzwfvi6v3giroQw7F2HDWPxze2kCz1R2gVtFgyJUfzmevVWfuoC3RrDqtqEqurXvu2mbXbMpZAY`.
+The prior funding blocker (deployer < program rent) is cleared. `claimed-only` rows
+above remain claimed-only until an on-cluster e2e run against this program confirms them.
 
 ---
 
