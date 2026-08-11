@@ -52,7 +52,10 @@ const MBX_ID = /^[0-9a-f]{32}$/;
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const FILE_ID = /^[0-9a-f]{24}$/;
 
-// Per-IP rate limit (same in-process pilot pattern as the other routes).
+// Per-IP rate limit (same in-process pilot pattern as the other routes). The IP
+// comes from X-Forwarded-For and is SPOOFABLE, so it is only the first gate; the
+// GLOBAL limiter below is the unspoofable backstop that bounds directory-probe
+// (enrollment-oracle) and put-flood abuse regardless of header rotation.
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60_000;
 const hits = new Map<string, number[]>();
@@ -63,6 +66,19 @@ function rateLimited(ip: string): boolean {
   hits.set(ip, recent);
   if (hits.size > 2000) for (const [k, v] of hits) if (!v.some((t) => now - t < RATE_WINDOW_MS)) hits.delete(k);
   return recent.length > RATE_LIMIT;
+}
+
+// Global limiter across all callers — unspoofable (no per-IP key). Applied ONLY
+// to `bundle` and `put` in POST (see there): it bounds enrollment-oracle probing
+// and inbox flooding that X-Forwarded-For rotation would otherwise let an
+// attacker scale freely, WITHOUT coupling read/delete availability to it.
+const GLOBAL_LIMIT = 240;
+let globalHits: number[] = [];
+function globallyRateLimited(): boolean {
+  const now = Date.now();
+  globalHits = globalHits.filter((t) => now - t < RATE_WINDOW_MS);
+  globalHits.push(now);
+  return globalHits.length > GLOBAL_LIMIT;
 }
 
 const boxDir = (id: string) => path.join(DIR, "boxes", id);
@@ -117,7 +133,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-  if (rateLimited(ip)) return NextResponse.json({ error: "rate limited" }, { status: 429 });
+  // Per-IP gate applies to EVERY op (spoofable, first line of defence).
+  if (rateLimited(ip)) return NextResponse.json({ error: "rate limited" }, { status: 429, headers: { "retry-after": "60" } });
 
   let body: any;
   try {
@@ -126,7 +143,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "bad json" }, { status: 400 });
   }
 
-  switch (body?.op) {
+  const op = body?.op;
+  // The unspoofable GLOBAL cap is scoped to the two abuse-prone ops it exists to
+  // bound — `bundle` (enrollment-oracle probing) and `put` (inbox flooding).
+  // It deliberately does NOT gate `get`/`ack`/`publish`: coupling all ops to one
+  // bucket let a cheap bundle/put flood (~4 req/s, no header to rotate) return
+  // 429 for message READS and DELETES for every member, service-wide (ultracode
+  // MEDIUM, 2026-08-11d). Keeping reads/deletes on the per-IP gate means a
+  // write-path flood can churn throughput but cannot take down delivery.
+  if ((op === "bundle" || op === "put") && globallyRateLimited()) {
+    return NextResponse.json({ error: "rate limited" }, { status: 429, headers: { "retry-after": "60" } });
+  }
+
+  switch (op) {
     // --- prekey directory -------------------------------------------------
     case "publish": {
       const b = body.bundle as PrekeyBundle;
@@ -162,6 +191,17 @@ export async function POST(req: NextRequest) {
     }
 
     case "bundle": {
+      // ACCEPTED, BOUNDED RESIDUAL (ultracode 2026-08-11c): a sender must fetch
+      // the recipient's prekey bundle to seal to them, and the recipient is named
+      // by wallet — so `bundle` is inherently an enrollment oracle (a non-null
+      // reply proves that wallet has enrolled in F63). This is the same property
+      // every prekey directory has (Signal's contact discovery included); the
+      // mailbox id is a public derivation of the wallet, so keying the directory
+      // by a hash does NOT blind it. It cannot be eliminated without private
+      // contact discovery (PIR / OPRF), which is the F63 v2 item in
+      // docs/messaging-migration.md. What we DO here: the global limiter above
+      // bounds mass-probe throughput regardless of X-Forwarded-For rotation, so
+      // enumeration is throttled rather than free.
       const wallet = body.wallet;
       if (typeof wallet !== "string" || !BASE58.test(wallet)) {
         return NextResponse.json({ error: "bad wallet" }, { status: 400 });
@@ -185,9 +225,33 @@ export async function POST(req: NextRequest) {
       }
       const dir = boxDir(to);
       await ensureDir(dir);
-      const existing = await sweep(dir);
+      let existing = await sweep(dir);
+      // FIFO eviction instead of hard-reject (ultracode 2026-08-11c): `put` is
+      // unauthenticated (sealed sender — the server cannot tell a real sender
+      // from a flood), and the mailbox id is derivable from a known wallet. If a
+      // full box returned 507, an attacker could pin it full and BLOCK all honest
+      // delivery. Evicting the oldest envelope(s) to make room means newest
+      // legitimate mail always lands; a flood can churn old mail but cannot stop
+      // inbound messaging. The global limiter above throttles the flood rate.
       if (existing.length >= MAX_PER_BOX) {
-        return NextResponse.json({ error: "mailbox full" }, { status: 507 });
+        const stamped = await Promise.all(
+          existing.map(async (n) => {
+            try {
+              return { n, ts: (await fs.stat(path.join(dir, n))).mtimeMs };
+            } catch {
+              return { n, ts: Infinity }; // raced away — treat as newest, skip
+            }
+          })
+        );
+        stamped.sort((a, b) => a.ts - b.ts); // oldest first
+        const evict = stamped.slice(0, existing.length - MAX_PER_BOX + 1);
+        for (const { n } of evict) {
+          try {
+            await fs.unlink(path.join(dir, n));
+          } catch {
+            /* already gone */
+          }
+        }
       }
       const e = body.envelope as SealedEnvelope;
       const clean: SealedEnvelope = { v: 1, eph: e.eph, nonce: e.nonce, spkEpoch: e.spkEpoch, ct: e.ct, expiresAt: e.expiresAt };

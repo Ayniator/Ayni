@@ -143,8 +143,8 @@ pub mod ayni {
     /// Attestation B: a trusted servant (distinct person from the parrain)
     /// co-attests — the commitment enters the votable set and the provisional
     /// marker closes. Admission complete.
-    pub fn confirm_admission(ctx: Context<ConfirmAdmission>) -> Result<()> {
-        instructions::confirm_admission(ctx)
+    pub fn confirm_admission(ctx: Context<ConfirmAdmission>, epoch: u64) -> Result<()> {
+        instructions::confirm_admission(ctx, epoch)
     }
 
     /// Renew (extend) a membership for another term on donation.

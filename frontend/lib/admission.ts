@@ -18,11 +18,20 @@ import {
   readOnlyProgram,
   twoSponsorPda,
 } from "./member";
-import { rpcConnection } from "./solana";
 
 const seed = (s: string) => new TextEncoder().encode(s);
 const toBytes = (hex: string) => Uint8Array.from((hex.match(/.{1,2}/g) ?? []).map((b) => parseInt(b, 16)));
 const toHex = (b: ArrayLike<number>) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+/** Little-endian u64 seed bytes (no Buffer dependency). */
+const leU64 = (n: number): Uint8Array => {
+  const b = new Uint8Array(8);
+  let v = BigInt(n);
+  for (let i = 0; i < 8; i++) {
+    b[i] = Number(v & 0xffn);
+    v >>= 8n;
+  }
+  return b;
+};
 
 export const attestPda = (circle: PublicKey, newcomer: Uint8Array) =>
   PublicKey.findProgramAddressSync([seed("attest"), circle.toBytes(), newcomer], PROGRAM_ID)[0];
@@ -138,21 +147,42 @@ export async function confirmAdmission(
 ): Promise<string> {
   const newcomer = toBytes(newcomerCommitmentHex);
   const anonymous = !parrainCommitmentHex || /^0*$/.test(parrainCommitmentHex);
-  // F54 ring buffer — pass it when it exists so the epoch pin is exact; null
-  // is correct for circles that have never cranked note_root.
   const rootsPda = PublicKey.findProgramAddressSync([seed("roots"), circle.toBytes()], PROGRAM_ID)[0];
-  const rootsInfo = await rpcConnection().getAccountInfo(rootsPda);
+  const memberTree = memberTreePda(circle);
+
+  // recent_roots is now REQUIRED by confirm_admission — it seeds the F54b
+  // anti-double-insert marker and pins the epoch, and making it mandatory stops
+  // a seat omitting it. Crank note_root once to create the ring buffer if the
+  // circle has none yet (a no-op cost for circles that already have one).
+  let rootsAcct: any = await (readOnlyProgram().account as any).recentRoots
+    .fetchNullable(rootsPda)
+    .catch(() => null);
+  if (!rootsAcct) {
+    await programWith(wallet)
+      .methods.noteRoot()
+      .accounts({ circle, memberTree, recentRoots: rootsPda, caller: wallet.publicKey })
+      .rpc();
+    rootsAcct = await (readOnlyProgram().account as any).recentRoots.fetch(rootsPda);
+  }
+  const epoch = rootsAcct.epoch as anchor.BN;
+  const epochLeaf = PublicKey.findProgramAddressSync(
+    [seed("epochleaf"), circle.toBytes(), leU64(Number(epoch)), newcomer],
+    PROGRAM_ID
+  )[0];
+
   return programWith(wallet)
-    .methods.confirmAdmission()
+    .methods.confirmAdmission(epoch)
     .accounts({
       circle,
       membership: membershipPda(circle, newcomer),
       provisional: provisionalPda(circle, newcomer),
       attestation: attestPda(circle, newcomer),
       parrainMembership: anonymous ? null : membershipPda(circle, toBytes(parrainCommitmentHex)),
-      memberTree: memberTreePda(circle),
-      recentRoots: rootsInfo ? rootsPda : null,
+      memberTree,
+      recentRoots: rootsPda,
+      epochLeaf,
       servant: wallet.publicKey,
+      systemProgram: SystemProgram.programId,
     } as any)
     .rpc();
 }

@@ -96,8 +96,17 @@ export async function publishMailboxBundle(
 
   const needNew = spks.length === 0 || now - spks[0].createdAt > SPK_ROTATE_SECS;
   if (needNew) {
+    // Advance past BOTH the local newest epoch AND whatever the directory last
+    // published. A fresh/reset device has no local SPKs; without consulting the
+    // directory it would restart at epoch 1, and the server's monotonic-epoch
+    // rule ("epoch not newer") would reject the publish — permanently breaking
+    // inbound mail (ultracode 2026-08-11c). The IK re-derives deterministically
+    // and the mailbox id is unchanged, so healing the SPK restores delivery.
+    const dir = await post("bundle", { wallet: me }).catch(() => ({ bundle: null }));
+    const dirEpoch = Number(dir?.bundle?.epoch) || 0;
+    const localEpoch = spks[0]?.epoch ?? 0;
     const kp = nacl.box.keyPair();
-    const epoch = (spks[0]?.epoch ?? 0) + 1;
+    const epoch = Math.max(localEpoch, dirEpoch) + 1;
     spks = [{ epoch, pub: mbxB64(kp.publicKey), sec: mbxB64(kp.secretKey), createdAt: now }, ...spks];
     saveSpks(me, spks);
   } else {

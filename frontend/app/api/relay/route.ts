@@ -52,7 +52,11 @@ function relayerKeypair(): Keypair | null {
 }
 
 // Per-IP rate limit (same in-process pattern as the circle-email route: per
-// instance only — honest pilot limitation).
+// instance only — honest pilot limitation). The IP is taken from X-Forwarded-For
+// and is therefore SPOOFABLE (ultracode 2026-08-11c): an attacker rotating the
+// header defeats the per-IP bucket. So the per-IP limit is only the first,
+// best-effort gate; the GLOBAL limiter below (which no header can rotate around)
+// is the real backstop, and the daily tx/lamports caps bound total loss.
 const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60_000;
 const hits = new Map<string, number[]>();
@@ -63,6 +67,18 @@ function rateLimited(ip: string): boolean {
   hits.set(ip, recent);
   if (hits.size > 2000) for (const [k, v] of hits) if (!v.some((t) => now - t < RATE_WINDOW_MS)) hits.delete(k);
   return recent.length > RATE_LIMIT;
+}
+
+// Global rate limit across ALL callers — unspoofable (no per-IP key), so
+// X-Forwarded-For rotation cannot exhaust throughput or the daily budget with a
+// flood of requests. Sized well above the per-IP limit for a small pilot.
+const GLOBAL_LIMIT = 60;
+let globalHits: number[] = [];
+function globallyRateLimited(): boolean {
+  const now = Date.now();
+  globalHits = globalHits.filter((t) => now - t < RATE_WINDOW_MS);
+  globalHits.push(now);
+  return globalHits.length > GLOBAL_LIMIT;
 }
 
 // Daily budget: BOTH a transaction count and a LAMPORTS cap, reset at UTC
@@ -82,10 +98,20 @@ function newDay(): void {
     daySpent = 0;
   }
 }
-function overDailyTxBudget(): boolean {
+// Pure CHECK — no side effect (ultracode 2026-08-11d): incrementing here, before
+// the balance/lamports checks and the send, let a policy-valid request that is
+// then rejected (balance too low, lamports exhausted, or a deliberate on-chain
+// failure like an init-collision) still permanently consume the count — ~500
+// cheap failing requests would exhaust the daily budget and 503 every honest
+// caller until UTC midnight. The increment is committed on the SUCCESS path only
+// (recordTx, next to recordSpend).
+function wouldExceedDailyTxBudget(): boolean {
+  newDay();
+  return dayCount + 1 > Number(process.env.AHA_RELAYER_DAILY_TXS || 500);
+}
+function recordTx(): void {
   newDay();
   dayCount += 1;
-  return dayCount > Number(process.env.AHA_RELAYER_DAILY_TXS || 500);
 }
 function overDailyLamports(pending: number): boolean {
   newDay();
@@ -95,6 +121,16 @@ function overDailyLamports(pending: number): boolean {
 function recordSpend(lamports: number): void {
   daySpent += lamports;
 }
+
+// TOCTOU guard (ultracode 2026-08-11c): balance-floor and lamports-cap checks
+// used to read state, then sign — so N concurrent relays all passed the same
+// pre-check and overshot the cap together. We now RESERVE a conservative cost
+// up front (so concurrent requests see each other's in-flight spend) and
+// reconcile to the actual cost after confirmation. EST_COST bounds one relay's
+// worst case: the largest allowlisted account's rent (send_message, 528-byte
+// ciphertext ≈ 0.005 SOL) plus fees, rounded up.
+const EST_COST = 6_000_000;
+let outstanding = 0;
 
 export async function GET() {
   const kp = relayerKeypair();
@@ -106,8 +142,10 @@ export async function POST(req: NextRequest) {
   if (!kp) return NextResponse.json({ error: "relayer not configured" }, { status: 503 });
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-  if (rateLimited(ip)) return NextResponse.json({ error: "rate limited" }, { status: 429 });
-  if (overDailyTxBudget()) return NextResponse.json({ error: "relayer daily budget exhausted" }, { status: 503 });
+  // Per-IP (spoofable, first gate) AND global (unspoofable, real backstop).
+  if (rateLimited(ip) || globallyRateLimited()) {
+    return NextResponse.json({ error: "rate limited" }, { status: 429 });
+  }
 
   let body: RelayRequest;
   try {
@@ -116,23 +154,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "bad json" }, { status: 400 });
   }
 
+  // Validate BEFORE spending any budget: an invalid or spoofed request must not
+  // consume the daily transaction count (ultracode 2026-08-11c).
   const verdict = validateRelayRequest(body, kp.publicKey.toBase58());
   if (!verdict.ok) return NextResponse.json({ error: verdict.reason }, { status: 400 });
 
+  // Only a well-formed, allowlisted request MAY count toward the day — but the
+  // count is committed after a successful relay (recordTx below), not here, so a
+  // request that passes validation and then fails cannot inflate the budget.
+  if (wouldExceedDailyTxBudget()) return NextResponse.json({ error: "relayer daily budget exhausted" }, { status: 503 });
+
   const conn = new Connection(RPC_URL, "confirmed");
 
-  // Solvency floor: keep enough to stay operable rather than draining to zero.
+  // Solvency floor + lamports cap, evaluated against in-flight RESERVATIONS so
+  // concurrent relays cannot all pass the same pre-check and overshoot together.
   const minBalance = Number(process.env.AHA_RELAYER_MIN_LAMPORTS || 50_000_000);
   const balanceBefore = await conn.getBalance(kp.publicKey);
-  if (balanceBefore < minBalance) {
+  if (balanceBefore - outstanding - EST_COST < minBalance) {
     return NextResponse.json({ error: "relayer balance too low" }, { status: 503 });
   }
-  // Pre-flight money cap: if today's spend already hit the lamports budget,
-  // refuse before signing anything.
-  if (overDailyLamports(0)) {
+  if (overDailyLamports(outstanding + EST_COST)) {
     return NextResponse.json({ error: "relayer daily lamports budget exhausted" }, { status: 503 });
   }
 
+  // Reserve this relay's worst-case cost for the duration it is in flight.
+  outstanding += EST_COST;
   try {
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID, // server-pinned: a request cannot target another program
@@ -149,23 +195,26 @@ export async function POST(req: NextRequest) {
     const signature = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false });
     await conn.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
 
-    // Charge the ACTUAL cost (fee + any rent) against the daily lamports cap;
-    // once exhausted, further relays are refused until UTC midnight — this is
-    // the money backstop against rent-burn drain.
+    // Reconcile: release the reservation and charge the ACTUAL cost (fee + any
+    // rent) against the daily lamports cap; once exhausted, further relays are
+    // refused until UTC midnight — the money backstop against rent-burn drain.
+    outstanding = Math.max(0, outstanding - EST_COST);
     try {
       const spent = Math.max(0, balanceBefore - (await conn.getBalance(kp.publicKey)));
       recordSpend(spent);
-      if (overDailyLamports(0)) {
-        // Already over after this tx; the NEXT request will be refused below.
-      }
     } catch {
       recordSpend(6000); // conservative fee estimate if the balance re-read fails
     }
+    // Commit the tx-count budget now that a relay has actually landed.
+    recordTx();
     if (overDailyLamports(0)) {
       return NextResponse.json({ signature, warning: "relayer daily lamports budget reached" });
     }
     return NextResponse.json({ signature });
   } catch (e: any) {
+    // Release the reservation on failure too, so a failed relay doesn't
+    // permanently subtract from the budget.
+    outstanding = Math.max(0, outstanding - EST_COST);
     // Surface the failure class without echoing accounts or data back.
     return NextResponse.json({ error: "relay failed" }, { status: 502 });
   }

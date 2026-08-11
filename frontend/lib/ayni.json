@@ -2,7 +2,7 @@
   "address": "AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG",
   "metadata": {
     "name": "ayni",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "spec": "0.1.0",
     "description": "Ayni — Solana implementation of AHA (Ancestral Humanity Anonymous)"
   },
@@ -1164,11 +1164,12 @@
         {
           "name": "recent_roots",
           "docs": [
-            "F54 ring buffer — pass when the Circle has one so the pre-confirmation",
-            "root stays provable and the epoch is pinned on the attestation."
+            "F54 ring buffer — REQUIRED. The circle must have cranked `note_root` at",
+            "least once (which creates it) before a two-sponsor admission can be",
+            "confirmed. Making it mandatory stops a seat from omitting it to skip the",
+            "anti-double-insert marker or to force a stale `leaf_epoch`."
           ],
           "writable": true,
-          "optional": true,
           "pda": {
             "seeds": [
               {
@@ -1189,15 +1190,65 @@
           }
         },
         {
+          "name": "epoch_leaf",
+          "docs": [
+            "F54b anti-double-insert marker — its `init` collides with",
+            "reinsert_member's identical `init`, so a member confirmed during a live",
+            "epoch cannot be reinserted a second time. `epoch` (an instruction arg,",
+            "checked to equal `recent_roots.epoch`) seeds it."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  111,
+                  99,
+                  104,
+                  108,
+                  101,
+                  97,
+                  102
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "epoch"
+              },
+              {
+                "kind": "account",
+                "path": "membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
           "name": "servant",
           "docs": [
             "Any Council seat (signs; receives the marker's rent)."
           ],
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "epoch",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "create_member_proposal",

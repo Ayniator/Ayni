@@ -65,6 +65,61 @@ upgrade authority `AHAimdiM1YwRDzbY9htW8WcDmz831C6Va6QXNQHs1nYk`; 1,309,528 byte
 The prior funding blocker (deployer < program rent) is cleared. `claimed-only` rows
 above remain claimed-only until an on-cluster e2e run against this program confirms them.
 
+**Security hardening round (2026-08-11c).** An adversarial find→verify sweep
+(13 agents) surfaced 8 confirmed findings across the anonymity layer; all fixed:
+
+- **HIGH — `reinsert_member` double-insert** (found independently by two lenses):
+  a member added during a live epoch could be re-inserted, inflating
+  `next_index`/`member_count` (quorum-inflation governance DoS) and corrupting the
+  append-only tree. Fixed two ways: `reinsert_member` now requires
+  `membership.issued_at < recent_roots.epoch_started_at` (blocks direct issuance),
+  and `confirm_admission` mints the `["epochleaf", circle, epoch, commitment]`
+  marker whose `init` collides with `reinsert_member`'s (blocks the
+  provisional-confirmed-during-epoch path). `confirm_admission` now REQUIRES
+  `recent_roots` (was optional — a seat could omit it to skip the marker), so
+  circles must crank `note_root` once before the first two-sponsor confirmation;
+  the client does this automatically. **Program logic changed → devnet redeploy
+  pending funding** (deployer 3.38 SOL < ~9 SOL upgrade buffer; airdrops
+  rate-limited). The live devnet program is the pre-hardening build until then.
+- **MED — relayer daily budget** burned by invalid/`X-Forwarded-For`-spoofed
+  requests, and **money caps TOCTOU-racy** under concurrency: the daily tx count
+  now increments only for validated requests, a global (unspoofable) rate limit
+  backstops per-IP, and lamports/balance caps reserve a conservative cost before
+  signing and reconcile after.
+- **MED — mailbox prekey `bundle` op is an enrollment oracle**: inherent to any
+  prekey directory (the true fix is PIR/OPRF contact discovery = F63 v2);
+  throttled by the new global limiter and documented as a bounded residual.
+- **MED — fresh-device SPK epoch reset**: a reset device restarted at epoch 1 and
+  the server's monotonic rule rejected it, killing inbound mail. The client now
+  advances past `max(local, directory)` so delivery self-heals.
+- **LOW — mailbox `put` flood** could pin a victim's box full and hard-block
+  delivery: switched from 507-reject to FIFO eviction, so new mail always lands.
+
+Two adversarial finders converging on the same HIGH raised confidence it was
+real, not speculative.
+
+**Follow-up re-check (2026-08-11d).** A second adversarial find→verify sweep
+(17 agents) over the hardening diff confirmed the 8 fixes and every CRITICAL
+privacy / double-insert invariant held; 12 candidates yielded 2 availability-only
+survivors, both fixed:
+
+- **MED — mailbox global rate-limiter coupled all ops** (a regression from the
+  new global limiter): keyed by nothing (one module-wide bucket), it gated
+  `get`/`ack`/`publish` as well as the abuse-prone `bundle`/`put`, so a cheap
+  bundle-probe or put-flood (~4 req/s, no header to rotate) could 429 message
+  reads and deletes for every member service-wide. The global cap is now scoped
+  to only `bundle`+`put`; reads/deletes stay on the per-IP gate. Added
+  `Retry-After: 60`.
+- **LOW — relayer `dayCount` inflated on rejected requests**: `overDailyTxBudget`
+  incremented as a side effect *before* the balance/lamports checks and the send,
+  so ~500 policy-valid-but-failing requests could exhaust the daily budget and
+  503 every honest caller until UTC midnight. Split into a pure
+  `wouldExceedDailyTxBudget()` check + `recordTx()` committed only after a relay
+  lands. (Lamports remain the money backstop; this was availability-only.)
+
+Both are frontend relay/mailbox route changes only — no program logic touched, so
+no redeploy implication.
+
 ---
 
 ## 0. Round update — 2026-08-11 (66 instructions)

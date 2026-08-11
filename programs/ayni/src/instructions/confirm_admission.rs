@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::errors::AyniError;
 use crate::merkle;
-use crate::state::{AdmissionAttestation, Circle, Membership, MemberTree, ProvisionalMember, RecentRoots};
+use crate::state::{AdmissionAttestation, Circle, EpochLeaf, Membership, MemberTree, ProvisionalMember, RecentRoots};
 
 /// Attestation B of the two-sponsor pair (Epic 1, amended v0.2): a trusted
 /// servant — any holder of one of the 7 Council seats — co-attests the
@@ -19,7 +19,7 @@ use crate::state::{AdmissionAttestation, Circle, Membership, MemberTree, Provisi
 /// one-human bound is `require_personhood` (Sybil gate), with this check catching
 /// the common key-reuse case. The confirming party must in any case hold one of
 /// the 7 seats, a small trusted set.
-pub fn confirm_admission(ctx: Context<ConfirmAdmission>) -> Result<()> {
+pub fn confirm_admission(ctx: Context<ConfirmAdmission>, epoch: u64) -> Result<()> {
     let circle = &mut ctx.accounts.circle;
     let servant = ctx.accounts.servant.key();
 
@@ -53,18 +53,33 @@ pub fn confirm_admission(ctx: Context<ConfirmAdmission>) -> Result<()> {
     // The newcomer joins the votable set — this, and only this, is what turns
     // a provisional member into a full one.
     let commitment = ctx.accounts.membership.commitment;
-    let epoch = ctx
-        .accounts
-        .recent_roots
-        .as_ref()
-        .map(|rr| rr.epoch)
-        .unwrap_or(0);
+    // `recent_roots` is REQUIRED (not optional): a Council seat must not be able
+    // to omit it to skip the anti-double-insert marker below, and its epoch is
+    // what pins `leaf_epoch` correctly. The `epoch` arg seeds that marker, so it
+    // must equal the ring buffer's true current epoch.
+    require!(
+        epoch == ctx.accounts.recent_roots.epoch,
+        AyniError::NotInGoodStanding
+    );
+
     let mt: &mut MemberTree = &mut ctx.accounts.member_tree;
     let leaf_index = mt.next_index;
     merkle::insert_leaf(mt.depth, &mut mt.next_index, &mut mt.root, &mut mt.filled_subtrees, commitment)?;
-    if let Some(rr) = ctx.accounts.recent_roots.as_mut() {
-        rr.push(mt.root);
-    }
+    ctx.accounts.recent_roots.push(mt.root);
+
+    // F54b: claim this commitment's slot in the current epoch. reinsert_member
+    // creates the SAME ["epochleaf", circle, epoch, commitment] PDA with `init`;
+    // that init collides here, so a member confirmed during a live epoch (already
+    // present in the rebuilt tree) cannot be inserted a SECOND time via the
+    // rebuild side door. At epoch 0 the marker is inert (reinsert_member requires
+    // epoch > 0), but minting it unconditionally keeps the invariant uniform.
+    let circle_key = circle.key();
+    let leaf = &mut ctx.accounts.epoch_leaf;
+    leaf.circle = circle_key;
+    leaf.epoch = epoch;
+    leaf.commitment = commitment;
+    leaf.leaf_index = leaf_index;
+    leaf.bump = ctx.bumps.epoch_leaf;
 
     // F54: pin the exact insertion position (and its epoch) on the surviving
     // attestation account, so clients can reconstruct the tree's insertion
@@ -82,6 +97,7 @@ pub fn confirm_admission(ctx: Context<ConfirmAdmission>) -> Result<()> {
 }
 
 #[derive(Accounts)]
+#[instruction(epoch: u64)]
 pub struct ConfirmAdmission<'info> {
     #[account(mut)]
     pub circle: Box<Account<'info, Circle>>,
@@ -130,17 +146,34 @@ pub struct ConfirmAdmission<'info> {
     )]
     pub member_tree: Box<Account<'info, MemberTree>>,
 
-    /// F54 ring buffer — pass when the Circle has one so the pre-confirmation
-    /// root stays provable and the epoch is pinned on the attestation.
+    /// F54 ring buffer — REQUIRED. The circle must have cranked `note_root` at
+    /// least once (which creates it) before a two-sponsor admission can be
+    /// confirmed. Making it mandatory stops a seat from omitting it to skip the
+    /// anti-double-insert marker or to force a stale `leaf_epoch`.
     #[account(
         mut,
         has_one = circle,
         seeds = [b"roots", circle.key().as_ref()],
         bump = recent_roots.bump
     )]
-    pub recent_roots: Option<Box<Account<'info, RecentRoots>>>,
+    pub recent_roots: Box<Account<'info, RecentRoots>>,
+
+    /// F54b anti-double-insert marker — its `init` collides with
+    /// reinsert_member's identical `init`, so a member confirmed during a live
+    /// epoch cannot be reinserted a second time. `epoch` (an instruction arg,
+    /// checked to equal `recent_roots.epoch`) seeds it.
+    #[account(
+        init,
+        payer = servant,
+        space = EpochLeaf::SPACE,
+        seeds = [b"epochleaf", circle.key().as_ref(), &epoch.to_le_bytes(), membership.commitment.as_ref()],
+        bump
+    )]
+    pub epoch_leaf: Box<Account<'info, EpochLeaf>>,
 
     /// Any Council seat (signs; receives the marker's rent).
     #[account(mut)]
     pub servant: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
 }

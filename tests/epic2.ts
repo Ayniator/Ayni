@@ -147,6 +147,11 @@ describe("ayni — F54 recent roots / epochs + F56 fellowship anchor", () => {
     await issue(circle, cDead, anchor.web3.Keypair.generate().publicKey);
     await new Promise((r) => setTimeout(r, 2500)); // cDead expires
     await issue(circle, cLive, anchor.web3.Keypair.generate().publicKey);
+    // Separate the issuance from the rebuild by >1s so cLive.issued_at is
+    // strictly < epoch_started_at (reinsert's predate-the-epoch guard uses
+    // second-granularity timestamps; a member issued in the SAME second as
+    // begin_member_epoch is conservatively excluded until the next epoch).
+    await new Promise((r) => setTimeout(r, 1500));
 
     await program.methods
       .beginMemberEpoch()
@@ -186,6 +191,18 @@ describe("ayni — F54 recent roots / epochs + F56 fellowship anchor", () => {
     threw = false;
     try { await reinsert(cDead); } catch { threw = true; }
     assert.isTrue(threw, "an EXPIRED membership cannot re-enter — this is the good-standing filter");
+
+    // 2026-08-11c HIGH guard: a member DIRECTLY ISSUED during the live epoch is
+    // already in the rebuilt tree, so reinserting it would double-count it
+    // (next_index/member_count inflation → quorum-inflation DoS). issue stamps
+    // issued_at = now, which is >= epoch_started_at once the epoch has begun, so
+    // reinsert must refuse it. (The confirm-during-epoch path is blocked by the
+    // identical-seed EpochLeaf `init` collision exercised just above.)
+    const cDuring = makeCommitment();
+    await issue(circle, cDuring, anchor.web3.Keypair.generate().publicKey);
+    threw = false;
+    try { await reinsert(cDuring); } catch { threw = true; }
+    assert.isTrue(threw, "a member issued DURING the current epoch cannot be reinserted (issued_at >= epoch_started_at)");
   });
 
   // --- F56: anchor publish + parentage rule --------------------------------

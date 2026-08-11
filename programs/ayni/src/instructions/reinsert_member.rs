@@ -22,6 +22,25 @@ pub fn reinsert_member(ctx: Context<ReinsertMember>, epoch: u64) -> Result<()> {
         AyniError::MembershipExpired
     );
 
+    // Must PREDATE the current epoch's rebuild. A member added during the live
+    // epoch is already in the freshly-rebuilt tree, so reinserting it would
+    // double-count it (duplicate leaf, inflated next_index/member_count →
+    // quorum-inflation DoS). issue_membership stamps `issued_at = now`, so a
+    // directly-issued member has `issued_at >= epoch_started_at` and is rejected
+    // here. Members that entered via confirm_admission during the epoch (whose
+    // `issued_at` predates the rebuild) are blocked instead by the EpochLeaf
+    // `init` collision below, which confirm_admission mints for the epoch.
+    //
+    // Timestamps are second-granular, so the boundary is intentionally strict
+    // (`<`): a member issued in the SAME second as begin_member_epoch is
+    // conservatively excluded (it heals at the next epoch) rather than risk
+    // admitting a post-rebuild member. This trades a rare liveness edge for the
+    // security property (never a double-insert), which is the correct direction.
+    require!(
+        ctx.accounts.membership.issued_at < rr.epoch_started_at,
+        AyniError::NotInGoodStanding
+    );
+
     // Not provisional: the ProvisionalMember PDA for this commitment must not
     // exist (a closed/never-created PDA is system-owned with no data). The
     // address itself is constraint-checked below, so an attacker cannot pass an

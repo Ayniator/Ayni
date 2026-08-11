@@ -50,6 +50,28 @@ describe("ayni — two-sponsor admission (Epic 1)", () => {
   const membershipPda = (c: Buffer) => pda(Buffer.from("membership"), circle.toBuffer(), c);
   const attestPda = (c: Buffer) => pda(Buffer.from("attest"), circle.toBuffer(), c);
   const provisionalPda = (c: Buffer) => pda(Buffer.from("provisional"), circle.toBuffer(), c);
+  const recentRoots = pda(Buffer.from("roots"), circle.toBuffer());
+  const leU64 = (n: number) => {
+    const b = Buffer.alloc(8);
+    b.writeBigUInt64LE(BigInt(n));
+    return b;
+  };
+  const epochLeafPda = (epoch: number, c: Buffer) =>
+    pda(Buffer.from("epochleaf"), circle.toBuffer(), leU64(epoch), c);
+  // confirm_admission now REQUIRES the ring buffer; crank note_root once to
+  // create it, then read the current epoch for the anti-double-insert marker.
+  let rootsReady = false;
+  const ensureRoots = async () => {
+    if (rootsReady) return;
+    if (!(await provider.connection.getAccountInfo(recentRoots))) {
+      await program.methods
+        .noteRoot()
+        .accounts({ circle, memberTree, recentRoots, caller: payer.publicKey })
+        .rpc();
+    }
+    rootsReady = true;
+  };
+  const currentEpoch = async () => Number((await program.account.recentRoots.fetch(recentRoots)).epoch);
 
   const noGuardians = [anchor.web3.PublicKey.default, anchor.web3.PublicKey.default];
 
@@ -109,9 +131,11 @@ describe("ayni — two-sponsor admission (Epic 1)", () => {
       .signers([signer])
       .rpc();
 
-  const confirm = (commitment: Buffer, parrainCommitment: Buffer, servant: anchor.web3.Keypair) =>
-    program.methods
-      .confirmAdmission()
+  const confirm = async (commitment: Buffer, parrainCommitment: Buffer, servant: anchor.web3.Keypair) => {
+    await ensureRoots();
+    const epoch = await currentEpoch();
+    return program.methods
+      .confirmAdmission(new anchor.BN(epoch))
       .accounts({
         circle,
         membership: membershipPda(commitment),
@@ -119,11 +143,14 @@ describe("ayni — two-sponsor admission (Epic 1)", () => {
         attestation: attestPda(commitment),
         parrainMembership: membershipPda(parrainCommitment),
         memberTree,
-        recentRoots: null,
+        recentRoots,
+        epochLeaf: epochLeafPda(epoch, commitment),
         servant: servant.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([servant])
       .rpc();
+  };
 
   const treeState = async () => {
     const t: any = await program.account.memberTree.fetch(memberTree);
@@ -240,11 +267,15 @@ describe("ayni — two-sponsor admission (Epic 1)", () => {
     await provider.connection.confirmTransaction(sig);
     await attest(cN3, cParrain, parrainOwner);
     await issueProvisional(cN3, n3Owner.publicKey, n3Owner);
+    await ensureRoots();
+    const e3 = await currentEpoch();
     await expectFail(
-      program.methods.confirmAdmission()
+      program.methods.confirmAdmission(new anchor.BN(e3))
         .accounts({
           circle, membership: membershipPda(cN3), provisional: provisionalPda(cN3),
-          attestation: attestPda(cN3), parrainMembership: null, memberTree, recentRoots: null, servant: seats[RHYTHM].publicKey,
+          attestation: attestPda(cN3), parrainMembership: null, memberTree, recentRoots,
+          epochLeaf: epochLeafPda(e3, cN3), servant: seats[RHYTHM].publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
         } as any)
         .signers([seats[RHYTHM]]).rpc(),
       "ParrainCannotConfirm"
