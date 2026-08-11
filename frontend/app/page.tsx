@@ -67,48 +67,31 @@ export default function Home() {
     }
   }, [circles]);
 
-  // Coarse IP-based location — works without permission and over plain http
-  // (e.g. when the app is opened via a LAN IP, where the browser geolocation
-  // API is disabled as a non-secure context).
-  async function ipLocate(): Promise<boolean> {
-    for (const url of ["https://ipwho.is/", "https://ipapi.co/json/"]) {
-      try {
-        const j = await (await fetch(url)).json();
-        const lat = j.latitude, lon = j.longitude;
-        if (typeof lat === "number" && typeof lon === "number") {
-          setCenter({ lat, lon });
-          setLocated(true);
-          return true;
-        }
-      } catch {}
-    }
-    return false;
-  }
-
-  async function locate() {
+  // Location comes ONLY from the browser's Geolocation API, and only after the
+  // visitor presses the button (F71 / Sentinel R6): no IP-geolocation service,
+  // no third-party lookup — the position stays in this browser and is used
+  // locally to sort Circles by distance. Without permission the map simply
+  // shows the neutral world view (DEFAULT_CENTER).
+  function locate() {
     setError(null);
-    setLocating(true);
     const secure = typeof window !== "undefined" && window.isSecureContext;
-    const done = () => setLocating(false);
-    if (navigator.geolocation && secure) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setCenter({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-          setLocated(true);
-          done();
-        },
-        async () => {
-          // denied / unavailable / timeout → fall back to IP geolocation
-          if (!(await ipLocate())) setError("Couldn't get your location. Allow location access, or try again.");
-          done();
-        },
-        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
-      );
-    } else {
-      if (!(await ipLocate()))
-        setError("Couldn't get your location. Open the app via https or localhost to enable precise location.");
-      done();
+    if (!navigator.geolocation || !secure) {
+      setError("Your browser's location API needs a secure context (https or localhost). You can still browse the world map — nothing about you is sent anywhere.");
+      return;
     }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCenter({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setLocated(true);
+        setLocating(false);
+      },
+      () => {
+        setError("Couldn't get your location. Allow location access and try again — or just browse the map.");
+        setLocating(false);
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+    );
   }
 
   const ranked: CircleWithDistance[] = useMemo(
@@ -133,6 +116,10 @@ export default function Home() {
         <button className="btn" onClick={locate} disabled={locating}>
           {locating ? "Locating…" : located ? "Update my location" : "Use my location"}
         </button>
+      </p>
+      <p className="muted sm" style={{ marginTop: -6 }}>
+        Your position is read by your browser only and used locally to sort Circles by
+        distance — it is never sent to us or to any third party.
       </p>
 
       {error && <p className="error">{error}</p>}
@@ -227,8 +214,7 @@ function CircleDetail({
           <h4 style={{ margin: "0 0 4px" }}>Location</h4>
           <p className="muted sm" style={{ margin: 0 }}>
             {circle.address || "—"}<br />
-            <span className="mono">{circle.lat.toFixed(5)}, {circle.lon.toFixed(5)}</span>{" "}
-            · <a href={`https://www.openstreetmap.org/?mlat=${circle.lat}&mlon=${circle.lon}#map=15/${circle.lat}/${circle.lon}`} target="_blank" rel="noreferrer">map ↗</a>
+            <span className="mono">{circle.lat.toFixed(5)}, {circle.lon.toFixed(5)}</span>
           </p>
           {docs.length > 0 && (
             <>

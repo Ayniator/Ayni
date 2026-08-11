@@ -76,12 +76,49 @@ pub mod ayni {
     pub fn attest_admission_zk(
         ctx: Context<AttestAdmissionZk>,
         newcomer_commitment: [u8; 32],
+        root: [u8; 32],
         nullifier: [u8; 32],
         proof_a: [u8; 64],
         proof_b: [u8; 128],
         proof_c: [u8; 64],
     ) -> Result<()> {
-        instructions::attest_admission_zk(ctx, newcomer_commitment, nullifier, proof_a, proof_b, proof_c)
+        instructions::attest_admission_zk(ctx, newcomer_commitment, root, nullifier, proof_a, proof_b, proof_c)
+    }
+
+    /// F54a — record the current member root into the recent-roots ring buffer
+    /// (permissionless crank; run before proving).
+    pub fn note_root(ctx: Context<NoteRoot>) -> Result<()> {
+        instructions::note_root(ctx)
+    }
+
+    /// F54b — begin a new member epoch: empty the tree; only live memberships
+    /// re-enter via `reinsert_member`. Any-seat housekeeping.
+    pub fn begin_member_epoch(ctx: Context<BeginMemberEpoch>) -> Result<()> {
+        instructions::begin_member_epoch(ctx)
+    }
+
+    /// F54b — re-insert one live membership into the current epoch's tree
+    /// (permissionless).
+    pub fn reinsert_member(ctx: Context<ReinsertMember>, epoch: u64) -> Result<()> {
+        instructions::reinsert_member(ctx, epoch)
+    }
+
+    /// F56 — publish this Circle's member root under its foundation
+    /// (permissionless crank).
+    pub fn publish_member_root(ctx: Context<PublishMemberRoot>) -> Result<()> {
+        instructions::publish_member_root(ctx)
+    }
+
+    /// F56 — verify a visiting member of a sibling Circle against its anchored
+    /// root; mints an anonymous VisitPass.
+    pub fn verify_fellow_member(
+        ctx: Context<VerifyFellowMember>,
+        nullifier: [u8; 32],
+        proof_a: [u8; 64],
+        proof_b: [u8; 128],
+        proof_c: [u8; 64],
+    ) -> Result<()> {
+        instructions::verify_fellow_member(ctx, nullifier, proof_a, proof_b, proof_c)
     }
 
     /// Provisional admission on the parrain's attestation: membership exists

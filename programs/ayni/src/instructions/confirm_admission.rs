@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::errors::AyniError;
 use crate::merkle;
-use crate::state::{AdmissionAttestation, Circle, Membership, MemberTree, ProvisionalMember};
+use crate::state::{AdmissionAttestation, Circle, Membership, MemberTree, ProvisionalMember, RecentRoots};
 
 /// Attestation B of the two-sponsor pair (Epic 1, amended v0.2): a trusted
 /// servant — any holder of one of the 7 Council seats — co-attests the
@@ -53,8 +53,27 @@ pub fn confirm_admission(ctx: Context<ConfirmAdmission>) -> Result<()> {
     // The newcomer joins the votable set — this, and only this, is what turns
     // a provisional member into a full one.
     let commitment = ctx.accounts.membership.commitment;
+    let epoch = ctx
+        .accounts
+        .recent_roots
+        .as_ref()
+        .map(|rr| rr.epoch)
+        .unwrap_or(0);
     let mt: &mut MemberTree = &mut ctx.accounts.member_tree;
+    let leaf_index = mt.next_index;
     merkle::insert_leaf(mt.depth, &mut mt.next_index, &mut mt.root, &mut mt.filled_subtrees, commitment)?;
+    if let Some(rr) = ctx.accounts.recent_roots.as_mut() {
+        rr.push(mt.root);
+    }
+
+    // F54: pin the exact insertion position (and its epoch) on the surviving
+    // attestation account, so clients can reconstruct the tree's insertion
+    // order even when confirmations interleave with direct issuance.
+    // 1-BASED (0 = "not yet confirmed"), so a genuine index 0 at epoch 0 is
+    // distinguishable from an unconfirmed attestation's zeroed fields.
+    let att = &mut ctx.accounts.attestation;
+    att.leaf_index = leaf_index.saturating_add(1);
+    att.leaf_epoch = epoch;
 
     circle.member_count = circle.member_count.saturating_add(1);
     // `provisional` closes via the account constraint; its absence is what the
@@ -89,7 +108,9 @@ pub struct ConfirmAdmission<'info> {
 
     /// The parrain's attestation for this newcomer, and through it the
     /// parrain's membership — both needed for the distinct-persons rule.
+    /// Mut: `confirm_admission` pins the leaf index/epoch on it (F54).
     #[account(
+        mut,
         seeds = [b"attest", circle.key().as_ref(), membership.commitment.as_ref()],
         bump = attestation.bump,
         has_one = circle,
@@ -108,6 +129,16 @@ pub struct ConfirmAdmission<'info> {
         bump = member_tree.bump
     )]
     pub member_tree: Box<Account<'info, MemberTree>>,
+
+    /// F54 ring buffer — pass when the Circle has one so the pre-confirmation
+    /// root stays provable and the epoch is pinned on the attestation.
+    #[account(
+        mut,
+        has_one = circle,
+        seeds = [b"roots", circle.key().as_ref()],
+        bump = recent_roots.bump
+    )]
+    pub recent_roots: Option<Box<Account<'info, RecentRoots>>>,
 
     /// Any Council seat (signs; receives the marker's rent).
     #[account(mut)]

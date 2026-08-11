@@ -18,6 +18,7 @@ import {
   readOnlyProgram,
   twoSponsorPda,
 } from "./member";
+import { rpcConnection } from "./solana";
 
 const seed = (s: string) => new TextEncoder().encode(s);
 const toBytes = (hex: string) => Uint8Array.from((hex.match(/.{1,2}/g) ?? []).map((b) => parseInt(b, 16)));
@@ -137,6 +138,10 @@ export async function confirmAdmission(
 ): Promise<string> {
   const newcomer = toBytes(newcomerCommitmentHex);
   const anonymous = !parrainCommitmentHex || /^0*$/.test(parrainCommitmentHex);
+  // F54 ring buffer — pass it when it exists so the epoch pin is exact; null
+  // is correct for circles that have never cranked note_root.
+  const rootsPda = PublicKey.findProgramAddressSync([seed("roots"), circle.toBytes()], PROGRAM_ID)[0];
+  const rootsInfo = await rpcConnection().getAccountInfo(rootsPda);
   return programWith(wallet)
     .methods.confirmAdmission()
     .accounts({
@@ -146,6 +151,7 @@ export async function confirmAdmission(
       attestation: attestPda(circle, newcomer),
       parrainMembership: anonymous ? null : membershipPda(circle, toBytes(parrainCommitmentHex)),
       memberTree: memberTreePda(circle),
+      recentRoots: rootsInfo ? rootsPda : null,
       servant: wallet.publicKey,
     } as any)
     .rpc();

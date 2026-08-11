@@ -8,6 +8,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import { PROGRAM_ID, SigningWallet, programWith, readOnlyProgram } from "./member";
+import { relayerPubkey, relayInstruction } from "./relayer";
 
 const seed = (s: string) => new TextEncoder().encode(s);
 const CMD_LEN = 160;        // padded MACI command plaintext
@@ -75,6 +76,16 @@ export async function publishMaciCommand(
   // The coordinator opens with: box.open(ct, ZERO_NONCE, eph_pubkey, coordinatorSecret).
   const ct = nacl.box(pad(command), new Uint8Array(24), coordinator, eph.secretKey);
   if (ct.length !== CT_LEN) throw new Error("internal: MACI ciphertext length mismatch");
+  // F55: relay when possible — a coercion-resistant command should not carry
+  // its author's wallet as fee-payer.
+  const relayer = await relayerPubkey();
+  if (relayer) {
+    const ix = await readOnlyProgram()
+      .methods.publishMaciMessage([...eph.publicKey], Buffer.from(ct))
+      .accounts({ round, message: maciMessagePda(round, info.messageCount), payer: relayer, systemProgram: SystemProgram.programId })
+      .instruction();
+    return relayInstruction(ix);
+  }
   return programWith(wallet)
     .methods.publishMaciMessage([...eph.publicKey], Buffer.from(ct))
     .accounts({ round, message: maciMessagePda(round, info.messageCount), payer: wallet.publicKey, systemProgram: SystemProgram.programId })

@@ -27,14 +27,19 @@ import * as anchor from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import { PROGRAM_ID, SigningWallet, programWith, readOnlyProgram } from "./member";
+import { relayerPubkey, relayInstruction } from "./relayer";
 
 const seed = (s: string) => new TextEncoder().encode(s);
 const KEY_DERIVATION_MSG = "AHA private messaging key v1 — sign to unlock your encrypted inbox.";
 
 // Fixed sizes — keep in sync with the on-chain Message::CT_LEN.
-const PLAINTEXT_LEN = 1024;            // padded envelope length
-const CT_LEN = PLAINTEXT_LEN + 16;     // + NaCl box MAC = 1040 (== Message::CT_LEN)
-export const MAX_PLAINTEXT = 800;      // generous body cap (envelope overhead ~130–220 b)
+// 512/528 since 2026-08-11 (was 1024/1040 — an instruction carrying 1040
+// bytes cannot fit Solana's 1232-byte transaction limit, so the old size was
+// unsendable; long-form mail goes through the F63 mailbox, which pads to 1024
+// off-chain where no transaction limit exists).
+const PLAINTEXT_LEN = 512;             // padded envelope length
+const CT_LEN = PLAINTEXT_LEN + 16;     // + NaCl box MAC = 528 (== Message::CT_LEN)
+export const MAX_PLAINTEXT = 300;      // body cap (envelope overhead ~160–210 b)
 
 export const messagingKeyPda = (owner: PublicKey) =>
   PublicKey.findProgramAddressSync([seed("msgkey"), owner.toBytes()], PROGRAM_ID)[0];
@@ -181,15 +186,26 @@ export async function sendMessage(
   if (ct.length !== CT_LEN) throw new Error("internal: ciphertext length mismatch");
   // (eph.secretKey is now discarded — no way to re-derive it.)
 
-  const program = programWith(wallet);
   const [msgPda] = PublicKey.findProgramAddressSync(
     [seed("msg"), recipient.toBytes(), idLe],
     PROGRAM_ID
   );
-  const txSig = await program.methods
-    .sendMessage(id, recipient, [...eph.publicKey], [...nonce], new anchor.BN(expiresAt), Buffer.from(ct))
-    .accounts({ message: msgPda, payer: wallet.publicKey })
-    .rpc();
+  // F55: relay when possible — sealed sender keeps the author out of the
+  // ACCOUNT, but a self-paid transaction still names them as fee-payer.
+  const relayer = await relayerPubkey();
+  let txSig: string;
+  if (relayer) {
+    const ix = await readOnlyProgram()
+      .methods.sendMessage(id, recipient, [...eph.publicKey], [...nonce], new anchor.BN(expiresAt), Buffer.from(ct))
+      .accounts({ message: msgPda, payer: relayer })
+      .instruction();
+    txSig = await relayInstruction(ix);
+  } else {
+    txSig = await programWith(wallet)
+      .methods.sendMessage(id, recipient, [...eph.publicKey], [...nonce], new anchor.BN(expiresAt), Buffer.from(ct))
+      .accounts({ message: msgPda, payer: wallet.publicKey })
+      .rpc();
+  }
 
   // Keep a local, device-only copy so the sender can still see their thread
   // (the chain no longer stores who sent what, and the ephemeral key is gone).
@@ -199,7 +215,7 @@ export async function sendMessage(
 
 const MSG_RECIPIENT_OFFSET = 8; // discriminator → recipient is the first field now
 // Exact on-chain size of a v2 Message account: 8 disc + 32 recipient + 32 eph +
-// 24 nonce + 8 id + 8 created + 8 expires + (4+1040) ciphertext + 1 bump = 1165.
+// 24 nonce + 8 id + 8 created + 8 expires + (4+528) ciphertext + 1 bump = 653.
 // Filtering on it skips legacy v1 messages (different layout) so decoding the
 // fixed-size v2 set never overruns the buffer.
 const MSG_ACCOUNT_SIZE = 8 + 32 + 32 + 24 + 8 + 8 + 8 + (4 + CT_LEN) + 1;

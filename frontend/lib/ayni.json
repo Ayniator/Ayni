@@ -445,7 +445,8 @@
         {
           "name": "circle",
           "relations": [
-            "member_tree"
+            "member_tree",
+            "recent_roots"
           ]
         },
         {
@@ -464,6 +465,33 @@
                   98,
                   101,
                   114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recent_roots",
+          "docs": [
+            "F54 ring buffer — pass it (after cranking `note_root`) so the proof",
+            "survives concurrent admissions; may be null for a Circle that has never",
+            "cranked, in which case only the exact current root is accepted."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
                   115
                 ]
               },
@@ -563,6 +591,15 @@
           }
         },
         {
+          "name": "root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
           "name": "nullifier",
           "type": {
             "array": [
@@ -599,6 +636,91 @@
           }
         }
       ]
+    },
+    {
+      "name": "begin_member_epoch",
+      "docs": [
+        "F54b — begin a new member epoch: empty the tree; only live memberships",
+        "re-enter via `reinsert_member`. Any-seat housekeeping."
+      ],
+      "discriminator": [
+        74,
+        136,
+        188,
+        0,
+        7,
+        183,
+        90,
+        198
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "writable": true,
+          "relations": [
+            "member_tree"
+          ]
+        },
+        {
+          "name": "member_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recent_roots",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "Any Council seat (signs; pays the ring-buffer rent if first use)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "cancel_proposal",
@@ -829,7 +951,8 @@
             "provisional",
             "attestation",
             "parrain_membership",
-            "member_tree"
+            "member_tree",
+            "recent_roots"
           ]
         },
         {
@@ -907,8 +1030,10 @@
           "name": "attestation",
           "docs": [
             "The parrain's attestation for this newcomer, and through it the",
-            "parrain's membership — both needed for the distinct-persons rule."
+            "parrain's membership — both needed for the distinct-persons rule.",
+            "Mut: `confirm_admission` pins the leaf index/epoch on it (F54)."
           ],
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -956,6 +1081,33 @@
                   98,
                   101,
                   114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recent_roots",
+          "docs": [
+            "F54 ring buffer — pass when the Circle has one so the pre-confirmation",
+            "root stays provable and the epoch is pinned on the attestation."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
                   115
                 ]
               },
@@ -3205,6 +3357,90 @@
       "args": []
     },
     {
+      "name": "note_root",
+      "docs": [
+        "F54a — record the current member root into the recent-roots ring buffer",
+        "(permissionless crank; run before proving)."
+      ],
+      "discriminator": [
+        38,
+        240,
+        119,
+        156,
+        96,
+        9,
+        192,
+        105
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "member_tree"
+          ]
+        },
+        {
+          "name": "member_tree",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recent_roots",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "docs": [
+            "Anyone (pays the one-time PDA rent on first crank; a relayer may pay so",
+            "the prover-to-be is not named by the crank either)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "open_maci_round",
       "docs": [
         "Open a MACI (coercion-resistant) round over a member proposal, registering",
@@ -3696,6 +3932,126 @@
       ]
     },
     {
+      "name": "publish_member_root",
+      "docs": [
+        "F56 — publish this Circle's member root under its foundation",
+        "(permissionless crank)."
+      ],
+      "discriminator": [
+        41,
+        20,
+        114,
+        179,
+        95,
+        98,
+        29,
+        154
+      ],
+      "accounts": [
+        {
+          "name": "foundation"
+        },
+        {
+          "name": "circle",
+          "docs": [
+            "The Circle being anchored — must genuinely belong to this federation."
+          ],
+          "relations": [
+            "member_tree",
+            "recent_roots"
+          ]
+        },
+        {
+          "name": "member_tree",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recent_roots",
+          "docs": [
+            "Present when the Circle has a ring buffer (carries the epoch)."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "anchor_entry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  110,
+                  99,
+                  104,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "foundation"
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "docs": [
+            "Anyone (pays the entry's rent on first publish)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "recover_membership",
       "docs": [
         "Rebind a membership's owner under an executed MigrateWallet proposal",
@@ -3928,6 +4284,201 @@
               32
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "reinsert_member",
+      "docs": [
+        "F54b — re-insert one live membership into the current epoch's tree",
+        "(permissionless)."
+      ],
+      "discriminator": [
+        76,
+        30,
+        110,
+        68,
+        184,
+        241,
+        40,
+        84
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "writable": true,
+          "relations": [
+            "membership",
+            "member_tree",
+            "recent_roots"
+          ]
+        },
+        {
+          "name": "membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "provisional",
+          "docs": [
+            "commitment; the handler only requires it to be EMPTY (never created, or",
+            "closed by `confirm_admission`) — a provisional member must not re-enter",
+            "the votable set through the rebuild side door."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  118,
+                  105,
+                  115,
+                  105,
+                  111,
+                  110,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recent_roots",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "epoch_leaf",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  111,
+                  99,
+                  104,
+                  108,
+                  101,
+                  97,
+                  102
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "epoch"
+              },
+              {
+                "kind": "account",
+                "path": "membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "docs": [
+            "Anyone (pays the leaf-marker rent)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "epoch",
+          "type": "u64"
         }
       ]
     },
@@ -5431,6 +5982,151 @@
       ]
     },
     {
+      "name": "verify_fellow_member",
+      "docs": [
+        "F56 — verify a visiting member of a sibling Circle against its anchored",
+        "root; mints an anonymous VisitPass."
+      ],
+      "discriminator": [
+        72,
+        166,
+        38,
+        196,
+        241,
+        84,
+        43,
+        82
+      ],
+      "accounts": [
+        {
+          "name": "foundation"
+        },
+        {
+          "name": "home_circle",
+          "docs": [
+            "The visitor's home Circle — in this federation (direct-parent rule)."
+          ]
+        },
+        {
+          "name": "host_circle",
+          "docs": [
+            "The Circle being visited — also in this federation."
+          ]
+        },
+        {
+          "name": "anchor_entry",
+          "docs": [
+            "The home Circle's published root — seed-bound to (foundation, home), so",
+            "a proof can only be checked against the root genuinely anchored for",
+            "that Circle."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  110,
+                  99,
+                  104,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "foundation"
+              },
+              {
+                "kind": "account",
+                "path": "home_circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "visit_pass",
+          "docs": [
+            "One pass per member per host Circle (`init` collision = already",
+            "verified; the pass persists — no need to re-prove)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  105,
+                  115,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "host_circle"
+              },
+              {
+                "kind": "arg",
+                "path": "nullifier"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "A relayer pays, so the visitor's wallet never appears."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nullifier",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "withdraw_treasury",
       "docs": [
         "Move treasury SOL, authorized by an executed 4-of-7 WithdrawTreasury proposal."
@@ -5858,6 +6554,32 @@
       ]
     },
     {
+      "name": "CircleRootAnchor",
+      "discriminator": [
+        60,
+        138,
+        105,
+        82,
+        228,
+        248,
+        198,
+        68
+      ]
+    },
+    {
+      "name": "EpochLeaf",
+      "discriminator": [
+        193,
+        36,
+        97,
+        199,
+        178,
+        84,
+        230,
+        120
+      ]
+    },
+    {
       "name": "FaucetJar",
       "discriminator": [
         167,
@@ -6092,6 +6814,19 @@
       ]
     },
     {
+      "name": "RecentRoots",
+      "discriminator": [
+        218,
+        137,
+        164,
+        71,
+        135,
+        210,
+        110,
+        93
+      ]
+    },
+    {
       "name": "SeatElection",
       "discriminator": [
         213,
@@ -6154,6 +6889,19 @@
         41,
         161,
         36
+      ]
+    },
+    {
+      "name": "VisitPass",
+      "discriminator": [
+        184,
+        116,
+        104,
+        203,
+        244,
+        198,
+        138,
+        247
       ]
     },
     {
@@ -6395,6 +7143,21 @@
       "code": 6044,
       "name": "InvalidVisibilityTier",
       "msg": "Visibility tier must be 0 (chosen), 1 (my circle), or 2 (all members)"
+    },
+    {
+      "code": 6045,
+      "name": "RootNotRecent",
+      "msg": "Proof root is not the current member root nor a recent one"
+    },
+    {
+      "code": 6046,
+      "name": "AnchorMismatch",
+      "msg": "Proof root does not match the published anchor root for that Circle"
+    },
+    {
+      "code": 6047,
+      "name": "NotInGoodStanding",
+      "msg": "Membership is not live (expired or still provisional)"
     }
   ],
   "types": [
@@ -6557,6 +7320,23 @@
           {
             "name": "attested_at",
             "type": "i64"
+          },
+          {
+            "name": "leaf_index",
+            "docs": [
+              "Set by `confirm_admission`: 1 + the MemberTree leaf index the newcomer",
+              "was inserted at (1-BASED; 0 = not yet confirmed), and the member epoch",
+              "it belongs to (F54). Lets clients reconstruct the exact insertion order",
+              "even when confirmations interleave with direct issuance. Valid only",
+              "while `leaf_epoch` equals the Circle's current epoch",
+              "(`RecentRoots.epoch`); stale after an epoch rebuild (the reinsertion's",
+              "`EpochLeaf` supersedes it)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "leaf_epoch",
+            "type": "u64"
           },
           {
             "name": "bump",
@@ -6930,6 +7710,52 @@
       }
     },
     {
+      "name": "CircleRootAnchor",
+      "docs": [
+        "F56 — fellowship-wide verification anchor: a Circle's member root published",
+        "under its foundation, so any Circle in the same federation can verify a",
+        "visiting member's proof without holding the visitor's home tree. Written by",
+        "the permissionless `publish_member_root` crank (it only copies verified",
+        "on-chain state); parentage is constraint-checked with the same rule the",
+        "federation-governance fixes hardened (`child.parent == foundation`).",
+        "PDA: [\"anchor\", foundation, circle]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "foundation",
+            "type": "pubkey"
+          },
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "Council",
       "type": {
         "kind": "struct",
@@ -7014,6 +7840,45 @@
                 32
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "EpochLeaf",
+      "docs": [
+        "F54b — one re-inserted leaf of an epoch rebuild. PDA",
+        "[\"epochleaf\", circle, epoch_le, commitment]; `init` collision is the",
+        "double-reinsertion guard. `leaf_index` lets clients reconstruct the new",
+        "tree's insertion order exactly."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "commitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "leaf_index",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
@@ -7964,6 +8829,72 @@
       }
     },
     {
+      "name": "RecentRoots",
+      "docs": [
+        "F54a — ring buffer of a Circle's recent MemberTree roots, plus the current",
+        "member epoch (F54b). Companion PDA [\"roots\", circle] so the already-deployed",
+        "MemberTree layout never changes. Written by the permissionless `note_root`",
+        "crank (run by a prover right before proving, so the root they prove against",
+        "survives concurrent insertions) and by `begin_member_epoch`/`reinsert_member`.",
+        "A proof verified against ANY root in the buffer is accepted where the",
+        "instruction opts in (attest_admission_zk) — a bounded staleness window, not",
+        "an unbounded one: the buffer holds `N` roots and old ones are overwritten."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "epoch",
+            "docs": [
+              "Member epoch — 0 until the first `begin_member_epoch` rebuild. Each",
+              "rebuild increments it and empties the tree; only live memberships are",
+              "re-inserted, which is what makes the votable set a GOOD-STANDING set."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "epoch_started_at",
+            "docs": [
+              "When the current epoch began (0 for epoch 0)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "index",
+            "docs": [
+              "Next write position in `roots` (wraps at N)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "roots",
+            "docs": [
+              "Last N roots, zero entries = never written."
+            ],
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                16
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "SeatElection",
       "docs": [
         "Binds a member proposal (F6 anonymous ZK ballot) to a seat election: if the",
@@ -8135,6 +9066,45 @@
           {
             "name": "bio",
             "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VisitPass",
+      "docs": [
+        "F56 — proof that AN anonymous member of `home_circle` verified themselves to",
+        "`host_circle`. The nullifier is Poseidon(secret, host_circle_field) — one",
+        "pass per member per host Circle, deterministic, naming no one. PDA:",
+        "[\"visit\", host_circle, nullifier]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "host_circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "home_circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "nullifier",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "verified_at",
+            "type": "i64"
           },
           {
             "name": "bump",

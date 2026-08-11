@@ -622,7 +622,14 @@ pub struct Message {
 }
 impl Message {
     /// Fixed sealed length: 1024-byte padded plaintext + 16-byte NaCl box MAC.
-    pub const CT_LEN: usize = 1040;
+    /// 512-byte padded envelope + 16-byte NaCl box MAC. Was 1040 — but a
+    /// 1040-byte ciphertext makes the send_message instruction data 1156
+    /// bytes, which CANNOT fit Solana's 1232-byte transaction limit with
+    /// accounts and a signature: the old size was unsendable in a single
+    /// transaction (found by the F55 relayer integration test, 2026-08-11).
+    /// 528 fits with room to spare, halves the account rent (the deferred
+    /// F32 rent item), and long-form mail belongs to the F63 mailbox anyway.
+    pub const CT_LEN: usize = 528;
     pub const SPACE: usize = 8 + 32 + 32 + 24 + 8 + 8 + 8 + 4 + Self::CT_LEN + 1;
 }
 
@@ -706,15 +713,126 @@ pub struct AdmissionAttestation {
     pub parrain: [u8; 32],   // named form: attesting commitment; zero if anonymous
     pub nullifier: [u8; 32], // anonymous form: vouch nullifier; zero if named
     pub attested_at: i64,
+    /// Set by `confirm_admission`: 1 + the MemberTree leaf index the newcomer
+    /// was inserted at (1-BASED; 0 = not yet confirmed), and the member epoch
+    /// it belongs to (F54). Lets clients reconstruct the exact insertion order
+    /// even when confirmations interleave with direct issuance. Valid only
+    /// while `leaf_epoch` equals the Circle's current epoch
+    /// (`RecentRoots.epoch`); stale after an epoch rebuild (the reinsertion's
+    /// `EpochLeaf` supersedes it).
+    pub leaf_index: u64,
+    pub leaf_epoch: u64,
     pub bump: u8,
 }
 
 impl AdmissionAttestation {
-    pub const SPACE: usize = 8 + 32 + 32 + 32 + 32 + 8 + 1;
+    pub const SPACE: usize = 8 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 1;
 
     pub fn is_anonymous(&self) -> bool {
         self.parrain == [0u8; 32]
     }
+}
+
+/// F54a — ring buffer of a Circle's recent MemberTree roots, plus the current
+/// member epoch (F54b). Companion PDA ["roots", circle] so the already-deployed
+/// MemberTree layout never changes. Written by the permissionless `note_root`
+/// crank (run by a prover right before proving, so the root they prove against
+/// survives concurrent insertions) and by `begin_member_epoch`/`reinsert_member`.
+/// A proof verified against ANY root in the buffer is accepted where the
+/// instruction opts in (attest_admission_zk) — a bounded staleness window, not
+/// an unbounded one: the buffer holds `N` roots and old ones are overwritten.
+#[account]
+pub struct RecentRoots {
+    pub circle: Pubkey,
+    /// Member epoch — 0 until the first `begin_member_epoch` rebuild. Each
+    /// rebuild increments it and empties the tree; only live memberships are
+    /// re-inserted, which is what makes the votable set a GOOD-STANDING set.
+    pub epoch: u64,
+    /// When the current epoch began (0 for epoch 0).
+    pub epoch_started_at: i64,
+    /// Next write position in `roots` (wraps at N).
+    pub index: u8,
+    /// Last N roots, zero entries = never written.
+    pub roots: [[u8; 32]; Self::N],
+    pub bump: u8,
+}
+
+impl RecentRoots {
+    // 16, not 32: borsh deserializes the array on the SBF stack, and 32 roots
+    // (1 KiB) overflowed the 4 KiB frame in the widest accounts struct. 16
+    // recent roots is still a generous staleness window for a proof in flight.
+    pub const N: usize = 16;
+    pub const SPACE: usize = 8 + 32 + 8 + 8 + 1 + 32 * Self::N + 1;
+
+    pub fn push(&mut self, root: [u8; 32]) {
+        // Skip consecutive duplicates so a crank cannot flush the buffer by
+        // re-noting the same root N times.
+        let last = (self.index as usize + Self::N - 1) % Self::N;
+        if self.roots[last] == root {
+            return;
+        }
+        self.roots[self.index as usize] = root;
+        self.index = ((self.index as usize + 1) % Self::N) as u8;
+    }
+
+    pub fn contains(&self, root: &[u8; 32]) -> bool {
+        *root != [0u8; 32] && self.roots.iter().any(|r| r == root)
+    }
+}
+
+/// F54b — one re-inserted leaf of an epoch rebuild. PDA
+/// ["epochleaf", circle, epoch_le, commitment]; `init` collision is the
+/// double-reinsertion guard. `leaf_index` lets clients reconstruct the new
+/// tree's insertion order exactly.
+#[account]
+pub struct EpochLeaf {
+    pub circle: Pubkey,
+    pub epoch: u64,
+    pub commitment: [u8; 32],
+    pub leaf_index: u64,
+    pub bump: u8,
+}
+
+impl EpochLeaf {
+    pub const SPACE: usize = 8 + 32 + 8 + 32 + 8 + 1;
+}
+
+/// F56 — fellowship-wide verification anchor: a Circle's member root published
+/// under its foundation, so any Circle in the same federation can verify a
+/// visiting member's proof without holding the visitor's home tree. Written by
+/// the permissionless `publish_member_root` crank (it only copies verified
+/// on-chain state); parentage is constraint-checked with the same rule the
+/// federation-governance fixes hardened (`child.parent == foundation`).
+/// PDA: ["anchor", foundation, circle].
+#[account]
+pub struct CircleRootAnchor {
+    pub foundation: Pubkey,
+    pub circle: Pubkey,
+    pub root: [u8; 32],
+    pub epoch: u64,
+    pub updated_at: i64,
+    pub bump: u8,
+}
+
+impl CircleRootAnchor {
+    pub const SPACE: usize = 8 + 32 + 32 + 32 + 8 + 8 + 1;
+}
+
+/// F56 — proof that AN anonymous member of `home_circle` verified themselves to
+/// `host_circle`. The nullifier is Poseidon(secret, host_circle_field) — one
+/// pass per member per host Circle, deterministic, naming no one. PDA:
+/// ["visit", host_circle, nullifier].
+#[account]
+pub struct VisitPass {
+    pub host_circle: Pubkey,
+    pub home_circle: Pubkey,
+    pub nullifier: [u8; 32],
+    pub verified_at: i64,
+    pub bump: u8,
+}
+
+impl VisitPass {
+    pub const SPACE: usize = 8 + 32 + 32 + 32 + 8 + 1;
 }
 
 /// Marks a membership as provisional (Epic 1 / Epic 9): admitted on the

@@ -18,6 +18,40 @@
 
 ---
 
+## 0b. Round update — 2026-08-11b (71 instructions) — the anonymity layer
+
+Verified natively: `anchor build` clean, **71** instruction files; bare
+`anchor test` = **100 passing / 0 failing** (+`epic2`, +`relayer`, +`mailbox`);
+frontend `tsc --noEmit` clean; privacy-sweep green.
+
+New this round:
+- **F55 relayer** (`code`, `exec`) — `app/api/relay/route.ts`, `lib/relayer.ts`,
+  pure `lib/relayPolicy.ts`. `tests/relayer.ts` exercises the refusal matrix and
+  proves an allowlisted instruction accepts a third-party fee-payer with the
+  member's wallet nowhere in the tx. Wired into cast_vote / attest_admission_zk /
+  send_message / publish_maci_message and the F54/F56 cranks.
+- **F54** (`code`, `exec`) — `note_root`, `begin_member_epoch`, `reinsert_member`;
+  `RecentRoots`(16)/`EpochLeaf` state; `tests/epic2.ts` proves the ring buffer
+  keeps a superseded root provable, the epoch rebuild drops an expired member,
+  and double-reinsertion is refused.
+- **F56** (`code`, `exec`) — `publish_member_root`, `verify_fellow_member`;
+  `CircleRootAnchor`/`VisitPass`; parentage + garbage-proof rejection asserted.
+- **F63 v1** (`code`, `exec`) — off-chain mailbox: `app/api/mailbox/route.ts`,
+  `lib/mailbox.ts`, pure `lib/mailboxCrypto.ts`; `tests/mailbox.ts` (seal/open,
+  tamper→null, forward-secrecy, no-network-sink).
+- **F80 UI**, **F71** geolocation removal, **Message::CT_LEN 1040→528** (a latent
+  unsendable-tx bug the F55 test surfaced, not just a rent optimization).
+- Decisions: ADR **0002** (quantum-resistance architecture), **0007**
+  (open-membership→bootstrap), **0008** (public rank accepted, user waiver);
+  `docs/sybil.md` rewritten; `docs/emerald-table.md` (E3 hexes).
+- **F50/F51/F52** flipped to ✅ (suites green). **F46** checklist now covers 51
+  rows (F54/F55/F56/F63/F71 entries added this round); `tests/sentinel/baselines/`
+  created.
+
+Still funding-blocked: no devnet deploy (deployer < program rent).
+
+---
+
 ## 0. Round update — 2026-08-11 (66 instructions)
 
 Verified natively this round (host now has cargo/anchor/solana + portable node 18):

@@ -7,3 +7,6 @@ next-env.d.ts
 .env*.local
 .vercel
 .data/
+
+# F63 mailbox relay store (runtime data, never committed)
+.mailbox/

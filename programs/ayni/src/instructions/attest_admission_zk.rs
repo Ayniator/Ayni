@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
-use crate::state::{AdmissionAttestation, Circle, MemberTree, Nullifier};
+use crate::state::{AdmissionAttestation, Circle, MemberTree, Nullifier, RecentRoots};
 use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 
 /// Attestation A, anonymous form (Trust Platform Epic 2): a Groth16 proof that
@@ -27,9 +27,11 @@ use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 ///   append-only, so an expired member who was never revoked can still produce
 ///   a proof. This is the SAME semantics member voting already accepts for a
 ///   snapshot; tightening it needs an epoch-refreshed good-standing tree (F54).
-/// * The proof is verified against the CURRENT tree root: the prover
-///   reconstructs the tree client-side (as `zk-vote.ts` does) and must be
-///   up-to-date; a stale proof fails on the root equality.
+/// * The proof is verified against the CURRENT tree root **or any root in the
+///   Circle's recent-roots ring buffer** (F54): the prover reconstructs the
+///   tree client-side (as `zk-vote.ts` does), cranks `note_root` so the root
+///   they prove against is recorded, and a concurrent admission no longer
+///   kills the in-flight proof. Staleness is bounded by the buffer size.
 /// * `confirm_admission` cannot compare a trusted servant against an anonymous
 ///   parrain, so the distinct-persons rule downgrades from program-enforced to
 ///   circle-visible for anonymous attestations: the confirming seat is public,
@@ -42,15 +44,27 @@ use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 pub fn attest_admission_zk(
     ctx: Context<AttestAdmissionZk>,
     newcomer_commitment: [u8; 32],
+    root: [u8; 32],
     nullifier: [u8; 32],
     proof_a: [u8; 64],
     proof_b: [u8; 128],
     proof_c: [u8; 64],
 ) -> Result<()> {
+    // F54: accept the current root, or any root still in the ring buffer
+    // (cheap check first, before the pairing work).
+    let is_current = root == ctx.accounts.member_tree.root;
+    let is_recent = ctx
+        .accounts
+        .recent_roots
+        .as_ref()
+        .map(|rr| rr.contains(&root))
+        .unwrap_or(false);
+    require!(is_current || is_recent, AyniError::RootNotRecent);
+
     // Public-signal order (outputs first): [nullifier, root, proposalId, choice].
     let public_inputs: [[u8; 32]; 4] = [
         nullifier,
-        ctx.accounts.member_tree.root,
+        root,
         newcomer_commitment,
         crate::merkle::field_from_u8(1), // choice = 1: "I attest"
     ];
@@ -71,7 +85,7 @@ pub fn attest_admission_zk(
 }
 
 #[derive(Accounts)]
-#[instruction(newcomer_commitment: [u8; 32], nullifier: [u8; 32])]
+#[instruction(newcomer_commitment: [u8; 32], root: [u8; 32], nullifier: [u8; 32])]
 pub struct AttestAdmissionZk<'info> {
     pub circle: Account<'info, Circle>,
 
@@ -82,6 +96,16 @@ pub struct AttestAdmissionZk<'info> {
         bump = member_tree.bump
     )]
     pub member_tree: Account<'info, MemberTree>,
+
+    /// F54 ring buffer — pass it (after cranking `note_root`) so the proof
+    /// survives concurrent admissions; may be null for a Circle that has never
+    /// cranked, in which case only the exact current root is accepted.
+    #[account(
+        has_one = circle,
+        seeds = [b"roots", circle.key().as_ref()],
+        bump = recent_roots.bump
+    )]
+    pub recent_roots: Option<Box<Account<'info, RecentRoots>>>,
 
     /// One parrain attestation per newcomer — shared PDA with the named form,
     /// so the two forms cannot be stacked.

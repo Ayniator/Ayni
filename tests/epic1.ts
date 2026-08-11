@@ -119,6 +119,7 @@ describe("ayni — two-sponsor admission (Epic 1)", () => {
         attestation: attestPda(commitment),
         parrainMembership: membershipPda(parrainCommitment),
         memberTree,
+        recentRoots: null,
         servant: servant.publicKey,
       })
       .signers([servant])
@@ -243,7 +244,7 @@ describe("ayni — two-sponsor admission (Epic 1)", () => {
       program.methods.confirmAdmission()
         .accounts({
           circle, membership: membershipPda(cN3), provisional: provisionalPda(cN3),
-          attestation: attestPda(cN3), parrainMembership: null, memberTree, servant: seats[RHYTHM].publicKey,
+          attestation: attestPda(cN3), parrainMembership: null, memberTree, recentRoots: null, servant: seats[RHYTHM].publicKey,
         } as any)
         .signers([seats[RHYTHM]]).rpc(),
       "ParrainCannotConfirm"

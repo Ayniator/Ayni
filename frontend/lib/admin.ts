@@ -15,15 +15,18 @@ import {
   PROGRAM_ID,
   SigningWallet,
   circleConfigPda,
+  connection,
   invalidateCircles,
   memberTreePda,
   openMembershipPda,
   programWith,
   readOnlyProgram,
+  treasuryAllowPda,
   treasuryPda,
 } from "./member";
 import { SystemProgram } from "@solana/web3.js";
-import { TOKEN_2022_PROGRAM_ID } from "./multisig";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "./multisig";
+import { getCircleConfig } from "./config";
 
 // ---------------------------------------------------------------------------
 // Council seats / roles
@@ -71,7 +74,12 @@ export function freshNonce(): anchor.BN {
 // Council proposals (the 4-of-7 votes)
 // ---------------------------------------------------------------------------
 
-export type CouncilActionKind = "rotateSeat" | "migrateWallet" | "withdrawTreasury" | "setTreasuryWallet";
+export type CouncilActionKind =
+  | "rotateSeat"
+  | "migrateWallet"
+  | "withdrawTreasury"
+  | "withdrawTreasuryToken"
+  | "setTreasuryWallet";
 
 export interface CouncilProposal {
   pubkey: string;
@@ -107,6 +115,13 @@ function describeAction(action: any): { kind: CouncilActionKind; summary: string
     return {
       kind: "setTreasuryWallet",
       summary: `Set treasury wallet → ${short(action.setTreasuryWallet.newWallet)}`,
+    };
+  }
+  if (action.withdrawTreasuryToken) {
+    const t = action.withdrawTreasuryToken;
+    return {
+      kind: "withdrawTreasuryToken",
+      summary: `Withdraw ${t.amount.toString()} base units of ${short(t.mint)} → ${short(t.recipient)}`,
     };
   }
   const amt = action.withdrawTreasury.amount;
@@ -195,6 +210,83 @@ export const actionWithdrawTreasury = (lamports: bigint, recipient: PublicKey) =
 export const actionSetTreasuryWallet = (newWallet: PublicKey) => ({
   setTreasuryWallet: { newWallet },
 });
+/** F80: move an SPL / Token-2022 balance out of the treasury (amount in raw base units). */
+export const actionWithdrawTreasuryToken = (mint: PublicKey, amount: bigint, recipient: PublicKey) => ({
+  withdrawTreasuryToken: { mint, amount: new anchor.BN(amount.toString()), recipient },
+});
+
+// ---------------------------------------------------------------------------
+// F80 — executing a WithdrawTreasuryToken proposal (the token twin of the SOL
+// withdraw). The proposal pins {mint, amount, recipient}; we recover them from
+// the account, derive both associated token accounts, detect which token
+// program owns the mint (SPL vs Token-2022), and pass the recipient's
+// TreasuryAllow entry when the Circle's spend allowlist is on.
+// ---------------------------------------------------------------------------
+
+/** The well-known SPL Associated Token Account program. */
+export const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+);
+
+/** Associated token address for `owner` (off-curve owners allowed — the treasury is a PDA). */
+export const associatedTokenAddress = (
+  owner: PublicKey,
+  mint: PublicKey,
+  tokenProgramId: PublicKey
+) =>
+  PublicKey.findProgramAddressSync(
+    [owner.toBytes(), tokenProgramId.toBytes(), mint.toBytes()],
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  )[0];
+
+/**
+ * Trigger an executed 4-of-7 WithdrawTreasuryToken proposal: the treasury PDA
+ * transfers the pinned token amount to the pinned recipient. Permissionless to
+ * call once the Council has executed the vote (mirrors the SOL withdraw).
+ */
+export async function withdrawTreasuryToken(
+  wallet: SigningWallet,
+  circle: PublicKey,
+  proposal: PublicKey
+): Promise<string> {
+  const program = programWith(wallet);
+  const p: any = await (program.account as any).proposal.fetch(proposal);
+  const act = p.action?.withdrawTreasuryToken;
+  if (!act) throw new Error("proposal is not a WithdrawTreasuryToken action");
+  const mint = new PublicKey(act.mint);
+  const recipient = new PublicKey(act.recipient);
+
+  // Which token program owns the mint (classic SPL vs Token-2022)?
+  const mintInfo = await connection().getAccountInfo(mint);
+  if (!mintInfo) throw new Error("mint account not found on-chain");
+  const tokenProgram = mintInfo.owner.equals(TOKEN_2022_PROGRAM_ID)
+    ? TOKEN_2022_PROGRAM_ID
+    : TOKEN_PROGRAM_ID;
+
+  // Same allowlist handling as the SOL withdraw: when the Circle's spend
+  // allowlist is on, the recipient's TreasuryAllow entry must ride along.
+  const cfg = await getCircleConfig(circle.toBase58());
+  const allow = cfg.treasuryAllowlist ? treasuryAllowPda(circle, recipient) : null;
+
+  const treasury = treasuryPda(circle);
+  return program.methods
+    .withdrawTreasuryToken()
+    .accounts({
+      circle,
+      proposal,
+      config: circleConfigPda(circle),
+      allow,
+      mint,
+      treasury,
+      treasuryTokenAccount: associatedTokenAddress(treasury, mint, tokenProgram),
+      recipient,
+      recipientTokenAccount: associatedTokenAddress(recipient, mint, tokenProgram),
+      caller: wallet.publicKey,
+      tokenProgram,
+      systemProgram: SystemProgram.programId,
+    } as any)
+    .rpc();
+}
 
 export const treasuryConfigPda = (circle: PublicKey) =>
   PublicKey.findProgramAddressSync([seed("treasurycfg"), circle.toBytes()], PROGRAM_ID)[0];

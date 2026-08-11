@@ -173,6 +173,10 @@ features:
     name: Epic 0 — gas faucet (+ F47 treasurer ledger, F48 disbursement jitter)
     shipped_round: 2
     covered_by: [tests/faucet.ts, tests/sentinel/privacy-sweep.sh]
+    checks:  # cheap static presence gates (F46) — fail loudly if the feature is deleted/renamed
+      - cmd: test -f programs/ayni/src/instructions/init_faucet.rs && test -f programs/ayni/src/instructions/activate_faucet.rs && test -f programs/ayni/src/instructions/refill_faucet.rs && test -f programs/ayni/src/instructions/set_faucet_amount.rs
+      - cmd: grep -q "pub struct FaucetJar" programs/ayni/src/state.rs
+      - cmd: grep -q "pays the neophyte exactly one uniform grant" tests/faucet.ts
     cases:
       - init by seat / refused to non-seat
       - Treasurer tunes within cap; above cap, zero, non-Treasurer, non-seat refused
@@ -288,6 +292,9 @@ features:
   - id: F25
     name: Circle email notifications
     covered_by: []
+    checks:  # cheap static presence gates (F46)
+      - cmd: test -f frontend/lib/circleEmail.ts && test -f frontend/app/api/circle-email/route.ts
+      - cmd: test -f indexer/email-indexer.js
     uncovered:
       - "the round-2 hardening of app/api/circle-email (chain verification of
          circleName/membership, IP rate limit) has no test — see layer B.
@@ -401,3 +408,413 @@ features:
          need Layer A / Playwright, which does not exist in this repo)"
       - "not yet wired into the onboarding stepper (E9) or a dedicated
          /recovery route — component exists, integration does not"
+
+  # ------------------------------------------------------------------------
+  # F46 registry sweep (2026-08-11): per-feature coverage for every ✅ row in
+  # BACKLOG.md's feature registry. Each entry carries 1-3 cheap, DETERMINISTIC
+  # static checks (`checks:` — file-exists / grep), runnable without a
+  # validator, node, or a build. They are presence gates, not behaviour tests:
+  # they fail loudly if the instruction, client lib, account struct, or named
+  # test case is deleted or renamed. Behaviour coverage, where it exists, is
+  # named in `covered_by` (the anchor suites run under Layer C). Run all of
+  # them from the repo root; every cmd must exit 0.
+  # ------------------------------------------------------------------------
+
+  - id: F1
+    name: Soulbound yearly membership (ZK-commitment keyed)
+    covered_by: [tests/ayni.ts]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/issue_membership.rs && test -f programs/ayni/src/instructions/renew_membership.rs
+      - cmd: grep -q "pub struct Membership" programs/ayni/src/state.rs
+      - cmd: grep -q "issues a soulbound yearly membership" tests/ayni.ts
+
+  - id: F2
+    name: Selective-disclosure identity (optional owner wallet)
+    covered_by: []  # behaviour implicit in every owner-gated suite
+    checks:
+      - cmd: grep -q "pub owner" programs/ayni/src/state.rs
+      - cmd: grep -q "OWNER_OFFSET" frontend/lib/member.ts
+
+  - id: F3
+    name: Soulbound Token-2022 membership token (NonTransferable)
+    covered_by: [scripts/test-membership-mint.js]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/create_membership_mint.rs && test -f programs/ayni/src/instructions/set_membership_mint.rs && test -f programs/ayni/src/instructions/mint_membership_token.rs
+      - cmd: grep -q "non_transferable_mint_initialize" programs/ayni/src/instructions/create_membership_mint.rs
+      - cmd: test -f scripts/test-membership-mint.js
+
+  - id: F4
+    name: Social vouching — Scribe-Secretary-seat-gated issuance
+    covered_by: [tests/ayni.ts]
+    checks:
+      - cmd: grep -q "SEAT_SECRETARY" programs/ayni/src/instructions/issue_membership.rs
+      - cmd: grep -q "rejects a non-Secretary seat" tests/ayni.ts
+
+  - id: F31
+    name: Per-Circle membership policy (permissionless vs gated, OpenMembership marker)
+    covered_by: []  # devnet-verified per BACKLOG; no local suite
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/set_open_membership.rs
+      - cmd: grep -q "openjoin" programs/ayni/src/state.rs
+
+  - id: F5
+    name: Anonymous proof-of-personhood (one human, one membership)
+    covered_by: []  # no e2e proof test — F43 gap, tracked in Layer C
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/set_personhood.rs && test -f programs/ayni/src/instructions/prove_personhood.rs
+      - cmd: grep -q "pub struct PersonhoodCredential" programs/ayni/src/state.rs
+
+  - id: F6
+    name: Anonymous member voting (one member, one vote, per-proposal nullifier)
+    covered_by: [tests/vote.ts, tests/f28-election.ts]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/create_member_proposal.rs && test -f programs/ayni/src/instructions/cast_vote.rs && test -f programs/ayni/src/instructions/finalize_member_proposal.rs
+      - cmd: test -f circuits/member_vote.circom && test -f frontend/public/zk/member_vote.wasm
+      - cmd: test -f frontend/lib/zk-vote.ts
+
+  - id: F7
+    name: 7-seat Council, 4-of-7 proposals
+    covered_by: [tests/ayni.ts, tests/resilience.ts]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/propose.rs && test -f programs/ayni/src/instructions/approve.rs && test -f programs/ayni/src/instructions/execute_proposal.rs && test -f programs/ayni/src/instructions/cancel_proposal.rs
+      - cmd: grep -q "pub struct Council" programs/ayni/src/council.rs
+      - cmd: grep -q "initializes a Circle with its 7-seat Council" tests/ayni.ts
+
+  - id: F8
+    name: Forkable federated Circles (Circle.parent)
+    covered_by: [tests/federation.ts]
+    checks:
+      - cmd: grep -q "pub parent" programs/ayni/src/state.rs
+      - cmd: test -f programs/ayni/src/instructions/initialize_circle.rs
+
+  - id: F28
+    name: Member election of the 7 Council seats
+    covered_by: [tests/f28-election.ts]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/link_seat_election.rs && test -f programs/ayni/src/instructions/install_elected_seat.rs
+      - cmd: grep -q "pub struct SeatElection" programs/ayni/src/state.rs
+      - cmd: test -f tests/f28-election.ts
+
+  - id: F37
+    name: Per-Circle quorum / pass-threshold config for member voting
+    covered_by: []  # devnet-verified per BACKLOG; finalize path exercised by vote suites
+    checks:
+      - cmd: grep -q "vote_quorum_num" programs/ayni/src/state.rs
+      - cmd: grep -q "vote_quorum" programs/ayni/src/instructions/finalize_member_proposal.rs
+
+  - id: F9
+    name: Key recovery — MigrateWallet (4-of-7) + recover_membership
+    covered_by: [tests/resilience.ts, tests/audit-fixes.ts]
+    checks:
+      - cmd: grep -q "MigrateWallet" programs/ayni/src/council.rs
+      - cmd: test -f programs/ayni/src/instructions/recover_membership.rs
+      - cmd: grep -q "holds a wallet migration for the time-lock" tests/resilience.ts
+
+  - id: F10
+    name: Migration time-lock + any-seat contest window
+    covered_by: [tests/resilience.ts]
+    checks:
+      - cmd: grep -q "recovery_timelock" programs/ayni/src/council.rs
+      - cmd: grep -q "eligible_at" programs/ayni/src/council.rs
+      - cmd: grep -q "lets any single seat contest" tests/resilience.ts
+
+  - id: F11
+    name: Member co-signature & self-recovery (guardians, 1-of-2)
+    covered_by: [tests/cosign.ts]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/set_recovery.rs && test -f programs/ayni/src/instructions/member_migrate.rs
+      - cmd: grep -q "recovery_keys" programs/ayni/src/state.rs
+      - cmd: grep -q "lets a member self-migrate" tests/cosign.ts
+
+  - id: F12
+    name: ZK lineage level grants (issuer-anonymous)
+    covered_by: []  # no e2e proof test — F43 gap, tracked in Layer C
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/initialize_lineage.rs && test -f programs/ayni/src/instructions/grant_level.rs
+      - cmd: test -f circuits/lineage_grant.circom
+      - cmd: test -f app/lineage/prove.ts
+
+  - id: F13
+    name: Acknowledgment credentials (root-only storage)
+    covered_by: []  # no e2e proof test — F43 gap
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/issue_acknowledgment.rs
+      - cmd: grep -q "pub struct Acknowledgment" programs/ayni/src/state.rs
+
+  - id: F14
+    name: ZK selective field disclosure (ack_disclose)
+    covered_by: []  # no e2e proof test — F43 gap
+    checks:
+      - cmd: test -f circuits/ack_disclose.circom
+      - cmd: test -f app/acknowledgment/prove.ts
+
+  - id: F15
+    name: ZK predicate proofs (date / catalog / teacher-set)
+    covered_by: []  # no e2e proof test — F43 gap
+    checks:
+      - cmd: grep -q "buildSet" app/acknowledgment/prove.ts
+      - cmd: test -f docs/acknowledgments.md
+
+  - id: F16
+    name: On-chain predicate-gated access (verify_disclosure -> AccessPass)
+    covered_by: []  # no e2e proof test — F43 gap
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/verify_disclosure.rs
+      - cmd: grep -q "pub struct AccessPass" programs/ayni/src/state.rs
+      - cmd: test -f programs/ayni/src/verifying_key_ack.rs
+
+  - id: F17
+    name: Self-supporting donation treasury (donate / donate_token / withdraw)
+    covered_by: [tests/audit-fixes.ts]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/donate.rs && test -f programs/ayni/src/instructions/donate_token.rs && test -f programs/ayni/src/instructions/withdraw_treasury.rs
+      - cmd: test -f app/treasury/fund.ts
+
+  - id: F36
+    name: CircleConfig policy PDA + donation-on-renew (Tradition 7)
+    covered_by: []  # devnet-verified per BACKLOG
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/set_circle_config.rs
+      - cmd: grep -q "renew_donation_lamports" programs/ayni/src/state.rs
+      - cmd: grep -q "renew_donation" programs/ayni/src/instructions/renew_membership.rs
+
+  - id: F38
+    name: Treasury mission/spend allowlist (Traditions 5/6)
+    covered_by: []  # devnet-verified per BACKLOG
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/set_treasury_allow.rs
+      - cmd: grep -q "TreasuryAllow" programs/ayni/src/instructions/withdraw_treasury.rs
+
+  - id: F29
+    name: Change the Circle treasury wallet (4-of-7, must be a multisig)
+    covered_by: []  # devnet-verified per BACKLOG
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/set_treasury_wallet.rs
+      - cmd: grep -q "TreasuryNotMultisig" programs/ayni/src/instructions/set_treasury_wallet.rs
+      - cmd: test -f frontend/lib/multisig.ts && test -f scripts/create-multisig.js
+
+  - id: F80
+    name: Withdraw SPL/Token-2022 from the treasury (4-of-7)
+    covered_by: [tests/audit-fixes.ts]  # see also SEC-2026-08-11 entry above
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/withdraw_treasury_token.rs
+      - cmd: grep -q "WithdrawTreasuryToken" programs/ayni/src/council.rs
+      - cmd: grep -q "withdraw_treasury_token moves donated SPL tokens out" tests/audit-fixes.ts
+
+  # --- 2026-08-11b anonymity layer (F54/F55/F56/F63/F71) --------------------
+  - id: F54
+    name: MemberTree recent-roots ring buffer + epoch good-standing set
+    covered_by: [tests/epic2.ts]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/note_root.rs
+      - cmd: test -f programs/ayni/src/instructions/begin_member_epoch.rs
+      - cmd: test -f programs/ayni/src/instructions/reinsert_member.rs
+      - cmd: grep -q "pub struct RecentRoots" programs/ayni/src/state.rs
+      - cmd: grep -q "note_root records roots that survive later insertions" tests/epic2.ts
+      - cmd: grep -q "an EXPIRED membership cannot re-enter" tests/epic2.ts
+
+  - id: F55
+    name: Relayer service (fee-payer anonymity) — allowlisted third-party payer
+    covered_by: [tests/relayer.ts]
+    checks:
+      - cmd: test -f frontend/app/api/relay/route.ts
+      - cmd: test -f frontend/lib/relayPolicy.ts
+      - cmd: test -f frontend/lib/relayer.ts
+      - cmd: grep -q "RELAY_ALLOWLIST" frontend/lib/relayPolicy.ts
+      # the relayer must never co-sign: its signature means "paid the fee", not authority
+      - cmd: grep -q "unexpected extra signer" frontend/lib/relayPolicy.ts
+      - cmd: grep -q "the relayer is the only signer" tests/relayer.ts
+      # the route must not log (privacy) — assert no console/logger call slipped in
+      - cmd: "! grep -qE 'console\\.(log|info|warn|error)|logger\\.' frontend/app/api/relay/route.ts"
+
+  - id: F56
+    name: Fellowship-wide verification anchor (visiting-member proof)
+    covered_by: [tests/epic2.ts]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/publish_member_root.rs
+      - cmd: test -f programs/ayni/src/instructions/verify_fellow_member.rs
+      - cmd: grep -q "pub struct CircleRootAnchor" programs/ayni/src/state.rs
+      - cmd: grep -q "pub struct VisitPass" programs/ayni/src/state.rs
+      - cmd: grep -q "a foreign foundation is refused" tests/epic2.ts
+
+  - id: F63
+    name: Off-chain sealed-sender mailbox (E7 v1) — no on-chain message record
+    covered_by: [tests/mailbox.ts]
+    checks:
+      - cmd: test -f frontend/app/api/mailbox/route.ts
+      - cmd: test -f frontend/lib/mailbox.ts
+      - cmd: test -f frontend/lib/mailboxCrypto.ts
+      # the crypto module must stay pure — no network sink (same rule as sharding)
+      - cmd: "! grep -qE 'fetch\\(|XMLHttpRequest|WebSocket|sendBeacon' frontend/lib/mailboxCrypto.ts"
+      # the relay must not log
+      - cmd: "! grep -qE 'console\\.(log|info|warn|error)|logger\\.' frontend/app/api/mailbox/route.ts"
+      # reads are recipient-signed (metadata not readable by address alone)
+      - cmd: grep -q "getSignedBytes" frontend/app/api/mailbox/route.ts
+      - cmd: grep -q "no network sink" tests/mailbox.ts
+
+  - id: F71
+    name: Third-party IP-geolocation removed from the public site
+    covered_by: []  # UI privacy invariant — enforced by static greps here
+    checks:
+      # the visitor's IP must not be handed to any geolocation API
+      - cmd: "! grep -rqE 'ipwho|ipapi' frontend/app frontend/lib"
+      # no address reverse-geocode to Nominatim
+      - cmd: "! grep -rq 'nominatim' frontend/app frontend/lib"
+      # only the map-tile URL may reference openstreetmap (the map itself)
+      - cmd: "test \"$(grep -rl 'openstreetmap' frontend/app frontend/lib frontend/components | grep -v CircleMap.tsx | wc -l)\" = 0"
+
+  - id: F18
+    name: Public Circle directory (geo + IPFS doc CIDs)
+    covered_by: [tests/profile.ts]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/upsert_circle_profile.rs && test -f frontend/components/CircleMap.tsx
+      - cmd: grep -q "pub struct CircleProfile" programs/ayni/src/state.rs
+      - cmd: grep -q "any seat creates the profile" tests/profile.ts
+
+  - id: F19
+    name: Update circle locations (in-place, range-validated)
+    covered_by: [tests/profile.ts]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/update_circle_location.rs
+      - cmd: grep -q "rejects out-of-range coordinates" tests/profile.ts
+
+  - id: F26
+    name: Structured meeting schedule + calendar on a Circle
+    covered_by: []
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/set_meetings.rs
+      - cmd: grep -q "pub struct CircleMeetings" programs/ayni/src/state.rs
+      - cmd: test -f frontend/lib/meetings.ts
+
+  - id: F41
+    name: Circle country / continent grouping
+    covered_by: []
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/set_circle_country.rs
+      - cmd: grep -q "pub struct CircleCountry" programs/ayni/src/state.rs
+      - cmd: test -f frontend/lib/country.ts
+
+  - id: F20
+    name: Deterministic Jazzicon identicons + AHA-purple brand rule
+    covered_by: [tests/jazzicon.ts]
+    # BRAND RULE, regression-guarded per BACKLOG F20: "do not remove that test".
+    # The two greps below assert the AHA-purple test cases still EXIST by name;
+    # deleting or renaming either fails this entry, which fails the round.
+    checks:
+      - cmd: test -f frontend/lib/jazzicon.ts && test -f frontend/components/Identicon.tsx
+      - cmd: grep -q "renders AHA-prefixed addresses entirely in the purple family" tests/jazzicon.ts
+      - cmd: grep -q "leaves non-AHA addresses on the full hue wheel" tests/jazzicon.ts
+
+  - id: F21
+    name: Delist a Circle from the directory
+    covered_by: []
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/close_circle_profile.rs
+      - cmd: test -f scripts/close-circle.js
+
+  - id: F22
+    name: Wallet connect + "My Circle" member console
+    covered_by: []  # no UI-level suite — Layer A gap
+    checks:
+      - cmd: test -d frontend/app/me
+      - cmd: test -f frontend/lib/member.ts && test -f frontend/components/WalletProviders.tsx
+      - cmd: grep -q "OWNER_OFFSET" frontend/lib/member.ts
+
+  - id: F23
+    name: Create-a-Circle self-serve UI
+    covered_by: []  # no UI-level suite — Layer A gap
+    checks:
+      - cmd: test -d frontend/app/create
+      - cmd: test -f frontend/lib/createCircle.ts
+
+  - id: F24
+    name: Circle administration console (seat-gated, embedded in /me)
+    covered_by: []  # no UI-level suite — Layer A gap
+    checks:
+      - cmd: test -f frontend/app/admin/CircleAdmin.tsx
+      - cmd: grep -q "CircleAdmin" frontend/app/me/page.tsx
+
+  - id: F34
+    name: Foundation-led federation governance (rotate seats / close a child, 4-of-7)
+    covered_by: [tests/federation.ts]
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/propose_child_rotation.rs && test -f programs/ayni/src/instructions/execute_child_rotation.rs && test -f programs/ayni/src/instructions/propose_child_close.rs && test -f programs/ayni/src/instructions/execute_child_close.rs
+      - cmd: test -f frontend/lib/foundation.ts && test -d frontend/app/foundation
+      - cmd: grep -q "CAN rotate its direct child" tests/federation.ts
+
+  - id: F30
+    name: Member posts / bulletins (time-boxed, seat-removable)
+    covered_by: []
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/create_post.rs && test -f programs/ayni/src/instructions/delete_post.rs
+      - cmd: grep -q "pub struct Post" programs/ayni/src/state.rs
+      - cmd: test -f frontend/lib/posts.ts && test -d frontend/app/board
+
+  - id: F32
+    name: Encrypted 1-to-1 private messaging (on-chain pilot)
+    covered_by: []
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/register_messaging_key.rs && test -f programs/ayni/src/instructions/send_message.rs && test -f programs/ayni/src/instructions/delete_message.rs
+      - cmd: grep -q "pub struct MessagingKey" programs/ayni/src/state.rs
+      - cmd: test -f frontend/lib/messaging.ts && test -d frontend/app/inbox
+
+  - id: F32b
+    name: Seat-holders must have messaging enabled (UX-enforced policy)
+    covered_by: []
+    # POLICY GUARD per BACKLOG F46's own note: the gate component must remain
+    # MOUNTED in the root layout, not merely exist — the second grep matches the
+    # JSX mount site (<SeatMessagingGate), not just the import line.
+    checks:
+      - cmd: test -f frontend/components/SeatMessagingGate.tsx
+      - cmd: grep -q "<SeatMessagingGate" frontend/app/layout.tsx
+
+  - id: F27
+    name: WingPeer (mentor) bond + ProgressToken milestone chips
+    covered_by: [tests/faucet.ts]  # the parrain attestation path exercises WingPeer
+    checks:
+      - cmd: test -f programs/ayni/src/instructions/establish_wing_peer.rs && test -f programs/ayni/src/instructions/end_wing_peer.rs && test -f programs/ayni/src/instructions/issue_progress_token.rs
+      - cmd: grep -q "pub struct WingPeer" programs/ayni/src/state.rs
+      - cmd: grep -q "pub struct ProgressToken" programs/ayni/src/state.rs
+
+  - id: F33
+    name: User profile — avatar + timezone (device-local)
+    covered_by: []
+    checks:
+      - cmd: test -f frontend/lib/profile.ts
+      - cmd: grep -q "aha:profile" frontend/lib/profile.ts
+
+  - id: F40
+    name: Notifications centre (chain-derived)
+    covered_by: []
+    checks:
+      - cmd: test -f frontend/lib/notifications.ts
+      - cmd: test -d frontend/app/notifications
+
+  - id: F47
+    name: Treasurer's encrypted off-chain faucet ledger (pilot)
+    covered_by: []  # untested — see the F35 entry's uncovered list
+    checks:
+      - cmd: test -f frontend/lib/faucetLedger.ts
+      - cmd: test -f frontend/app/api/faucet-ledger/route.ts
+
+  - id: F48
+    name: Randomized disbursement timing — jitter queue (pilot)
+    covered_by: []  # untested — see the F35 entry's uncovered list
+    checks:
+      - cmd: grep -q "firstGas" frontend/app/me/page.tsx
+      - cmd: grep -q "jitter" frontend/lib/faucetLedger.ts
+
+  - id: F70
+    name: The six open-decision ADRs in docs/decisions/
+    covered_by: []
+    checks:
+      - cmd: test -f docs/decisions/0001-chain-and-scope.md && test -f docs/decisions/0002-quantum-resistance.md && test -f docs/decisions/0003-phone-number-registration.md
+      - cmd: test -f docs/decisions/0004-interim-vs-final-admission.md && test -f docs/decisions/0005-faucet-vs-relayer.md && test -f docs/decisions/0006-software-stewardship.md
+      - cmd: test -f docs/decisions/README.md
+
+  - id: F79
+    name: Honest handover UI disclosure + Sentinel Layer F installed
+    covered_by: [tests/sharding.ts]  # see also the F72-F79 and F74-handover entries above
+    checks:
+      - cmd: grep -q "acting together, can reconstruct" frontend/components/ShardHandover.tsx
+      - cmd: test -f .claude/agents/sentinel.md && test -f backlog/sentinel-agent.md

@@ -38,6 +38,66 @@ resolving it needs a redesign, not a patch (see *Known issues*) ·
 **Epic column** — `E0`–`E10` tie a row to the product backlog; `—` means
 infrastructure that serves no single epic.
 
+### Round update (2026-08-11b) — E2/E7 anonymity layer + open-decision closeouts
+
+The keystone round: the fee-payer-anonymity gap that silently defeated every
+"anonymous" action is closed, and the E7 messaging re-architecture ships its
+first off-chain stage. **101 program tests + property suites green** (`anchor
+test`, +`epic2`, +`relayer`, +`mailbox`); frontend `tsc` clean; privacy sweep
+green; **71 instruction files** (was 66).
+
+- **F55 relayer SHIPPED.** `frontend/app/api/relay/route.ts` +
+  `frontend/lib/relayer.ts` + a pure allowlist policy `frontend/lib/relayPolicy.ts`
+  (discriminators pinned against the IDL, "relayer is the only signer" enforced,
+  spend floor + daily cap + no logging). `cast_vote`, `attest_admission_zk`,
+  `send_message`, `publish_maci_message` (and the F54/F56 cranks) now relay by
+  default; self-pay is the honestly-labeled fallback. Closes the
+  `zk-vote.ts:158`/`messaging.ts:191` `payer: wallet.publicKey` deanonymization.
+  Tests: `tests/relayer.ts` (policy refusal matrix + on-chain third-party-payer).
+- **F54 SHIPPED** — `RecentRoots` ring buffer (16 roots) via the permissionless
+  `note_root` crank, so a ZK proof survives concurrent admissions; and the epoch
+  rebuild (`begin_member_epoch` + `reinsert_member`) that turns the append-only
+  votable set into a **good-standing set** (expired/revoked commitments do not
+  re-enter). `attest_admission_zk` now accepts any recent root. `tests/epic2.ts`.
+- **F56 SHIPPED** — fellowship-wide verification anchor: `publish_member_root`
+  (parentage-constrained, same rule as the federation-governance fix) +
+  `verify_fellow_member` (anonymous `VisitPass`, host-circle external nullifier).
+- **F63 v1 SHIPPED** — off-chain mailbox (`frontend/app/api/mailbox/route.ts` +
+  `lib/mailbox.ts` + pure `lib/mailboxCrypto.ts`): sealed sender, signed
+  rotating prekeys (coarse forward secrecy), no enumeration, no logging,
+  recipient-signed deletion. The Inbox sends here first and falls back to the
+  on-chain F32 legacy path only when the recipient has no bundle. `tests/mailbox.ts`.
+  The libsignal/PQXDH ratchet is v2 (`docs/messaging-migration.md`).
+- **Message::CT_LEN 1040 → 528** — not a deferred optimization but a **latent
+  bug the F55 test surfaced**: a 1040-byte ciphertext made `send_message`
+  1156 bytes, unsendable within Solana's 1232-byte tx limit. 528 fits, halves
+  the message account rent, and long-form mail belongs to F63 anyway.
+- **F80 admin UI wired** (`admin.ts` + `CircleAdmin.tsx`) — token withdrawal
+  propose→execute now has a button.
+- **F71 CLOSED** — third-party IP-geolocation removed (ipwho.is/ipapi.co and the
+  Nominatim reverse-geocode gone); only the OSM map-tile URL remains (the map
+  itself), documented as a separate exposure.
+- **Open decisions closed:** ADR **0002** rewritten into a real staged
+  quantum-resistance architecture (hybrid KEM → ProofAnchor seam → shard/key
+  derivation → chain-inherited signatures); ADR **0007** (open-membership demoted
+  to bootstrap mode under two-sponsor admission); ADR **0008** (public
+  `level`/chips **accepted by written user waiver** — R7 closed, not a
+  contradiction). `docs/sybil.md` rewritten to the shipped stack.
+- **E3 unblocked editorially** — `docs/emerald-table.md` (12 sourced hexes),
+  `quipu.ts` values updated; dye-sampling remains the one physical task.
+- **F46 debt paid** — `tests/sentinel/checklist.yaml` now covers 46 shipped rows
+  (was 2); `tests/sentinel/baselines/` created (npm-audit, program-size).
+- **Ultracode adversarial review** (4 finders → skeptical verify) surfaced and
+  **fixed before commit**: a mailbox read/delete authorization gap (reads were
+  unauthenticated; the IK-derived mailbox id was attacker-spoofable) — closed by
+  deriving the mailbox id from the **wallet** and requiring a recipient
+  signature on `get` and `ack`. Two residuals documented as accepted-and-bounded
+  (relayer pays for allowlisted-but-arbitrary content, bounded by rate/daily
+  caps; F56 "federation = shared parent" is not foundation-vetting).
+- Program `.so` = **1,291,232 bytes** (was 1,189,664; +8 instructions this
+  round). Rent ≈ **8.99 SOL**. Still funding-blocked: the deployer holds 5 SOL <
+  program rent; no devnet deploy this round either.
+
 ### Round update (2026-08-11) — test-all, security audit, deploy-cost
 
 - **Tests run NATIVELY and green:** `anchor test` against a local validator +
@@ -167,7 +227,7 @@ renumbered once correct); the **Epic** column is the product identity.
 | F23 | E9 | "Create a Circle" self-serve UI | ✅ | `initialize_circle`, `initialize_member_tree`; `frontend/app/create/`, `lib/createCircle.ts` | guided wizard: name (≤32 B), parent (foundation default), 7 distinct seats (creator auto-seated so they can sign the member-tree init, depth pinned to the circuit), advanced term/time-lock; shows the assigned `@aha` address on success. Its two hardcoded wallet links are what **F67** replaces. |
 | F24 | — | Circle administration console (seat-gated) | ✅ | `propose`/`approve`/`execute_proposal`/`cancel_proposal`, `create_member_proposal`/`finalize_member_proposal`, `issue_membership`/`renew_membership`/`revoke_membership`, `set_open_membership`, `set_treasury_wallet`; `frontend/app/admin/CircleAdmin.tsx` embedded in `/me` | the standalone menu was removed — `/admin/page.tsx` is now only a redirect. Role, Council + group-conscience votes (CRUD), membership add/renew/**delete**, membership & treasury-wallet policy. Casting member ballots is the ZK flow (F6). *Housekeeping:* `frontend/components/AdminNavLink.tsx` is now orphaned (imported by neither `Nav.tsx` nor `layout.tsx`) — dead code, delete it. |
 | F34 | E10 | **Foundation-led federation governance** (rotate seats / delete a Circle, 4-of-7) | ✅ | `propose/approve/execute_child_rotation`, `propose/approve/execute_child_close` (`validity_secs`, 1–90-day window), `ChildSeatVote`/`ChildCloseVote`; `frontend/app/foundation/`, `lib/foundation.ts` | the foundation Council can rotate any federation Circle's 7 seats or delete a Circle (closes it + delists its profile). Federation = Circles sharing the foundation's root `parent`. This already makes some cross-Circle votes **binding** — see the sovereignty ADR under *Open decisions*. |
-| F71 | E5 | Remove third-party IP-geolocation from the public site | ⬜ | `frontend/app/page.tsx:74` (ipwho.is, ipapi.co), `frontend/lib/geo.ts:18` (nominatim.openstreetmap.org) | Sentinel **R6**: the client hands a visitor's IP to two geolocation APIs and precise coordinates to Nominatim. Fixable without redesign — self-host, proxy, or drop the fallback and add consent copy. |
+| F71 | E5 | Remove third-party IP-geolocation from the public site | ✅ | `frontend/app/page.tsx` (browser Geolocation only, button-gated, local-only copy), `frontend/lib/geo.ts` (Nominatim removed; `validCoord` only), `/create` manual lat/lon | **Shipped 2026-08-11b.** The ipwho.is/ipapi.co IP fallback and the Nominatim reverse-geocode are gone; the visitor's IP is no longer handed to any third party. Residual, documented: the Leaflet **map tiles** still load from `tile.openstreetmap.org` (`CircleMap.tsx`) — that is the map itself (same class as any remote image), not an IP-geolocation lookup, and exports no user-entered data. |
 
 ### Community & content
 | # | Epic | Feature | Status | Instructions / files | Notes |
@@ -314,17 +374,17 @@ as shipped work. All ⬜ unless noted.
 ### E1 — two-sponsor admission
 | # | Epic | Item | Status | Notes |
 |---|------|------|--------|-------|
-| F50 | E1 | `attest_admission` + two-attestation gate on `issue_membership` | 🟡 (program + client built this round; suite written, not yet green) | **Amended v0.2 (2026-08-10, ElectaZ): the pair is asymmetric.** Attestation A — the **parrain**: any member in good standing; signer holds a key of the attestor's membership, `expires_at > now` (the pattern in `activate_faucet.rs`); PDA `["attest", circle, newcomer_commitment, parrain_commitment]`. Attestation B — a **trusted servant**: signer holds any of the 7 Council seats (`council.require_any_seat`); PDA `["attest2", circle, newcomer_commitment]` (one servant co-attestation per newcomer). **Distinct-persons rule enforced in the program**: the seat signer must not be a key of the parrain's membership. Issuance refused unless both PDAs exist. Continuity: F4's Secretary-gated issuance is already a seat attestation — this generalizes it to any-of-7 and adds the parrain beside it. **No parrain-attestation primitive exists today.** |
-| F51 | E1 · E9 | Split issuance from votable-set insertion (provisional membership) | 🟡 (built this round: `issue_provisional_membership` never touches the tree; `confirm_admission` is the only inserter; suite written, not yet green) | `issue_membership.rs:71` calls `merkle::insert_leaf` in the same atomic instruction, so a one-attestation newcomer would get immediate full voting power. Provisional must mean *"commitment not yet inserted into the MemberTree"* so every members-only proof fails by construction — never insert-then-remove; the tree is append-only. |
-| F52 | E1 | Sponsor UI — one-tap "attest for this newcomer" in `/me` | 🟡 (built this round: parrain attest input in the mentorship card, provisional join path in JoinCard, AdmissionsSection in admin with policy toggle + "Co-attest & confirm" for servants) | For members who met them in circle. |
+| F50 | E1 | `attest_admission` + two-attestation gate on `issue_membership` | ✅ (suite green — `tests/epic1.ts`, `tests/epic2.ts`; see ADR 0007) | **Amended v0.2 (2026-08-10, ElectaZ): the pair is asymmetric.** Attestation A — the **parrain**: any member in good standing; signer holds a key of the attestor's membership, `expires_at > now` (the pattern in `activate_faucet.rs`); PDA `["attest", circle, newcomer_commitment, parrain_commitment]`. Attestation B — a **trusted servant**: signer holds any of the 7 Council seats (`council.require_any_seat`); PDA `["attest2", circle, newcomer_commitment]` (one servant co-attestation per newcomer). **Distinct-persons rule enforced in the program**: the seat signer must not be a key of the parrain's membership. Issuance refused unless both PDAs exist. Continuity: F4's Secretary-gated issuance is already a seat attestation — this generalizes it to any-of-7 and adds the parrain beside it. **No parrain-attestation primitive exists today.** |
+| F51 | E1 · E9 | Split issuance from votable-set insertion (provisional membership) | ✅ (suite green — `issue_provisional_membership` never touches the tree; `confirm_admission` is the only inserter, now also pins the F54 epoch/leaf index) | `issue_membership.rs:71` calls `merkle::insert_leaf` in the same atomic instruction, so a one-attestation newcomer would get immediate full voting power. Provisional must mean *"commitment not yet inserted into the MemberTree"* so every members-only proof fails by construction — never insert-then-remove; the tree is append-only. |
+| F52 | E1 | Sponsor UI — one-tap "attest for this newcomer" in `/me` | ✅ (parrain attest input in the mentorship card, provisional join path in JoinCard, AdmissionsSection in admin with policy toggle + "Co-attest & confirm" for servants) | For members who met them in circle. |
 
 ### E2 — zero-knowledge vouch-proofs
 | # | Epic | Item | Status | Notes |
 |---|------|------|--------|-------|
-| F53 | E2 | Anonymous vouch-proof (`attest_admission_zk`) | 🟡 (built this round: `attest_admission_zk` verifies a member_vote Groth16 proof, `externalNullifier` = newcomer commitment, `nullifier = Poseidon(secret, newcomer)`; `vouchnull` PDA replay guard; `AdmissionAttestation` carries `nullifier`, `parrain = 0` when anonymous; `confirm_admission` downgrades the distinct-persons rule to circle-visible for anonymous attestations; client `attestAdmissionAnonymously` in `zk-vote.ts`, auto-selected in the `/me` parrain UI. Reuses the shipped `member_vote` VK + browser artifacts — no new ceremony. Remaining: a real end-to-end ballot test on devnet + ship as the default once F55 relayer exists) | Reuses `circuits/member_vote.circom` with `externalNullifier` = the newcomer's commitment — near-free, and it mirrors `lineage_grant.circom`'s `nullifier = Poseidon(secret, granteeCommitment)`, which already makes "the same sponsor vouching the same newcomer twice" collide, giving two-distinct-sponsors for free. VouchTally counts distinct sponsor nullifiers per newcomer commitment and feeds the **F50** gate. Record the circuit choice; ship its wasm+zkey to `frontend/public/zk/` (only `member_vote` is shipped to the browser today). |
-| F54 | E2 | MemberTree recent-roots ring buffer + good-standing member set | ⬜ | Two defects in one row. (a) Proofs verify only against the **single current root**, so any concurrent admission invalidates an in-flight proof. (b) The tree is **append-only** and `revoke_membership` closes the account but never the leaf, so expired and revoked commitments remain valid members forever — needs epoch snapshots or a second tree. |
-| F55 | E2 · E7 · E10 | Relayer service (fee-payer anonymity) | ⬜ | **The anonymity documented in `docs/member-voting.md` and in the program's own comments is not implemented:** `frontend/lib/zk-vote.ts:158` and `frontend/lib/messaging.ts:191` both set `payer: wallet.publicKey`, so the prover pays and is named. Blocks E0's anonymous form, E2's whole premise, and E7's interim mitigation. Needs the E10 relayer ADR (**F70**) first. |
-| F56 | E2 | Fellowship-wide verification anchor | ⬜ | Every tree is per-Circle today, so a visiting member's proof cannot be checked by another Circle. |
+| F53 | E2 | Anonymous vouch-proof (`attest_admission_zk`) | 🟡 (built this round: `attest_admission_zk` verifies a member_vote Groth16 proof, `externalNullifier` = newcomer commitment, `nullifier = Poseidon(secret, newcomer)`; `vouchnull` PDA replay guard; `AdmissionAttestation` carries `nullifier`, `parrain = 0` when anonymous; `confirm_admission` downgrades the distinct-persons rule to circle-visible for anonymous attestations; client `attestAdmissionAnonymously` in `zk-vote.ts`, auto-selected in the `/me` parrain UI. Reuses the shipped `member_vote` VK + browser artifacts — no new ceremony. **2026-08-11b:** F55 relayer now exists and `attestAdmissionAnonymously` submits through it by default; F54 recent-roots means the proof survives concurrent admissions. Remaining: a real end-to-end ballot test on devnet) | Reuses `circuits/member_vote.circom` with `externalNullifier` = the newcomer's commitment — near-free, and it mirrors `lineage_grant.circom`'s `nullifier = Poseidon(secret, granteeCommitment)`, which already makes "the same sponsor vouching the same newcomer twice" collide, giving two-distinct-sponsors for free. VouchTally counts distinct sponsor nullifiers per newcomer commitment and feeds the **F50** gate. Record the circuit choice; ship its wasm+zkey to `frontend/public/zk/` (only `member_vote` is shipped to the browser today). |
+| F54 | E2 | MemberTree recent-roots ring buffer + good-standing member set | ✅ | `RecentRoots` PDA `["roots", circle]` (16-root ring); `note_root` (permissionless crank), `begin_member_epoch` + `reinsert_member` (epoch rebuild); `attest_admission_zk` accepts any recent root; `EpochLeaf` PDA; `tests/epic2.ts` | **Shipped 2026-08-11b.** (a) Concurrent-admission defect closed: crank `note_root`, prove against any of the last 16 roots. (b) Good-standing defect closed: an epoch rebuild empties the tree and only **live** memberships re-enter (`reinsert_member` rejects expired; provisional excluded), so expired/revoked commitments drop out — no per-leaf deletion needed. Ring buffer is 16 (not 32) because borsh deserializes the array on the 4 KiB SBF stack. |
+| F55 | E2 · E7 · E10 | Relayer service (fee-payer anonymity) | ✅ | `frontend/app/api/relay/route.ts`, `frontend/lib/relayer.ts`, pure allowlist `frontend/lib/relayPolicy.ts`; wired into `cast_vote`/`attest_admission_zk`/`send_message`/`publish_maci_message`/cranks; `tests/relayer.ts` | **Shipped 2026-08-11b (ADR 0005 hybrid).** The relayer signs+pays allowlisted instructions with ITS key, so `payer: wallet.publicKey` no longer names the prover. Strict policy: pinned discriminators (asserted vs IDL), exact account/data shapes, **relayer is the only signer** (its signature = "paid the fee", never authority), spend floor + daily cap, **no logging**. Honest fallback: unconfigured ⇒ self-pay (named), stated in UI. Remaining hardening: batching/mixing to blunt the timing/IP channel the relay still sees. |
+| F56 | E2 | Fellowship-wide verification anchor | ✅ ⚠ | `publish_member_root` (anchors a Circle's root under its foundation, parentage-constrained), `verify_fellow_member` (anonymous `VisitPass`, host external nullifier); `CircleRootAnchor`/`VisitPass` PDAs; `tests/epic2.ts` | **Shipped 2026-08-11b.** A visiting member proves membership of their home Circle to any sibling Circle in the federation, against the anchored root, naming no one. Freshness = the anchor's freshness (crank `publish_member_root`); same snapshot semantics voting accepts. ⚠ **Trust limit (ultracode-confirmed, documented in `verify_fellow_member.rs`):** because `initialize_circle` is permissionless and `circle.parent` is caller-set, a VisitPass attests only "a member of *some* circle claiming this foundation as parent," **not** "foundation-vetted." Foundation-approved federation needs an approved-children list (F34 governance), a separate design decision — this is inherent to "federation = shared parent," not a bug in F56. |
 
 ### E3 — the quipu
 | # | Epic | Item | Status | Notes |
@@ -351,7 +411,7 @@ as shipped work. All ⬜ unless noted.
 ### E7 — encrypted messaging
 | # | Epic | Item | Status | Notes |
 |---|------|------|--------|-------|
-| F63 | E7 | Off-chain encrypted transport + **F32 sunset plan** | ⬜ | X3DH + double ratchet, real sealed sender, group sessions, entirely off-chain with no record of who wrote to whom or when. Requires an ADR on the transport (libsignal + a minimal delivery service vs a self-hosted relay) with the explicit constraint that **the prekey directory must not become an enumerable member list**. The sunset must also rework **F32b** seat-reachability and **F40** notifications, both built on the on-chain design. Interim while F32 lingers: route `send_message` through a relayer fee-payer (**F55**). |
+| F63 | E7 | Off-chain encrypted transport + **F32 sunset plan** | 🟡 **v1 shipped** | v1: `frontend/app/api/mailbox/route.ts` + `frontend/lib/mailbox.ts` + pure `frontend/lib/mailboxCrypto.ts`; `tests/mailbox.ts`; `docs/messaging-migration.md` | **v1 shipped 2026-08-11b:** off-chain sealed-sender mailbox — nothing about a message touches the chain (no recipient index, no public timestamp, no fee-payer). Signed **rotating prekeys** give coarse (prekey-granular) forward secrecy; the directory is keyed by wallet but has **no enumeration op**, deletion is recipient-signed, the relay never logs. The Inbox sends here first and falls back to on-chain F32 (labeled legacy) only when the recipient has no bundle. **Remaining for ✅ (v2):** libsignal X3DH + **double ratchet** (per-message FS) and **PQXDH** hybrid KEM (ADR 0002), group sessions, relay mixing/batching, and retiring F32 + reworking **F32b**/**F40** off the on-chain design. |
 | F64 | E7 | Client-side encrypted trust list | ⬜ | Trust / block / mute under a device- or passkey-wrapped key. Today there is only an unencrypted localStorage sent-log and read-markers; **no trust/block/mute concept exists anywhere.** |
 
 ### E8 — authentication

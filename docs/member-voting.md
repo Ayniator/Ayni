@@ -14,8 +14,12 @@ key recovery). One member = one vote, cast **anonymously**.
 - A vote is a Semaphore-style ZK proof (`circuits/member_vote.circom`): the voter
   proves their commitment is in the snapshot root and emits a **nullifier**
   `Poseidon(secret, proposalId)`. The nullifier PDA enforces **one vote per
-  member**; the voter's identity is never revealed. A relayer pays, so the
-  ballot isn't linked to a wallet.
+  member**; the voter's identity is never revealed. **The F55 relayer
+  (`/api/relay` + `lib/relayer.ts`, shipped 2026-08-11) pays**, so the ballot
+  isn't linked to a wallet. Honest fallback: with no relayer configured the
+  client self-pays and the fee-payer IS the voter's wallet — the UI states it,
+  and the relayer's own limits (it sees IP + timing, never content or
+  identity) are documented in `frontend/app/api/relay/route.ts`.
 
 ## Flow
 

@@ -92,4 +92,10 @@ pub enum AyniError {
     InvalidStep,
     #[msg("Visibility tier must be 0 (chosen), 1 (my circle), or 2 (all members)")]
     InvalidVisibilityTier,
+    #[msg("Proof root is not the current member root nor a recent one")]
+    RootNotRecent,
+    #[msg("Proof root does not match the published anchor root for that Circle")]
+    AnchorMismatch,
+    #[msg("Membership is not live (expired or still provisional)")]
+    NotInGoodStanding,
 }

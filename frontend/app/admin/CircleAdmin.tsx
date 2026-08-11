@@ -27,7 +27,9 @@ import {
   actionMigrateWallet,
   actionRotateSeat,
   actionWithdrawTreasury,
+  actionWithdrawTreasuryToken,
   actionSetTreasuryWallet,
+  withdrawTreasuryToken,
   applyTreasuryWallet,
   getTreasuryWallet,
   createMembershipMint,
@@ -625,6 +627,12 @@ function CouncilSection({ circle, wallet, me }: { circle: CircleInfo; wallet: an
                     {busy === `cancel-${p.pubkey}` ? "…" : "Cancel"}
                   </button>
                 )}
+                {p.kind === "withdrawTreasuryToken" && p.executed && !p.drained && (
+                  <button className="btn btn-sm" disabled={!!busy}
+                    onClick={() => act(`wdt-${p.pubkey}`, () => withdrawTreasuryToken(wallet, new PublicKey(circle.pubkey), new PublicKey(p.pubkey)))}>
+                    {busy === `wdt-${p.pubkey}` ? "…" : "Withdraw tokens"}
+                  </button>
+                )}
                 {p.kind === "setTreasuryWallet" && p.executed && !p.drained && (
                   <button className="btn btn-sm" disabled={!!busy}
                     onClick={() => act(`apply-${p.pubkey}`, () => applyTreasuryWallet(wallet, new PublicKey(circle.pubkey), new PublicKey(p.pubkey)))}>
@@ -644,11 +652,12 @@ function NewCouncilProposal({
   circle, wallet, disabled, onDone, setNote,
 }: { circle: CircleInfo; wallet: any; disabled: boolean; onDone: () => void; setNote: (n: TxNote) => void }) {
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<"rotateSeat" | "migrateWallet" | "withdrawTreasury" | "setTreasuryWallet">("withdrawTreasury");
+  const [kind, setKind] = useState<"rotateSeat" | "migrateWallet" | "withdrawTreasury" | "withdrawTreasuryToken" | "setTreasuryWallet">("withdrawTreasury");
   const [seatIndex, setSeatIndex] = useState(0);
   const [a, setA] = useState(""); // newHolder / oldWallet / recipient / new treasury wallet
-  const [b, setB] = useState(""); // newWallet
+  const [b, setB] = useState(""); // newWallet / token mint
   const [amount, setAmount] = useState("0.1");
+  const [tokenAmount, setTokenAmount] = useState(""); // raw base units of the token
   const [busy, setBusy] = useState(false);
 
   async function submit() {
@@ -674,6 +683,19 @@ function NewCouncilProposal({
         });
       }
       action = actionSetTreasuryWallet(w);
+    } else if (kind === "withdrawTreasuryToken") {
+      const mint = pk(b);
+      const rcpt = pk(a);
+      if (!mint) return setNote({ kind: "err", text: "Token mint is not a valid address." });
+      if (!rcpt) return setNote({ kind: "err", text: "Recipient is not a valid address." });
+      let raw: bigint;
+      try {
+        raw = BigInt(tokenAmount.trim());
+      } catch {
+        return setNote({ kind: "err", text: "Amount must be a whole number of base units (e.g. 1000000 for 1 token with 6 decimals)." });
+      }
+      if (raw <= BigInt(0)) return setNote({ kind: "err", text: "Amount must be > 0." });
+      action = actionWithdrawTreasuryToken(mint, raw, rcpt);
     } else {
       const rcpt = pk(a);
       const lamports = Math.round(parseFloat(amount) * LAMPORTS_PER_SOL);
@@ -687,7 +709,7 @@ function NewCouncilProposal({
       const sig = await propose(wallet, new PublicKey(circle.pubkey), action);
       setNote({ kind: "ok", text: "Proposal opened (your seat approved it).", sig });
       setOpen(false);
-      setA(""); setB("");
+      setA(""); setB(""); setTokenAmount("");
       onDone();
     } catch (e: any) {
       setNote({ kind: "err", text: String(e?.message || e) });
@@ -708,7 +730,8 @@ function NewCouncilProposal({
       <div className="form-row">
         <label>Action</label>
         <select value={kind} onChange={(e) => setKind(e.target.value as any)}>
-          <option value="withdrawTreasury">Withdraw from treasury</option>
+          <option value="withdrawTreasury">Withdraw from treasury (SOL)</option>
+          <option value="withdrawTreasuryToken">Withdraw from treasury (SPL token)</option>
           <option value="setTreasuryWallet">Change treasury wallet</option>
           <option value="rotateSeat">Rotate a seat</option>
           <option value="migrateWallet">Migrate a wallet</option>
@@ -756,6 +779,23 @@ function NewCouncilProposal({
           <div className="form-row">
             <label>Amount (SOL)</label>
             <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <label>Recipient</label>
+            <input value={a} onChange={(e) => setA(e.target.value)} placeholder="wallet address" />
+          </div>
+        </>
+      )}
+      {kind === "withdrawTreasuryToken" && (
+        <>
+          <div className="form-row">
+            <label>Token mint</label>
+            <input className="mono" value={b} onChange={(e) => setB(e.target.value)} placeholder="mint address (SPL or Token-2022)" />
+          </div>
+          <div className="form-row">
+            <label>Amount (base units)</label>
+            <input type="number" min="0" step="1" value={tokenAmount} onChange={(e) => setTokenAmount(e.target.value)} placeholder="e.g. 1000000" />
+            <span className="sm muted">raw units — for a 6-decimal token, 1000000 = 1 token</span>
           </div>
           <div className="form-row">
             <label>Recipient</label>

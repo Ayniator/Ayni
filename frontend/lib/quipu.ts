@@ -30,13 +30,16 @@ export const LAST_STEP = 12;
 //   citrinitas     steps 8–9    weld yellow                (solid)
 //   rubedo         steps 10–12  madder red                 (solid)
 //
-// The HEX VALUES remain provisional — deliberately, not for lack of a table.
-// A cord is a physical object worn for life; the render exists to depict it, so
-// the hex must be sampled from the DYED YARN, never chosen on a monitor. The
-// settled dyes and the sampling protocol are in docs/quipu.md; the placeholders
-// below are dye-representative and read correctly in both themes. When the yarn
-// is sampled, change ONLY the hex/stops in STAGE_PAINT — the boundaries, the
-// renderer, and everything else stay put.
+// The HEX VALUES remain provisional — deliberately. A cord is a physical
+// object worn for life; the render exists to depict it, so the hex must
+// ultimately be sampled from the DYED YARN, never chosen on a monitor. The
+// values below are the EDITORIAL REFERENCE VALUES from the Emerald
+// correspondence table (docs/emerald-table.md, 2026-08-11) — researched
+// approximations of the settled dyes on mordanted wool. Dye-sampled or
+// fellowship-ratified values supersede them; the sampling protocol lives in
+// docs/quipu.md. When the yarn is sampled, change ONLY the hex/stops in
+// STAGE_PAINT (and the table) — the boundaries, the renderer, and everything
+// else stay put.
 
 export type AlchemicalStage = "nigredo" | "cauda_pavonis" | "albedo" | "citrinitas" | "rubedo";
 
@@ -64,16 +67,24 @@ export function stageOf(step: number): AlchemicalStage {
 }
 
 const STAGE_PAINT: Record<AlchemicalStage, StepColour> = {
-  // Provisional hexes — sample from the dyed yarn (see docs/quipu.md).
-  nigredo: { stage: "nigredo", name: "iron-tannate black", paint: { kind: "solid", hex: "#1c1a17" } },
+  // Editorial reference hexes (docs/emerald-table.md) — dye samples supersede.
+  // Iron-gall black on wool: warm charcoal, never absolute black.
+  nigredo: { stage: "nigredo", name: "iron-tannate black", paint: { kind: "solid", hex: "#26211d" } },
   cauda_pavonis: {
     stage: "cauda_pavonis",
     name: "peacock's tail (indigo·cochineal·weld)",
-    paint: { kind: "iridescent", stops: ["#26456e", "#9e2b3f", "#d8b830", "#26456e"] },
+    // Mid-vat indigo · cochineal crimson (cool, alum) · weld gold, wrapping
+    // back to indigo. The weld stop equals the citrinitas hex (same dyepot);
+    // the cochineal stop is deliberately NOT the rubedo madder — two reds,
+    // two dyes, and they must read differently.
+    paint: { kind: "iridescent", stops: ["#31507c", "#a02440", "#d8b52c", "#31507c"] },
   },
-  albedo: { stage: "albedo", name: "undyed scoured wool", paint: { kind: "solid", hex: "#ece7db" } },
-  citrinitas: { stage: "citrinitas", name: "weld yellow", paint: { kind: "solid", hex: "#d8b830" } },
-  rubedo: { stage: "rubedo", name: "madder red", paint: { kind: "solid", hex: "#a72f2a" } },
+  // Scoured, unbleached fleece: warm ivory — wool, not paper.
+  albedo: { stage: "albedo", name: "undyed scoured wool", paint: { kind: "solid", hex: "#ece5d4" } },
+  // Weld (luteolin) on alum: the clearest lightfast natural yellow.
+  citrinitas: { stage: "citrinitas", name: "weld yellow", paint: { kind: "solid", hex: "#d8b52c" } },
+  // Madder (alizarin) on alum: warm brick red, orange-leaning.
+  rubedo: { stage: "rubedo", name: "madder red", paint: { kind: "solid", hex: "#a6402c" } },
 };
 
 /** The cord colour for a step (1..=12). Boundaries final; hexes provisional. */
@@ -87,8 +98,10 @@ export function repHex(c: StepColour): string {
   return c.paint.kind === "solid" ? c.paint.hex : c.paint.stops[0];
 }
 
-/** Boundaries are final and ship now. Only the HEX VALUES stay provisional —
- *  pending physical dye samples, per docs/quipu.md. */
+/** Boundaries are final and ship now. The hex values are the editorial
+ *  reference values from docs/emerald-table.md (2026-08-11) — still
+ *  provisional until physical dye samples or a fellowship vote replace them,
+ *  per the protocol in docs/quipu.md. */
 export const HEXES_ARE_PROVISIONAL = true;
 
 // --- knot-dates (Inca quipu positional knots) -------------------------------

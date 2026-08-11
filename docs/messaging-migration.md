@@ -1,11 +1,30 @@
 # Messaging migration: moving 1:1 off chain (F63)
 
-**Status: DESIGN / PLAN — not implemented.** This is the plan for Epic 7's real
-goal (fully off-chain, sealed-sender, metadata-minimal messaging). It is the
-large remaining body of work; the code that exists today (F32) is a deliberate,
-honestly-documented compromise, not this design. Nothing below has been built
-except the client-side trust list (`frontend/lib/trustlist.ts`, F64) and this
-document. Read it as a roadmap, not a description of shipped behaviour.
+**Status: v1 SHIPPED (2026-08-11) — the relay mailbox is live; the libsignal
+ratchet is the remaining v2 work.** What shipped as **F63 v1**:
+
+- **The relay mailbox** (`frontend/app/api/mailbox/route.ts` + client
+  `frontend/lib/mailbox.ts` + pure crypto `frontend/lib/mailboxCrypto.ts`,
+  property-tested in `tests/mailbox.ts`): sends go OFF-CHAIN first — no
+  recipient index, no public timestamp, no fee-payer, nothing in ledger
+  history. Sealed sender and fixed-length padding carried over from F32.
+- **Signed prekeys (coarse forward secrecy):** recipients publish a
+  wallet-signed, rotating x25519 prekey (epoch-monotonic directory); senders
+  seal to the prekey, devices delete old prekey secrets. Forward secrecy is
+  prekey-granular, NOT per-message — that is v2's double ratchet.
+- **The sunset bridge:** the Inbox sends via mailbox whenever the recipient
+  has a bundle and falls back to on-chain F32 (labeled as the legacy path in
+  the UI) only when they don't. F32 stays read-supported.
+- **No enumeration at the relay** (exact-id lookups only, recipient-signed
+  deletion, TTL) and **no logging** — same custody rules as the shard layer.
+
+What v1 does NOT deliver (deliberately, per §2.5): X3DH/double-ratchet
+per-message forward secrecy and post-compromise healing — that lands with the
+libsignal adapter (v2), which ADR 0002 additionally requires to be PQXDH
+(hybrid X25519+ML-KEM) for harvest-now-decrypt-later resistance. The relay
+still observes recipient pull patterns and IPs; mixing/batching remains open.
+
+The rest of this document is the v2 target design, unchanged.
 
 ---
 

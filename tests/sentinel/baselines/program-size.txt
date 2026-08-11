@@ -1,0 +1,9 @@
+# Baseline: target/deploy/ayni.so byte size.
+# Comparison rule: > 20% growth vs this figure is a regression (Layer C/E).
+# Regenerate the artifact with `anchor build` (containerized; see checklist
+# E_build_health), then: stat -c %s target/deploy/ayni.so
+# Matches the independently rebuilt figure recorded in NRR-2026-08-11-5
+# (66 instructions, 1,189,664 bytes).
+commit: 3800039
+date: 2026-08-11
+bytes: 1189664

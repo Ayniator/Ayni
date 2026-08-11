@@ -15,6 +15,7 @@ import {
   InboxMessage,
   MAX_PLAINTEXT,
   SentRecord,
+  appendSent,
   decryptMessage,
   deleteMessage,
   getSent,
@@ -24,6 +25,14 @@ import {
   registerMessagingKey,
   sendMessage,
 } from "../../lib/messaging";
+import {
+  MailboxMessage,
+  ackMailboxMessages,
+  fetchMailboxMessages,
+  publishMailboxBundle,
+  recipientBundle,
+  sendMailboxMessage,
+} from "../../lib/mailbox";
 
 const short = (s: string) => `${s.slice(0, 4)}…${s.slice(-4)}`;
 const when = (u: number) => formatTime(u);
@@ -73,8 +82,33 @@ export default function Inbox() {
     setBusy("enable"); setNote(null);
     try {
       const sig = await registerMessagingKey(wallet, sign);
+      // F63: also publish the off-chain prekey bundle, so mail to you can go
+      // through the private mailbox instead of the chain. Best-effort.
+      try { await publishMailboxBundle(wallet, sign); } catch { /* relay may be absent */ }
       setNote({ kind: "ok", text: "Messaging enabled — others can now message you.", sig });
       setRegistered(true);
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
+
+  // --- F63 private mailbox (off-chain) ---
+  const [mbx, setMbx] = useState<MailboxMessage[] | null>(null);
+  async function checkMailbox() {
+    if (!wallet || !sign) return;
+    setBusy("mbx"); setNote(null);
+    try {
+      // Publishing (rotating) the bundle on check keeps the prekey fresh.
+      try { await publishMailboxBundle(wallet, sign); } catch { /* best-effort */ }
+      setMbx(await fetchMailboxMessages(wallet, sign));
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
+  async function clearMailbox() {
+    if (!wallet || !sign || !mbx || mbx.length === 0) return;
+    setBusy("mbxclear"); setNote(null);
+    try {
+      await ackMailboxMessages(wallet, sign, mbx.map((m) => m.id));
+      setMbx([]);
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(null); }
   }
@@ -99,8 +133,17 @@ export default function Inbox() {
     setBusy("send"); setNote(null);
     try {
       const expiresAt = expiryDays ? Math.floor(Date.now() / 1000) + expiryDays * 86400 : 0;
-      const sig = await sendMessage(wallet, sign, r, text.trim(), expiresAt);
-      setNote({ kind: "ok", text: "Encrypted message sent — sealed sender (your address isn’t stored on it).", sig });
+      // F63 first: if the recipient has a mailbox bundle, the message goes
+      // OFF-CHAIN — no recipient index, no public timestamp, no fee-payer.
+      const bundle = await recipientBundle(r).catch(() => null);
+      if (bundle) {
+        await sendMailboxMessage(wallet, sign, r, text.trim(), expiresAt);
+        appendSent({ to: r.toBase58(), text: text.trim(), ts: Math.floor(Date.now() / 1000), expiresAt, pubkey: "mailbox" });
+        setNote({ kind: "ok", text: "Sent via the private mailbox — nothing about this message touches the chain." });
+      } else {
+        const sig = await sendMessage(wallet, sign, r, text.trim(), expiresAt);
+        setNote({ kind: "ok", text: "Sent on-chain (legacy path — recipient has no private mailbox yet). Sealed sender, but delivery time and recipient are public.", sig });
+      }
       setText(""); setTo("");
       setSent(getSent());
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
@@ -150,7 +193,43 @@ export default function Inbox() {
 
           {note && <p className={note.kind === "err" ? "error" : "ok-note"}>{note.text}{note.sig && <> · <a href={explorerTx(note.sig)} target="_blank" rel="noreferrer">tx</a></>}</p>}
 
-          <h3 style={{ margin: "18px 0 6px" }}>Received</h3>
+          <div className="card" style={{ marginTop: 14 }}>
+            <h3 style={{ marginTop: 0 }}>Private mailbox <span className="muted sm">(off-chain)</span></h3>
+            <p className="muted sm" style={{ marginTop: 0 }}>
+              Messages here never touch the chain — no public record of who received what, or when.
+              Checking signs once to derive your key; mail is decrypted on this device only.
+            </p>
+            <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+              <button className="btn btn-sm" onClick={checkMailbox} disabled={busy === "mbx"}>{busy === "mbx" ? "Checking…" : "Check private mailbox"}</button>
+              {mbx && mbx.length > 0 && (
+                <button className="btn btn-sm btn-ghost" onClick={clearMailbox} disabled={busy === "mbxclear"}>{busy === "mbxclear" ? "Clearing…" : "Delete all at relay"}</button>
+              )}
+            </div>
+            {mbx !== null && mbx.length === 0 && <p className="muted sm" style={{ marginBottom: 0 }}>No private mail.</p>}
+            {mbx !== null && mbx.length > 0 && (
+              <div className="members" style={{ marginTop: 10 }}>
+                {mbx.filter((m) => !m.expired).map((m) => (
+                  <div className="member" key={m.id} style={{ alignItems: "flex-start" }}>
+                    <Identicon seed={m.from ?? m.id} size={34} />
+                    <div className="meta" style={{ flex: 1, minWidth: 0 }}>
+                      <div className="name mono">
+                        {m.from
+                          ? <>{short(m.from)} <span className="badge badge-alt" title="Sender signature verified">✓ verified</span></>
+                          : <span className="badge" title="Could not verify the sender signature">⚠ unverified sender</span>}
+                      </div>
+                      <div className="sub">{when(m.ts)}</div>
+                      <p style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{m.text}</p>
+                      {m.from && (
+                        <button className="btn btn-sm btn-ghost" style={{ marginTop: 6 }} onClick={() => { setTo(m.from!); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Reply</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <h3 style={{ margin: "18px 0 6px" }}>Received <span className="muted sm">(on-chain, legacy)</span></h3>
           {msgs === null && <p className="muted">Loading…</p>}
           {msgs !== null && visible.length === 0 && <p className="muted">No messages.</p>}
           <div className="members">

@@ -28,7 +28,7 @@ import {
   Recurrence, WEEKDAYS, ORDINALS, describeRecurrence, setMeetings,
 } from "../../lib/meetings";
 import { createPost } from "../../lib/posts";
-import { checkOnLand } from "../../lib/geo";
+import { validCoord } from "../../lib/geo";
 import { COUNTRIES } from "../../lib/countries";
 import { setCircleCountry } from "../../lib/country";
 
@@ -61,8 +61,6 @@ export default function Create() {
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
   const [address, setAddress] = useState("");
-  const [geo, setGeo] = useState<{ ok: boolean; label: string; unknown?: boolean } | null>(null);
-  const [checking, setChecking] = useState(false);
   const [showOnMap, setShowOnMap] = useState(true);
 
   // Meeting schedule (recurring patterns) + founding board post
@@ -106,21 +104,9 @@ export default function Create() {
     });
   }
 
-  async function checkLocation() {
-    const la = parseFloat(lat), lo = parseFloat(lon);
-    setGeo(null);
-    setChecking(true);
-    try {
-      const r = await checkOnLand(la, lo);
-      setGeo(r);
-      if (r.ok && !r.unknown && !city.trim()) {
-        // auto-fill city from the reverse-geocode label's first part
-        setCity(r.label.split(",")[0]);
-      }
-    } finally {
-      setChecking(false);
-    }
-  }
+  // Local-only coordinate check (F71): no third-party geocoder is ever called.
+  const coordsEntered = lat.trim() !== "" || lon.trim() !== "";
+  const coordsValid = validCoord(parseFloat(lat), parseFloat(lon));
 
   function addPattern() {
     setRecurring((p) => [...p, { ...pat, note: pat.note?.trim() || undefined }]);
@@ -130,6 +116,7 @@ export default function Create() {
     if (!name.trim()) return "Give the Circle a name.";
     if (nameBytes > MAX_NAME_BYTES) return `Name is ${nameBytes} bytes; the limit is ${MAX_NAME_BYTES}.`;
     if (!country) return "Choose the Circle's country — it's required so the Circle is grouped on the foundation directory.";
+    if (coordsEntered && !coordsValid) return "GPS coordinates are invalid — latitude must be −90 … 90 and longitude −180 … 180.";
     const parentKey = pk(parent);
     if (!parentKey) return "Choose a valid parent Circle.";
     const seatKeys: PublicKey[] = [];
@@ -369,20 +356,19 @@ export default function Create() {
           <h3 style={{ margin: "18px 0 4px" }}>Location</h3>
           <div className="form-row">
             <label>GPS lat / lon</label>
-            <input type="number" step="0.00001" value={lat} onChange={(e) => { setLat(e.target.value); setGeo(null); }} placeholder="latitude" style={{ maxWidth: 130 }} />
-            <input type="number" step="0.00001" value={lon} onChange={(e) => { setLon(e.target.value); setGeo(null); }} placeholder="longitude" style={{ maxWidth: 130 }} />
-            <button className="btn btn-sm btn-ghost" onClick={checkLocation} disabled={checking || !lat || !lon}>
-              {checking ? "Checking…" : "Check"}
-            </button>
+            <input type="number" step="0.00001" min="-90" max="90" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="latitude (−90 … 90)" style={{ maxWidth: 130 }} />
+            <input type="number" step="0.00001" min="-180" max="180" value={lon} onChange={(e) => setLon(e.target.value)} placeholder="longitude (−180 … 180)" style={{ maxWidth: 130 }} />
           </div>
-          {geo && (
-            <p className={geo.ok ? "muted sm" : "error"} style={{ margin: "0 0 6px" }}>
-              {geo.ok
-                ? (geo.unknown ? "Couldn't verify the location (continuing)." : `📍 On land — ${geo.label}.`)
-                : `⚠ This looks like ${geo.label}. A Circle should sit on land — double-check the coordinates.`}
+          {coordsEntered && !coordsValid && (
+            <p className="error" style={{ margin: "0 0 6px" }}>
+              ⚠ Coordinates look invalid — latitude must be −90 … 90 and longitude −180 … 180 (and not 0, 0).
             </p>
           )}
-          <div className="form-row"><label>City</label><input value={city} onChange={(e) => setCity(e.target.value)} placeholder="auto-filled by Check" /></div>
+          <p className="muted sm" style={{ margin: "0 0 6px" }}>
+            Enter the coordinates directly — we don't send your address to third-party
+            geocoders; everything you type stays in your browser until you publish on-chain.
+          </p>
+          <div className="form-row"><label>City</label><input value={city} onChange={(e) => setCity(e.target.value)} placeholder="city / town" /></div>
           <div className="form-row">
             <label>Country *</label>
             <select value={country} onChange={(e) => setCountry(e.target.value)} required style={{ flex: 1 }}>

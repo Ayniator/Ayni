@@ -75,9 +75,13 @@ natural-dye families.
 The hexes remain provisional **on purpose**, not for lack of a table. A cord is
 a physical object a member wears for life; the render exists to *depict* it, so
 the colour must be taken from the dyed yarn — choose the hex from the yarn, never
-the yarn from the hex. The values in `STAGE_PAINT` today are dye-representative
-placeholders; `HEXES_ARE_PROVISIONAL` stays true until real samples replace them,
-and that flag now covers **only** the hexes (the boundaries are done).
+the yarn from the hex. The values in `STAGE_PAINT` today are the **editorial
+reference values** from the Emerald correspondence table
+(`docs/emerald-table.md`, 2026-08-11) — researched approximations of the
+settled dyes on mordanted wool, per step and stage, with sources.
+`HEXES_ARE_PROVISIONAL` stays true until real samples (or a fellowship vote)
+replace them, and that flag now covers **only** the hexes (the boundaries are
+done).
 
 **Excluded, hard constraint:** turmeric and safflower — however good the first
 dip looks, they fade to nothing in a couple of years, disqualifying for an object
@@ -132,6 +136,10 @@ draws real knots from the same data.
 - ✅ Colour + knot-date logic (`frontend/lib/quipu.ts`), with the codec fully
   specified and tested.
 - ✅ Stage **boundaries** final (five stages incl. cauda pavonis).
-- 🟡 Colour **hex values** provisional — awaiting physical dye samples (see the sampling protocol above); the Emerald table never had a colour column, so this is a dyeing task, not a lookup
-  (the only external dependency).
+- 🟡 Colour **hex values** editorial — the Emerald correspondence table now
+  lives in `docs/emerald-table.md` (the historical tablet never had a colour
+  column, so the fellowship wrote its own): editorial reference values
+  (2026-08-11), loaded into `STAGE_PAINT`. Dye-sampled or fellowship-ratified
+  values supersede them; the sampling protocol above still applies (the only
+  remaining physical task).
 - ⬜ The rendered necklace on the member page is **Epic 4** (the Quipu Page).
