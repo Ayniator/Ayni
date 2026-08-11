@@ -21,8 +21,12 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 # init-if-needed: the CircleProfile (directory geo + IPFS doc CIDs) is upserted
 # by the Council over time. Safe here — the instruction is seat-gated + has_one.
 anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
-# Token-2022 (soulbound membership) + SPL helpers.
-anchor-spl = "0.31.1"
+# Token-2022 (soulbound membership) + SPL helpers. Only the token /
+# token_2022 / token_2022_extensions paths are used (Multisig + NonTransferable
+# mint + token_interface); dropping default features drops the unused
+# associated_token (spl-associated-token-account) and no-op `mint` code from the
+# binary — deploy-size / rent reduction.
+anchor-spl = { version = "0.31.1", default-features = false, features = ["token", "token_2022", "token_2022_extensions"] }
 # On-chain Groth16 verification over BN254 via the alt_bn128 syscalls.
 groth16-solana = "0.2.0"
 # Poseidon syscall (moved out of solana-program in Solana 2.x).

@@ -34,6 +34,8 @@ pub enum AyniError {
     InvalidSeatIndex,
     #[msg("Migration time-lock has not elapsed yet")]
     TimelockNotElapsed,
+    #[msg("Recovery time-lock must not be negative")]
+    InvalidTimelock,
     #[msg("Proposal has been cancelled")]
     ProposalCancelled,
     #[msg("This membership requires the member's co-signature to migrate")]

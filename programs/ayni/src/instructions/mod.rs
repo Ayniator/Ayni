@@ -63,6 +63,7 @@ pub mod update_circle_location;
 pub mod upsert_circle_profile;
 pub mod verify_disclosure;
 pub mod withdraw_treasury;
+pub mod withdraw_treasury_token;
 
 pub use activate_faucet::*;
 pub use approve::*;
@@ -129,3 +130,4 @@ pub use update_circle_location::*;
 pub use upsert_circle_profile::*;
 pub use verify_disclosure::*;
 pub use withdraw_treasury::*;
+pub use withdraw_treasury_token::*;

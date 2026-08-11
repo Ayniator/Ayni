@@ -39,6 +39,20 @@ pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
             circle.council.seats[i] = *new_holder;
         }
         ProposalAction::MigrateWallet { old_wallet, new_wallet } => {
+            // One holder per seat: if old_wallet actually sits on the Council, the
+            // rebind must not land on a wallet that already holds a DIFFERENT seat
+            // (that would silently collapse two seats onto one key, weakening the
+            // 4-of-7 threshold to fewer distinct holders). RotateSeat /
+            // install_elected_seat / initialize_circle all enforce this; MigrateWallet
+            // was the one seat-mutating path that did not. When old_wallet holds no
+            // seat (a pure membership migration), the loop is a no-op and the check
+            // is skipped so it never blocks a legitimate member wallet swap.
+            if circle.council.seat_of(old_wallet).is_some() {
+                require!(
+                    circle.council.seat_of(new_wallet).is_none(),
+                    AyniError::DuplicateSeat
+                );
+            }
             // Rebind every Council seat held by old_wallet (bounded loop of 7).
             for s in circle.council.seats.iter_mut() {
                 if s == old_wallet {
@@ -53,6 +67,11 @@ pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
         ProposalAction::SetTreasuryWallet { .. } => {
             // Authorization only — the wallet is written in `set_treasury_wallet`,
             // gated on this executed proposal (which carries the new wallet).
+        }
+        ProposalAction::WithdrawTreasuryToken { .. } => {
+            // Authorization only — the tokens move in `withdraw_treasury_token`,
+            // gated on this executed proposal (so the treasury PDA can sign) with
+            // the same one-shot `drained` guard as WithdrawTreasury.
         }
     }
 

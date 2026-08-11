@@ -16,6 +16,12 @@ import {
   sponsorRecoveryAvailable,
   CHALLENGE_WINDOW_MS,
 } from "../frontend/lib/recovery";
+import {
+  encodeShardPayload,
+  decodeShardPayload,
+  looksLikeShardPayload,
+  HANDOVER_PREFIX,
+} from "../frontend/lib/shardHandover";
 
 // Epic 11 — Shamir 2-of-3 core + recovery flows. Property tests (no chain, no
 // validator): any two reconstruct exactly, any one yields nothing, a corrupted
@@ -120,7 +126,7 @@ describe("ayni — sponsor recovery, key shards (Epic 11)", () => {
   it("the recovery + custody + sharding modules contain NO network sink", () => {
     // Sentinel Layer F asserts this adversarially; a fast static guard here too.
     const forbidden = /\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon|navigator\.credentials|programWith|\.rpc\s*\(|sendTransaction|new Connection|@solana\/web3/;
-    for (const f of ["frontend/lib/recovery.ts", "frontend/lib/shardCustody.ts", "frontend/lib/sharding.ts"]) {
+    for (const f of ["frontend/lib/recovery.ts", "frontend/lib/shardCustody.ts", "frontend/lib/sharding.ts", "frontend/lib/shardHandover.ts"]) {
       const src = fs.readFileSync(path.join(__dirname, "..", f), "utf8");
       assert.notMatch(src, forbidden, `${f} must have no network/chain sink a shard could take`);
     }
@@ -135,5 +141,41 @@ describe("ayni — sponsor recovery, key shards (Epic 11)", () => {
     assert.notMatch(code, /\b(list|keys|count|entries|iterate|values|has)\s*[(:]/);
     // and the three real methods ARE present (put/get/burn)
     for (const m of ["put", "get", "burn"]) assert.match(code, new RegExp(`\\b${m}\\s*[(:]`), `${m} should exist`);
+  });
+
+  // --- F74: in-person handover codec (QR / NFC payload) ----------------------
+
+  it("a real shard round-trips through the handover codec exactly", async () => {
+    const master = newMasterSecret();
+    const [m, a] = await splitMaster(master);
+    for (const shard of [m, a]) {
+      const payload = encodeShardPayload(shard);
+      assert.isTrue(payload.startsWith(HANDOVER_PREFIX), "payload must carry the recognisable prefix");
+      const back = decodeShardPayload(payload);
+      assert.deepEqual([...back], [...shard], "decode must reproduce the shard byte-for-byte");
+    }
+    // and a decoded shard still reconstructs the master with its partner
+    const p = encodeShardPayload(m);
+    const recovered = await reconstructMaster(decodeShardPayload(p), a);
+    assert.deepEqual([...recovered], [...master]);
+  });
+
+  it("a corrupted or truncated handover payload fails LOUDLY, never returns a valid-looking shard", () => {
+    const payload = encodeShardPayload(Uint8Array.from({ length: 33 }, (_, i) => i + 1));
+    // flip a base64 char in the body
+    const i = HANDOVER_PREFIX.length + 4;
+    const tampered = payload.slice(0, i) + (payload[i] === "A" ? "B" : "A") + payload.slice(i + 1);
+    assert.throws(() => decodeShardPayload(tampered), /checksum|mismatch|corrupted|short/i);
+    // truncation
+    assert.throws(() => decodeShardPayload(payload.slice(0, payload.length - 6)), /mismatch|corrupted|short|checksum/i);
+    // a foreign QR (no prefix) is refused, not coerced
+    assert.throws(() => decodeShardPayload("https://example.com/whatever"), /not an AHA shard/i);
+    assert.isFalse(looksLikeShardPayload("https://example.com/whatever"));
+  });
+
+  it("the handover codec is deterministic and DOM/network-free (unit-testable in node)", () => {
+    const blob = Uint8Array.from({ length: 32 }, (_, i) => (i * 7) & 0xff);
+    assert.equal(encodeShardPayload(blob), encodeShardPayload(blob), "same blob → same payload (no time/nonce leak)");
+    assert.throws(() => encodeShardPayload(new Uint8Array(0)), /empty/);
   });
 });

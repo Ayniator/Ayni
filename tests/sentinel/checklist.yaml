@@ -8,15 +8,33 @@
 # test:adversarial, Playwright); none of that exists in this repo, so the layers
 # are mapped onto what is real here. Do not delete a gap to make a round pass.
 
-round: 3
-established: 2026-08-10
-baseline_report: reports/sentinel/NRR-2026-08-10-2.md
-previous_baseline_report: reports/sentinel/NRR-2026-08-10-1.md
+round: 4
+established: 2026-08-11
+baseline_report: reports/sentinel/NRR-2026-08-11-4.md
+previous_baseline_report: reports/sentinel/NRR-2026-08-10-2.md
 
-# Focused addendum, not a full round bump: Round F (2026-08-11) added Layer F
-# (Epic 11 sponsor recovery) coverage only, on top of whatever round: 3 ends up
-# being when a full A-E re-execution happens. See reports/sentinel/NRR-2026-08-11-F.md.
+# Round F (2026-08-11) was a focused addendum: Layer F (Epic 11 sponsor
+# recovery) coverage only. See reports/sentinel/NRR-2026-08-11-F.md.
 layer_F_report: reports/sentinel/NRR-2026-08-11-F.md
+
+# Round 4 (2026-08-11) verdict: FAIL. Native run (this host has a real
+# toolchain: cargo/anchor-cli 0.31.1/solana-cli 2.1.21/node 18 on PATH — no
+# containers needed this round). Security-fix round (2 CRITICAL + 1 HIGH + 3
+# lower findings, docs/security-review-2026-08-11.md) + Epic 11 handover
+# (F74/F79 in-person QR/NFC codec). Root cause of the FAIL: this round's
+# Anchor.toml flips [provider] cluster localnet -> devnet, which breaks the
+# documented `anchor test`/`make test`/`scripts/test.sh` path outright (anchor
+# no longer starts a local validator; it tries to deploy to devnet and fails
+# on insufficient funds — reproduced directly). With an explicit
+# `--provider.cluster localnet` override the full suite is genuinely green:
+# 80 passing / 0 failing, matching the round's own claimed ground truth
+# exactly (66 instructions, .so 1,189,664 bytes, confirmed by a native
+# `anchor build`). See reports/sentinel/NRR-2026-08-11-4.md for full detail,
+# including a privacy-sweep gate false positive (the word "plausible" in a
+# test description collides with the Plausible-Analytics-SDK substring match)
+# and 3 of 6 security fixes (InvalidTimelock, withdraw_treasury_token/F80,
+# MigrateWallet DuplicateSeat dedup) shipping with no regression test despite
+# the security-review doc claiming fix #6 is tested.
 
 layers:
   E_build_health:
@@ -309,3 +327,59 @@ features:
          shard custody storage — assertion 3 (no structure links a shard to a
          member) was verified by Sentinel code-reading this round, not by an
          automated dump-and-inspect test"
+
+  - id: SEC-2026-08-11
+    name: "Round 4 — security audit fixes (2 CRITICAL, 1 HIGH, 3 lower) +
+      new instruction F80 (withdraw_treasury_token)"
+    shipped_round: 4
+    covered_by: [tests/federation.ts, tests/cosign.ts]
+    cases:
+      - "CRITICAL #1/#2: propose/execute_child_close and
+         propose/execute_child_rotation reject a foundation whose child.parent
+         does not equal foundation.key() (tests/federation.ts, 2 cases, native
+         PASS this round)"
+      - "HIGH #3: a lone guardian cannot member_migrate an owner-set membership
+         (tests/cosign.ts, 1 new case, native PASS this round)"
+    uncovered:
+      - "MEDIUM #4 (InvalidTimelock — negative recovery_timelock rejected in
+         initialize_circle): NO test. WARNING this round, FAILs round 5 if
+         still uncovered."
+      - "MEDIUM #5 / F80 (new instruction withdraw_treasury_token): NO test at
+         all — zero references to withdrawTreasuryToken anywhere in tests/.
+         WARNING this round (new feature shipped uncovered per spec §4), FAILs
+         round 5 if still uncovered."
+      - "LOW #6 (DuplicateSeat — one-holder-per-seat dedup on MigrateWallet in
+         execute_proposal.rs): NO test, DESPITE docs/security-review-2026-08-11.md
+         explicitly claiming '1/2/3/6' are all tested. Documentation-accuracy
+         finding, not just a coverage gap — flag to the main agent."
+      - "execute-time re-assertion in execute_child_close.rs/
+         execute_child_rotation.rs (defense-in-depth beyond the propose-time
+         constraint) is never independently exercised — federation.ts only
+         proves the propose-time gate blocks the attack before a vote exists."
+
+  - id: F74-handover
+    name: "Epic 11 — in-person shard handover (QR/NFC codec + honest
+      disclosure UI)"
+    shipped_round: 4
+    covered_by: [tests/sharding.ts, frontend/lib/shardHandover.ts, frontend/components/ShardHandover.tsx]
+    cases:
+      - "a real shard round-trips through the handover codec exactly (native
+         PASS)"
+      - "a corrupted or truncated handover payload fails LOUDLY, never a
+         plausible-looking shard (native PASS) — NOTE: this test's own
+         description is what trips the privacy-sweep false positive, see
+         round 4 report Regression #2"
+      - "the handover codec is deterministic and DOM/network-free (native
+         PASS)"
+      - "no-network-sink static gate widened to include shardHandover.ts, per
+         Round F's own recommendation — confirmed done and passing"
+      - "F79 on-screen disclosure copy present and correctly worded in
+         ShardHandover.tsx (code-read, not an automated DOM test — no
+         Playwright suite exists)"
+    uncovered:
+      - "QR-image rendering itself (the codec-to-visual-QR step) is explicitly
+         deferred per BACKLOG.md F74 row — textarea payload only today"
+      - "no automated DOM-level test of the on-screen disclosure copy (would
+         need Layer A / Playwright, which does not exist in this repo)"
+      - "not yet wired into the onboarding stepper (E9) or a dedicated
+         /recovery route — component exists, integration does not"

@@ -34,6 +34,11 @@ pub fn propose(ctx: Context<Propose>, nonce: u64, action: ProposalAction) -> Res
         ProposalAction::SetTreasuryWallet { new_wallet } => {
             require!(*new_wallet != Pubkey::default(), AyniError::WalletMismatch);
         }
+        ProposalAction::WithdrawTreasuryToken { mint, amount, recipient } => {
+            require!(*amount > 0, AyniError::WrongProposalAction);
+            require!(*mint != Pubkey::default(), AyniError::WalletMismatch);
+            require!(*recipient != Pubkey::default(), AyniError::WalletMismatch);
+        }
     }
 
     let now = Clock::get()?.unix_timestamp;

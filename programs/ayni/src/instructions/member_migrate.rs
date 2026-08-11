@@ -3,16 +3,28 @@ use anchor_lang::prelude::*;
 use crate::errors::AyniError;
 use crate::state::Membership;
 
-/// Self-recovery: a member who still controls a key (`owner` or `recovery_key`)
-/// migrates their own membership `owner` to a new wallet — no Council vote, no
-/// time-lock, because the member personally authorizes it (no collusion
-/// possible). The guardian `recovery_key` is left intact.
+/// Owner self-migration: the member rebinds their OWN membership `owner` to a
+/// new wallet — no Council vote, no time-lock, because the current owner
+/// personally authorizes it (no collusion possible). The guardian `recovery_keys`
+/// are left intact.
+///
+/// SECURITY (mirrors `set_recovery`): when an `owner` is set, ONLY the owner may
+/// call this. A lone guardian must NOT be able to instantly seize `owner` here —
+/// otherwise one stolen backup key hijacks an active membership and then rewrites
+/// the guardian set via `set_recovery` (which already gates on owner). Guardian-
+/// mediated recovery of a genuinely lost owner goes through the contestable,
+/// time-locked Council path `recover_membership` (with the member's cosignature
+/// when `require_cosign`), not through this instant path. A fully-anonymous
+/// membership (owner == default) has no stronger key, so any member key may seed
+/// its owner.
 pub fn member_migrate(ctx: Context<MemberMigrate>, new_owner: Pubkey) -> Result<()> {
     let membership = &mut ctx.accounts.membership;
-    require!(
-        membership.is_member_key(&ctx.accounts.member_authority.key()),
-        AyniError::Unauthorized
-    );
+    let who = ctx.accounts.member_authority.key();
+    if membership.owner != Pubkey::default() {
+        require!(who == membership.owner, AyniError::Unauthorized);
+    } else {
+        require!(membership.is_member_key(&who), AyniError::Unauthorized);
+    }
     membership.owner = new_owner;
     Ok(())
 }

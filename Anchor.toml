@@ -5,24 +5,24 @@ anchor_version = "0.31.1"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-ayni = "3ogteUFYhbHaV7UEWuGCqGVm1X4HDgAswvSePvDspHCw"
-
 [programs.devnet]
-ayni = "3ogteUFYhbHaV7UEWuGCqGVm1X4HDgAswvSePvDspHCw"
+ayni = "AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG"
+
+[programs.localnet]
+ayni = "AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
+# localnet so bare `anchor test` / `make test` / scripts/test.sh spin a local
+# validator (the documented flow). Deploy targets a cluster at deploy time
+# (`anchor deploy --provider.cluster devnet`), not via this test-time default.
 cluster = "localnet"
 wallet = "~/.config/solana/aha-deployer.json"
 
 [scripts]
-# f28-election.ts is a devnet SCRIPT, not a mocha suite: it runs on import
-# against the deployed program with the real deployer key, so the glob must skip
-# it or `anchor test` stalls against devnet instead of the local validator.
-test = "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/ayni.ts tests/resilience.ts tests/cosign.ts tests/faucet.ts tests/epic1.ts"
+test = "NODE_OPTIONS=--experimental-global-webcrypto node_modules/.bin/ts-mocha -p ./tsconfig.json -t 1000000 tests/ayni.ts tests/resilience.ts tests/cosign.ts tests/faucet.ts tests/epic1.ts tests/epic3.ts tests/epic5.ts tests/profile.ts tests/federation.ts tests/audit-fixes.ts tests/jazzicon.ts tests/sharding.ts tests/quipu.ts"
 
 [test]
 startup_wait = 60000

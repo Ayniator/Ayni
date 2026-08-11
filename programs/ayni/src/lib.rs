@@ -22,7 +22,7 @@ use council::ProposalAction;
 use instructions::*;
 use instructions::verify_disclosure::DisclosureGate;
 
-declare_id!("3ogteUFYhbHaV7UEWuGCqGVm1X4HDgAswvSePvDspHCw");
+declare_id!("AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG");
 
 #[program]
 pub mod ayni {
@@ -131,6 +131,13 @@ pub mod ayni {
     /// Move treasury SOL, authorized by an executed 4-of-7 WithdrawTreasury proposal.
     pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>) -> Result<()> {
         instructions::withdraw_treasury(ctx)
+    }
+
+    /// Move an SPL / Token-2022 treasury balance, authorized by an executed 4-of-7
+    /// `WithdrawTreasuryToken` proposal. Without this, `donate_token` deposits were
+    /// unrecoverable (no treasury-PDA signing path for tokens).
+    pub fn withdraw_treasury_token(ctx: Context<WithdrawTreasuryToken>) -> Result<()> {
+        instructions::withdraw_treasury_token(ctx)
     }
 
     /// Write the Circle's treasury steward wallet, authorized by an executed

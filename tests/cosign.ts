@@ -149,4 +149,37 @@ describe("ayni — member co-signature & self-recovery", () => {
     const m = await program.account.membership.fetch(membership);
     assert.ok(m.owner.equals(fresh), "member self-migrated their own membership");
   });
+
+  // Audit fix (HIGH): a lone guardian must NOT be able to instantly seize `owner`
+  // via member_migrate while an owner is set — that path defeated set_recovery's
+  // own owner-only invariant (one stolen backup key → permanent takeover).
+  // Guardian-mediated recovery of a genuinely lost owner goes through the
+  // contestable Council path (recover_membership), tested above.
+  it("a lone guardian CANNOT seize an owner-set membership via member_migrate", async () => {
+    const commitment = anchor.web3.Keypair.generate().publicKey.toBuffer();
+    commitment[0] &= 0x1f;
+    const owner = anchor.web3.Keypair.generate();
+    const guardian = anchor.web3.Keypair.generate();
+    const attackerWallet = anchor.web3.Keypair.generate().publicKey;
+    const membership = membershipPda(commitment);
+    await provider.connection.confirmTransaction(await provider.connection.requestAirdrop(guardian.publicKey, 1e9));
+
+    // owner set, one guardian, cosign off
+    await issue(commitment, owner.publicKey, [guardian.publicKey, anchor.web3.PublicKey.default], false);
+
+    let threw = false;
+    try {
+      await program.methods
+        .memberMigrate(attackerWallet)
+        .accounts({ membership, memberAuthority: guardian.publicKey })
+        .signers([guardian])
+        .rpc();
+    } catch {
+      threw = true; // Unauthorized: owner is set, only the owner may member_migrate
+    }
+    assert.isTrue(threw, "a guardian must not instantly rebind owner via member_migrate");
+
+    const m = await program.account.membership.fetch(membership);
+    assert.ok(m.owner.equals(owner.publicKey), "owner unchanged — takeover blocked");
+  });
 });

@@ -101,11 +101,18 @@ pub enum ProposalAction {
     /// destination shown in the directory/console). High-stakes ⇒ time-locked +
     /// contestable, then written by `set_treasury_wallet` into `TreasuryConfig`.
     SetTreasuryWallet { new_wallet: Pubkey },
+    /// Spend an SPL / Token-2022 balance from the Circle treasury's token account
+    /// (the counterpart of `WithdrawTreasury`, which moves SOL). Pins the `mint`,
+    /// `amount`, and `recipient`; drawn by `withdraw_treasury_token`, which signs
+    /// a `transfer_checked` with the treasury PDA. Without this, tokens sent via
+    /// `donate_token` were unrecoverable (audit: permanent fund-lock).
+    WithdrawTreasuryToken { mint: Pubkey, amount: u64, recipient: Pubkey },
 }
 
 impl ProposalAction {
-    /// borsh: 1-byte enum tag + largest variant (two pubkeys).
-    pub const MAX_SIZE: usize = 1 + 32 + 32;
+    /// borsh: 1-byte enum tag + largest variant. The largest is
+    /// `WithdrawTreasuryToken` (two pubkeys + a u64).
+    pub const MAX_SIZE: usize = 1 + 32 + 8 + 32;
 }
 
 /// A pending Council decision. Approvals are a bitmask over the 7 seats, so a

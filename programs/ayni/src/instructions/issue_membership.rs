@@ -89,7 +89,7 @@ pub fn issue_membership(
 #[instruction(commitment: [u8; 32])]
 pub struct IssueMembership<'info> {
     #[account(mut)]
-    pub circle: Account<'info, Circle>,
+    pub circle: Box<Account<'info, Circle>>,
 
     #[account(
         init,
@@ -98,7 +98,7 @@ pub struct IssueMembership<'info> {
         seeds = [b"membership", circle.key().as_ref(), commitment.as_ref()],
         bump
     )]
-    pub membership: Account<'info, Membership>,
+    pub membership: Box<Account<'info, Membership>>,
 
     #[account(
         mut,
@@ -106,12 +106,12 @@ pub struct IssueMembership<'info> {
         seeds = [b"members", circle.key().as_ref()],
         bump = member_tree.bump
     )]
-    pub member_tree: Account<'info, MemberTree>,
+    pub member_tree: Box<Account<'info, MemberTree>>,
 
     /// Required only when `circle.require_personhood`: a one-per-human
     /// `PersonhoodCredential` (from `prove_personhood`), consumed here.
     #[account(mut)]
-    pub personhood: Option<Account<'info, PersonhoodCredential>>,
+    pub personhood: Option<Box<Account<'info, PersonhoodCredential>>>,
 
     /// Optional admission-policy marker. Pass it (the ["openjoin", circle] PDA)
     /// to self-admit in a permissionless Circle; omit it for Scribe-Secretary
@@ -121,7 +121,7 @@ pub struct IssueMembership<'info> {
         bump = open_membership.bump,
         has_one = circle,
     )]
-    pub open_membership: Option<Account<'info, OpenMembership>>,
+    pub open_membership: Option<Box<Account<'info, OpenMembership>>>,
 
     /// Signs + pays. Must be the Scribe-Secretary seat for a gated Circle; in a
     /// permissionless Circle (open marker present) it may be any wallet.
@@ -141,5 +141,5 @@ pub struct IssueMembership<'info> {
         seeds = [b"twosponsor", circle.key().as_ref()],
         bump
     )]
-    pub two_sponsor: Account<'info, TwoSponsorAdmission>,
+    pub two_sponsor: Box<Account<'info, TwoSponsorAdmission>>,
 }

@@ -19,6 +19,15 @@ pub fn initialize_circle(
 ) -> Result<()> {
     require!(name.len() <= Circle::MAX_NAME, AyniError::NameTooLong);
 
+    // A NEGATIVE recovery_timelock is always a bug/attack: arm_if_ready computes
+    // eligible_at = now.saturating_add(recovery_timelock).max(1), so a negative
+    // value yields eligible_at = 1 — already elapsed — silently deleting the
+    // contest window for every MigrateWallet/WithdrawTreasury/RotateSeat. Reject
+    // it. A value of 0 is still permitted as an EXPLICIT opt-out (instant
+    // execution once threshold is met) for small/pilot circles that knowingly
+    // waive the contest window; production circles should set a real window.
+    require!(recovery_timelock >= 0, AyniError::InvalidTimelock);
+
     // Every seat must be filled and distinct (one holder per seat).
     for i in 0..COUNCIL_SEATS {
         require!(seats[i] != Pubkey::default(), AyniError::InvalidSeatIndex);

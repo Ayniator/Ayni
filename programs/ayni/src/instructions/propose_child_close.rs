@@ -40,6 +40,14 @@ pub fn propose_child_close(ctx: Context<ProposeChildClose>, _nonce: u64, validit
 #[instruction(nonce: u64)]
 pub struct ProposeChildClose<'info> {
     pub foundation: Account<'info, Circle>,
+
+    /// The target Circle. It MUST be a direct child of `foundation`
+    /// (`child.parent == foundation`). Without this, `foundation` is a bare
+    /// caller-supplied account, so anyone could stand up a Circle they seat 4-of-7
+    /// themselves and use it as `foundation` to close ANY Circle — including the
+    /// root — stealing its rent. `parent` is immutable after `initialize_circle`,
+    /// so this binds the vote to genuine parentage for its whole life.
+    #[account(constraint = child.parent == foundation.key() @ AyniError::Unauthorized)]
     pub child: Account<'info, Circle>,
 
     #[account(

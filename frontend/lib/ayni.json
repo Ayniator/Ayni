@@ -1,5 +1,5 @@
 {
-  "address": "3ogteUFYhbHaV7UEWuGCqGVm1X4HDgAswvSePvDspHCw",
+  "address": "AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG",
   "metadata": {
     "name": "ayni",
     "version": "0.1.0",
@@ -1661,6 +1661,10 @@
         },
         {
           "name": "child",
+          "docs": [
+            "Re-assert genuine parentage at execute (defense-in-depth beyond the vote's",
+            "has_one binding): a Circle may only be closed by its real parent."
+          ],
           "writable": true,
           "relations": [
             "vote"
@@ -3362,7 +3366,15 @@
           "name": "foundation"
         },
         {
-          "name": "child"
+          "name": "child",
+          "docs": [
+            "The target Circle. It MUST be a direct child of `foundation`",
+            "(`child.parent == foundation`). Without this, `foundation` is a bare",
+            "caller-supplied account, so anyone could stand up a Circle they seat 4-of-7",
+            "themselves and use it as `foundation` to close ANY Circle — including the",
+            "root — stealing its rent. `parent` is immutable after `initialize_circle`,",
+            "so this binds the vote to genuine parentage for its whole life."
+          ]
         },
         {
           "name": "vote",
@@ -3439,7 +3451,10 @@
         {
           "name": "child",
           "docs": [
-            "The target Circle (must have `parent == foundation`)."
+            "The target Circle. It MUST be a direct child of `foundation`",
+            "(`child.parent == foundation`) — enforced here, not just documented.",
+            "Without it, a caller-supplied `foundation` they seat 4-of-7 themselves",
+            "could rotate ANY Circle's Council. `parent` is immutable after creation."
           ]
         },
         {
@@ -5546,6 +5561,169 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "withdraw_treasury_token",
+      "docs": [
+        "Move an SPL / Token-2022 treasury balance, authorized by an executed 4-of-7",
+        "`WithdrawTreasuryToken` proposal. Without this, `donate_token` deposits were",
+        "unrecoverable (no treasury-PDA signing path for tokens)."
+      ],
+      "discriminator": [
+        63,
+        112,
+        138,
+        126,
+        181,
+        23,
+        101,
+        154
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "The Circle's policy (its `treasury_allowlist` flag). Seed-bound + created",
+            "on first use, so it can't be omitted to dodge an enabled allowlist."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "allow",
+          "docs": [
+            "The recipient wallet's allowlist entry — only required when the allowlist",
+            "is on."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "recipient"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Must equal the proposal's pinned mint."
+          ]
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "The treasury PDA — signs the transfer."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_token_account",
+          "docs": [
+            "The treasury's token account for `mint`, owned by the treasury PDA."
+          ],
+          "writable": true
+        },
+        {
+          "name": "recipient",
+          "docs": [
+            "account's authority is checked against this below)."
+          ]
+        },
+        {
+          "name": "recipient_token_account",
+          "docs": [
+            "The recipient's token account for `mint`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "caller",
+          "docs": [
+            "Whoever triggers the (still-permissionless) withdrawal; pays config rent on",
+            "first use."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -6075,141 +6253,146 @@
     },
     {
       "code": 6016,
+      "name": "InvalidTimelock",
+      "msg": "Recovery time-lock must not be negative"
+    },
+    {
+      "code": 6017,
       "name": "ProposalCancelled",
       "msg": "Proposal has been cancelled"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "MemberCosignRequired",
       "msg": "This membership requires the member's co-signature to migrate"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "DisclosureProofInvalid",
       "msg": "Invalid acknowledgment disclosure proof"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "PredicateNotMet",
       "msg": "Disclosure does not satisfy the gate's predicate requirements"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "VoteProofInvalid",
       "msg": "Invalid vote / personhood proof"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "VotingClosed",
       "msg": "Voting is closed for this proposal"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "VotingNotEnded",
       "msg": "Voting period has not ended yet"
     },
     {
-      "code": 6023,
+      "code": 6024,
       "name": "AlreadyFinalized",
       "msg": "Proposal already finalized"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "PersonhoodRequired",
       "msg": "Proof of personhood is required to join this Circle"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "DuplicateSeat",
       "msg": "That wallet already holds another Council seat"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "GateMismatch",
       "msg": "Gate requirements hash does not match the supplied requirements"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "ProfileFieldTooLong",
       "msg": "Circle profile field exceeds its maximum length"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "InvalidCoordinate",
       "msg": "Geographic coordinate out of range"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "InvalidVotingPeriod",
       "msg": "Voting period must be between 1 and 90 days"
     },
     {
-      "code": 6030,
+      "code": 6031,
       "name": "TreasuryNotMultisig",
       "msg": "Treasury steward wallet must be an initialized SPL multisig (m-of-n, m >= 2)"
     },
     {
-      "code": 6031,
+      "code": 6032,
       "name": "MintInitFailed",
       "msg": "Failed to initialize the membership mint"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "FaucetCapExceeded",
       "msg": "Faucet grant amount exceeds the absolute on-chain cap"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "FaucetInsufficient",
       "msg": "Faucet jar has insufficient funds for the grant"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "NotParrain",
       "msg": "Signer is not the neophyte's designated parrain (WingPeer)"
     },
     {
-      "code": 6035,
+      "code": 6036,
       "name": "NeophyteWalletUnset",
       "msg": "Neophyte membership has no owner wallet to receive the grant"
     },
     {
-      "code": 6036,
+      "code": 6037,
       "name": "FaucetAmountCooling",
       "msg": "Faucet grant amount changed recently; grants resume after the cooldown"
     },
     {
-      "code": 6037,
+      "code": 6038,
       "name": "FaucetRefillTooLarge",
       "msg": "Faucet refill exceeds the maximum a single vote may move"
     },
     {
-      "code": 6038,
+      "code": 6039,
       "name": "TwoSponsorRequired",
       "msg": "This Circle admits by two-sponsor attestation — use the provisional admission flow"
     },
     {
-      "code": 6039,
+      "code": 6040,
       "name": "TwoSponsorNotEnabled",
       "msg": "Two-sponsor admission is not enabled for this Circle"
     },
     {
-      "code": 6040,
+      "code": 6041,
       "name": "SelfAttestation",
       "msg": "A member cannot attest for their own admission"
     },
     {
-      "code": 6041,
+      "code": 6042,
       "name": "ParrainCannotConfirm",
       "msg": "The trusted servant must be a different person than the parrain"
     },
     {
-      "code": 6042,
+      "code": 6043,
       "name": "InvalidStep",
       "msg": "Quipu step must be between 1 and 12"
     },
     {
-      "code": 6043,
+      "code": 6044,
       "name": "InvalidVisibilityTier",
       "msg": "Visibility tier must be 0 (chosen), 1 (my circle), or 2 (all members)"
     }
@@ -7660,6 +7843,23 @@
             "fields": [
               {
                 "name": "new_wallet",
+                "type": "pubkey"
+              }
+            ]
+          },
+          {
+            "name": "WithdrawTreasuryToken",
+            "fields": [
+              {
+                "name": "mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              },
+              {
+                "name": "recipient",
                 "type": "pubkey"
               }
             ]

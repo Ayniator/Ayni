@@ -9,7 +9,7 @@ const anchor = require("@coral-xyz/anchor");
 const { PublicKey, Keypair, Connection } = require("@solana/web3.js");
 
 const TOKEN_2022 = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-const PROGRAM_ID = new PublicKey("3ogteUFYhbHaV7UEWuGCqGVm1X4HDgAswvSePvDspHCw");
+const PROGRAM_ID = new PublicKey("AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG");
 
 (async () => {
   const kp = Keypair.fromSecretKey(

@@ -12,8 +12,13 @@ use crate::state::{AdmissionAttestation, Circle, Membership, MemberTree, Provisi
 /// to the servant). The one-way glass opens in both directions at once.
 ///
 /// Distinct-persons rule, enforced here: the servant's signing key must not be
-/// a key of the parrain's membership — a parrain who also holds a seat cannot
-/// single-handedly admit their own neophyte.
+/// a key of the parrain's membership. This is a KEY-LEVEL check, not a person-
+/// level one — one human controlling two keypairs (a member wallet used for the
+/// parrain attestation and a *different* wallet holding a seat) can still satisfy
+/// it. There is no on-chain person primitive to compare against, so the durable
+/// one-human bound is `require_personhood` (Sybil gate), with this check catching
+/// the common key-reuse case. The confirming party must in any case hold one of
+/// the 7 seats, a small trusted set.
 pub fn confirm_admission(ctx: Context<ConfirmAdmission>) -> Result<()> {
     let circle = &mut ctx.accounts.circle;
     let servant = ctx.accounts.servant.key();
@@ -60,7 +65,7 @@ pub fn confirm_admission(ctx: Context<ConfirmAdmission>) -> Result<()> {
 #[derive(Accounts)]
 pub struct ConfirmAdmission<'info> {
     #[account(mut)]
-    pub circle: Account<'info, Circle>,
+    pub circle: Box<Account<'info, Circle>>,
 
     /// The newcomer's (provisional) membership.
     #[account(
@@ -68,7 +73,7 @@ pub struct ConfirmAdmission<'info> {
         seeds = [b"membership", circle.key().as_ref(), membership.commitment.as_ref()],
         bump = membership.bump,
     )]
-    pub membership: Account<'info, Membership>,
+    pub membership: Box<Account<'info, Membership>>,
 
     /// The provisional marker — closed here, one-shot: a second confirmation
     /// has no marker left to close and fails at the constraint.
@@ -80,7 +85,7 @@ pub struct ConfirmAdmission<'info> {
         bump = provisional.bump,
         constraint = provisional.commitment == membership.commitment,
     )]
-    pub provisional: Account<'info, ProvisionalMember>,
+    pub provisional: Box<Account<'info, ProvisionalMember>>,
 
     /// The parrain's attestation for this newcomer, and through it the
     /// parrain's membership — both needed for the distinct-persons rule.
@@ -89,12 +94,12 @@ pub struct ConfirmAdmission<'info> {
         bump = attestation.bump,
         has_one = circle,
     )]
-    pub attestation: Account<'info, AdmissionAttestation>,
+    pub attestation: Box<Account<'info, AdmissionAttestation>>,
 
     /// Required for a NAMED attestation (checked in the handler against
     /// `attestation.parrain`); pass null for an anonymous one.
     #[account(has_one = circle)]
-    pub parrain_membership: Option<Account<'info, Membership>>,
+    pub parrain_membership: Option<Box<Account<'info, Membership>>>,
 
     #[account(
         mut,
@@ -102,7 +107,7 @@ pub struct ConfirmAdmission<'info> {
         seeds = [b"members", circle.key().as_ref()],
         bump = member_tree.bump
     )]
-    pub member_tree: Account<'info, MemberTree>,
+    pub member_tree: Box<Account<'info, MemberTree>>,
 
     /// Any Council seat (signs; receives the marker's rent).
     #[account(mut)]

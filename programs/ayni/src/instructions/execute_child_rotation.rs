@@ -10,7 +10,6 @@ use crate::state::{ChildSeatVote, Circle};
 pub fn execute_child_rotation(ctx: Context<ExecuteChildRotation>) -> Result<()> {
     let threshold = ctx.accounts.foundation.council.threshold;
     let foundation_key = ctx.accounts.foundation.key();
-    let foundation_parent = ctx.accounts.foundation.parent;
     let now = Clock::get()?.unix_timestamp;
 
     // Read what we need from the vote, then release the borrow.
@@ -34,10 +33,12 @@ pub fn execute_child_rotation(ctx: Context<ExecuteChildRotation>) -> Result<()> 
 
     let child = &mut ctx.accounts.child;
     require!(child.key() != foundation_key, AyniError::Unauthorized);
-    require!(
-        child.parent == foundation_key || child.parent == foundation_parent,
-        AyniError::Unauthorized
-    );
+    // Only a Circle's REAL, DIRECT parent may rotate its seats. The former
+    // `child.parent == foundation.parent` branch read attacker-controlled data
+    // (foundation is caller-supplied; its parent is set freely at creation), so a
+    // hostile self-seated Circle could seize any Circle sharing its grandparent.
+    // Direct-parent-only matches the documented model (state.rs ChildSeatVote).
+    require!(child.parent == foundation_key, AyniError::Unauthorized);
     child.council.seats = new_seats;
     Ok(())
 }

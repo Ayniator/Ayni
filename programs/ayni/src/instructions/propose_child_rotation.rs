@@ -60,7 +60,11 @@ pub fn propose_child_rotation(
 pub struct ProposeChildRotation<'info> {
     pub foundation: Account<'info, Circle>,
 
-    /// The target Circle (must have `parent == foundation`).
+    /// The target Circle. It MUST be a direct child of `foundation`
+    /// (`child.parent == foundation`) — enforced here, not just documented.
+    /// Without it, a caller-supplied `foundation` they seat 4-of-7 themselves
+    /// could rotate ANY Circle's Council. `parent` is immutable after creation.
+    #[account(constraint = child.parent == foundation.key() @ AyniError::Unauthorized)]
     pub child: Account<'info, Circle>,
 
     #[account(

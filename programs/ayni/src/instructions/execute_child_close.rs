@@ -40,7 +40,9 @@ pub struct ExecuteChildClose<'info> {
     #[account(mut, has_one = foundation, has_one = child)]
     pub vote: Account<'info, ChildCloseVote>,
 
-    #[account(mut, close = recipient)]
+    /// Re-assert genuine parentage at execute (defense-in-depth beyond the vote's
+    /// has_one binding): a Circle may only be closed by its real parent.
+    #[account(mut, close = recipient, constraint = child.parent == foundation.key() @ AyniError::Unauthorized)]
     pub child: Account<'info, Circle>,
 
     /// Optional: the child's directory profile, closed so it leaves the map.

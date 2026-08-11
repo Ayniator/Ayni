@@ -9,7 +9,7 @@ direction is set below but the migration is not yet done.
 
 Ayni runs on **Solana**. This was never voted; it was decided by shipping: a
 58-instruction Anchor program is deployed to devnet at program id
-`3ogteUFYhbHaV7UEWuGCqGVm1X4HDgAswvSePvDspHCw` (`Anchor.toml`,
+`AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG` (`Anchor.toml`,
 `programs/ayni/src/lib.rs`). The other chains in the tree are scaffolds. Re-opening
 the chain question would discard working code for no stated benefit.
 
