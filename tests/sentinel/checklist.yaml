@@ -230,6 +230,28 @@ features:
          counts/ratings (Layer A gap — the highest-value E4 coverage)"
       - bio + service history + ZK presence not built (E5/F59)
 
+  - id: F60-F61
+    name: Epic 5 — per-element visibility
+    shipped_round: 5
+    covered_by: [tests/epic5.ts]
+    cases:
+      - absent policy ⇒ my-circle default (no account)
+      - member sets avatar/quipu/bio tiers; range-checked (tier > 2 rejected)
+      - member can change it again
+      - only the member may set it (stranger + seat both rejected)
+    enforcement_note:
+      - "read-path mayView() is APP-LEVEL in the pilot (viewer's own client
+         checks its memberships) — honest limit in lib/visibility.ts; the
+         privacy-correct enforcement is a ZK circle-membership proof + per-tier
+         encryption (Phase 2). hidden ≡ absent verified in the trust page render."
+    retrofit:
+      - "Membership.level dropped from /me and the admin member list (Sentinel
+         R7). ProgressToken chips remain, justified in docs/traditions-justifications.md."
+    uncovered:
+      - "no Playwright test that a viewer outside the audience sees a byte-shape-
+         identical bare page (Layer A / spec's side-channel assertion)"
+      - "roster (Membership.owner memcmp) + /board public-read still open (F61 remaining)"
+
   - id: F25
     name: Circle email notifications
     covered_by: []

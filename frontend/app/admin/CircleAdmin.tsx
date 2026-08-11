@@ -1350,7 +1350,7 @@ function MembersSection({ circle, wallet, amSecretary, anySeat }: { circle: Circ
           <div className="member" key={m.pubkey}>
             <Identicon seed={m.commitment} size={34} />
             <div className="meta" style={{ flex: 1, minWidth: 0 }}>
-              <div className="name mono">{short(m.commitment)}{m.level > 0 ? ` · L${m.level}` : ""}</div>
+              <div className="name mono">{short(m.commitment)}</div>
               <div className="sub">
                 {m.owner ? `owner ${short(m.owner)}` : "fully anonymous"} ·{" "}
                 {m.active ? `through ${day(m.expiresAt)}` : `expired ${day(m.expiresAt)}`}

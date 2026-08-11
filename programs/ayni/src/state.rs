@@ -479,6 +479,45 @@ impl MaciMessage {
     pub const SPACE: usize = 8 + 32 + 8 + 32 + 4 + Self::CT_LEN + 1;
 }
 
+/// A member's per-element visibility policy (Trust Platform Epic 5): who may see
+/// each element of their page — the avatar, the quipu, the bio — chosen
+/// independently. The audience widens through three tiers:
+///   0 = ChosenOnes   (only members the owner has chosen)
+///   1 = MyCircle     (members of this Circle) — the DEFAULT for every element
+///   2 = AllMembers   (any member of the fellowship — the widest audience that
+///                     exists; nothing is ever visible to the public internet)
+///
+/// Absent ⇒ every element defaults to `MyCircle` (tier 1): the protective
+/// default gives disclosure its social meaning, and opening up is a deliberate
+/// act. A viewer outside an element's audience sees the element simply absent —
+/// there is NO "hidden" indicator, so a sparse newcomer's page and a private
+/// elder's page look identical. PDA: ["visibility", circle, member].
+///
+/// This is the policy engine. Cryptographic enforcement of `MyCircle` (a ZK
+/// circle-membership proof on the read path, inheriting Epic 2's machinery) and
+/// the encrypted per-tier key distribution for avatar/bio are the remaining
+/// Phase-2 work; the quipu is on-chain and gated by this policy directly.
+#[account]
+pub struct VisibilityPolicy {
+    pub circle: Pubkey,
+    pub member: [u8; 32], // membership commitment
+    pub avatar: u8,       // tier 0..=2
+    pub quipu: u8,
+    pub bio: u8,
+    pub bump: u8,
+}
+
+impl VisibilityPolicy {
+    pub const CHOSEN: u8 = 0;
+    pub const MY_CIRCLE: u8 = 1; // the default
+    pub const ALL_MEMBERS: u8 = 2;
+    pub const SPACE: usize = 8 + 32 + 32 + 1 + 1 + 1 + 1;
+
+    pub fn valid_tier(t: u8) -> bool {
+        t <= Self::ALL_MEMBERS
+    }
+}
+
 /// One quipu cord — a single step of the twelve, completed and tied by the
 /// member's sponsor as the closing act of the ceremony (Trust Platform Epic 3).
 ///

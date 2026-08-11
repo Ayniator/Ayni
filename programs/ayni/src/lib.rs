@@ -174,6 +174,12 @@ pub mod ayni {
         instructions::tie_quipu_cord(ctx, step)
     }
 
+    /// A member sets their per-element visibility (Epic 5): avatar/quipu/bio each
+    /// to tier 0 (chosen) / 1 (my circle) / 2 (all members). Default is my circle.
+    pub fn set_visibility(ctx: Context<SetVisibility>, avatar: u8, quipu: u8, bio: u8) -> Result<()> {
+        instructions::set_visibility(ctx, avatar, quipu, bio)
+    }
+
     // --- Member posts / bulletins (F30) ---
 
     /// A member publishes a time-boxed post (text and/or IPFS image).

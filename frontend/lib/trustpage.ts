@@ -13,6 +13,7 @@ import { PublicKey } from "@solana/web3.js";
 import { PROGRAM_ID, connection, readOnlyProgram, listCircles, membershipPda } from "./member";
 import { attestPda } from "./admission";
 import { Cord } from "./quipu";
+import { Tier, getVisibility } from "./visibility";
 
 const seed = (s: string) => new TextEncoder().encode(s);
 const toBytes = (hex: string) => Uint8Array.from((hex.match(/.{1,2}/g) ?? []).map((b) => parseInt(b, 16)));
@@ -28,6 +29,7 @@ export interface TrustPage {
   provisional: boolean; // admitted but not yet confirmed into the votable set
   vouched: "anonymous" | "named" | "none"; // the vouch-proof, if a two-sponsor admission
   cords: Cord[]; // the quipu — never summed
+  quipuTier: Tier; // who may see the quipu (default my-circle)
 }
 
 /** Gather the trust page for a member commitment. `circle` may be given to skip
@@ -106,6 +108,8 @@ export async function getTrustPage(commitmentHex: string, circleHint?: string): 
       sponsor: toHex(Uint8Array.from(r.account.sponsor)),
     }));
 
+  const vis = await getVisibility(new PublicKey(circle), commitmentHex);
+
   return {
     commitment: commitmentHex,
     circle,
@@ -116,5 +120,6 @@ export async function getTrustPage(commitmentHex: string, circleHint?: string): 
     provisional,
     vouched,
     cords,
+    quipuTier: vis.quipu,
   };
 }

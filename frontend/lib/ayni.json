@@ -4847,6 +4847,120 @@
       ]
     },
     {
+      "name": "set_visibility",
+      "docs": [
+        "A member sets their per-element visibility (Epic 5): avatar/quipu/bio each",
+        "to tier 0 (chosen) / 1 (my circle) / 2 (all members). Default is my circle."
+      ],
+      "discriminator": [
+        182,
+        23,
+        73,
+        166,
+        255,
+        234,
+        36,
+        196
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "member_membership"
+          ]
+        },
+        {
+          "name": "member_membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "member_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  105,
+                  115,
+                  105,
+                  98,
+                  105,
+                  108,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "member_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member",
+          "docs": [
+            "A key the member controls (owner or guardian); signs + pays rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "avatar",
+          "type": "u8"
+        },
+        {
+          "name": "quipu",
+          "type": "u8"
+        },
+        {
+          "name": "bio",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "tie_quipu_cord",
       "docs": [
         "The sponsor ties a quipu cord for a completed step (Epic 3): one cord per",
@@ -5852,6 +5966,19 @@
       ]
     },
     {
+      "name": "VisibilityPolicy",
+      "discriminator": [
+        99,
+        151,
+        17,
+        224,
+        212,
+        41,
+        161,
+        36
+      ]
+    },
+    {
       "name": "WingPeer",
       "discriminator": [
         175,
@@ -6080,6 +6207,11 @@
       "code": 6042,
       "name": "InvalidStep",
       "msg": "Quipu step must be between 1 and 12"
+    },
+    {
+      "code": 6043,
+      "name": "InvalidVisibilityTier",
+      "msg": "Visibility tier must be 0 (chosen), 1 (my circle), or 2 (all members)"
     }
   ],
   "types": [
@@ -7746,6 +7878,63 @@
           {
             "name": "required",
             "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VisibilityPolicy",
+      "docs": [
+        "A member's per-element visibility policy (Trust Platform Epic 5): who may see",
+        "each element of their page — the avatar, the quipu, the bio — chosen",
+        "independently. The audience widens through three tiers:",
+        "0 = ChosenOnes   (only members the owner has chosen)",
+        "1 = MyCircle     (members of this Circle) — the DEFAULT for every element",
+        "2 = AllMembers   (any member of the fellowship — the widest audience that",
+        "exists; nothing is ever visible to the public internet)",
+        "",
+        "Absent ⇒ every element defaults to `MyCircle` (tier 1): the protective",
+        "default gives disclosure its social meaning, and opening up is a deliberate",
+        "act. A viewer outside an element's audience sees the element simply absent —",
+        "there is NO \"hidden\" indicator, so a sparse newcomer's page and a private",
+        "elder's page look identical. PDA: [\"visibility\", circle, member].",
+        "",
+        "This is the policy engine. Cryptographic enforcement of `MyCircle` (a ZK",
+        "circle-membership proof on the read path, inheriting Epic 2's machinery) and",
+        "the encrypted per-tier key distribution for avatar/bio are the remaining",
+        "Phase-2 work; the quipu is on-chain and gated by this policy directly."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "avatar",
+            "type": "u8"
+          },
+          {
+            "name": "quipu",
+            "type": "u8"
+          },
+          {
+            "name": "bio",
+            "type": "u8"
           },
           {
             "name": "bump",

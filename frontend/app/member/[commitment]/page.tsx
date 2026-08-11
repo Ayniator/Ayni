@@ -11,17 +11,22 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useWallet } from "@solana/wallet-adapter-react";
 import Identicon from "../../../components/Identicon";
 import QuipuNecklace from "../../../components/QuipuNecklace";
 import { TrustPage, getTrustPage } from "../../../lib/trustpage";
+import { findMyMemberships } from "../../../lib/member";
+import { Viewer, mayView, viewerOwns } from "../../../lib/visibility";
 import { countryByCode } from "../../../lib/countries";
 
 const day = (u: number) => (u ? new Date(u * 1000).toLocaleDateString(undefined, { year: "numeric", month: "long" }) : "");
 
 export default function MemberPage() {
   const params = useParams();
+  const { publicKey } = useWallet();
   const commitment = String(params?.commitment ?? "");
   const [page, setPage] = useState<TrustPage | null>(null);
+  const [viewer, setViewer] = useState<Viewer>({ circles: new Set(), commitments: new Set() });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,6 +38,20 @@ export default function MemberPage() {
       .finally(() => live && setLoading(false));
     return () => { live = false; };
   }, [commitment]);
+
+  useEffect(() => {
+    // The viewer's context: which circles they belong to, and their own
+    // commitments. An unconnected visitor is a member of nothing.
+    if (!publicKey) { setViewer({ circles: new Set(), commitments: new Set() }); return; }
+    let live = true;
+    findMyMemberships(publicKey, [])
+      .then((mine) => live && setViewer({
+        circles: new Set(mine.map((m) => m.circle)),
+        commitments: new Set(mine.map((m) => m.commitment)),
+      }))
+      .catch(() => {});
+    return () => { live = false; };
+  }, [publicKey]);
 
   if (loading) return <p className="muted">Reading the cords…</p>;
   // A page that doesn't resolve reads as a bare page — no "not found" alarm.
@@ -69,10 +88,15 @@ export default function MemberPage() {
         )}
       </div>
 
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>Quipu</h3>
-        <QuipuNecklace cords={page.cords} />
-      </div>
+      {/* The quipu shows only to its audience. Hidden ≡ absent: a viewer outside
+          the audience sees no quipu card and NO "hidden" indicator — identical
+          to a member who simply has no cords. */}
+      {(viewerOwns(page.commitment, viewer) || mayView(page.quipuTier, page.circle, page.commitment, viewer)) && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Quipu</h3>
+          <QuipuNecklace cords={page.cords} />
+        </div>
+      )}
 
       {/* Presence + bio arrive with the disclosure layer (Epic 5 / F59). Shown
           as not-yet-attested rather than faked — the repo's honest-degradation

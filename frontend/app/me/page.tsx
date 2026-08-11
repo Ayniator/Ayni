@@ -42,6 +42,7 @@ import { activateFaucet, getFaucet, hasFaucetGrant, listMenteesOf } from "../../
 import { flushLedgerQueue, recordGrantInLedger } from "../../lib/faucetLedger";
 import { attestAdmission, getTwoSponsorPolicy, hasAttestation, issueProvisionalMembership } from "../../lib/admission";
 import { attestAdmissionAnonymously, castMemberVote, haveVotingKey, newMemberIdentity } from "../../lib/zk-vote";
+import { ALL_MEMBERS, CHOSEN, DEFAULT_VISIBILITY, MY_CIRCLE, TIER_LABEL, Tier, Visibility, getVisibility, setVisibility } from "../../lib/visibility";
 
 const sol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(4).replace(/\.?0+$/, "") || "0";
 const day = (unix: number) => new Date(unix * 1000).toLocaleDateString();
@@ -130,6 +131,7 @@ export default function Me() {
             <WalletCard publicKey={publicKey} balance={balance} memberships={memberships} byPubkey={byPubkey} home={home} />
             <VotesCard wallet={wallet ?? null} memberships={memberships} />
             <MentorshipCard wallet={wallet ?? null} memberships={memberships} />
+            <VisibilityCard wallet={wallet ?? null} memberships={memberships} />
             <ProfileCard />
             <JoinCard
               circles={circles}
@@ -223,7 +225,6 @@ function WalletCard({
               </div>
               <div className="sub">
                 {m.active ? `member through ${day(m.expiresAt)}` : `expired ${day(m.expiresAt)}`}
-                {m.level > 0 ? ` · level ${m.level}` : ""}
               </div>
             </div>
             <span className="pill">{m.active ? "active" : "expired"}</span>
@@ -484,6 +485,63 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
 }
 
 // ---------------------------------------------------------------------------
+
+// Per-element visibility (Epic 5): the member sets who may see each element.
+// Everything defaults to "my circle"; opening up is a deliberate act.
+function VisibilityCard({ wallet, memberships }: { wallet: any; memberships: MyMembership[] }) {
+  const [vis, setVis] = useState<Record<string, Visibility>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  useEffect(() => {
+    for (const m of memberships)
+      getVisibility(new PublicKey(m.circle), m.commitment)
+        .then((v) => setVis((p) => ({ ...p, [m.circle]: v }))).catch(() => {});
+  }, [memberships]);
+
+  async function save(m: MyMembership, v: Visibility) {
+    if (!wallet) return;
+    setBusy(m.circle); setNote(null);
+    try {
+      await setVisibility(wallet, new PublicKey(m.circle), m.commitment, v);
+      setVis((p) => ({ ...p, [m.circle]: v }));
+      setNote({ kind: "ok", text: "Visibility saved." });
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
+
+  if (memberships.length === 0) return null;
+  const tierSelect = (m: MyMembership, key: keyof Visibility, v: Visibility) => (
+    <select value={v[key]} disabled={busy === m.circle}
+      onChange={(e) => save(m, { ...v, [key]: Number(e.target.value) as Tier })}>
+      {[MY_CIRCLE, ALL_MEMBERS, CHOSEN].map((t) => <option key={t} value={t}>{TIER_LABEL[t as Tier]}</option>)}
+    </select>
+  );
+
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>Who can see you</h3>
+      <p className="muted sm" style={{ marginTop: 0 }}>
+        Each element, its own audience. Everything starts at “my circle”; opening
+        up is deliberate. Nothing is ever visible to the public internet.
+      </p>
+      {memberships.map((m) => {
+        const v = vis[m.circle] ?? DEFAULT_VISIBILITY;
+        return (
+          <div key={m.pubkey} style={{ padding: "8px 0", borderTop: "1px solid var(--border)" }}>
+            <div className="name sm">{m.circleName}</div>
+            <div className="row" style={{ gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+              <label className="sm">Avatar {tierSelect(m, "avatar", v)}</label>
+              <label className="sm">Quipu {tierSelect(m, "quipu", v)}</label>
+              <label className="sm">Bio {tierSelect(m, "bio", v)}</label>
+            </div>
+          </div>
+        );
+      })}
+      {note && <p className={note.kind === "err" ? "error" : "ok-note"} style={{ marginBottom: 0 }}>{note.text}</p>}
+    </div>
+  );
+}
 
 function ProfileCard() {
   const [profile, setProfile] = useState(() => getUserProfile());
