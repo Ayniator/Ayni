@@ -32,6 +32,46 @@ files as needed without asking.
 standing intent. Prefer `git -C <dir> …` where convenient, but `cd … && git …`
 is approved.)
 
+## Locked positions — recovery, credential of record, shard handling (binding)
+
+These are settled decisions, not preferences. Any implementation (Epic 11 and
+anything that touches keys/recovery) is built against them; changing one requires
+an explicit written waiver from the user citing the backlog line that authorises
+it, in the commit note.
+
+- **Credential of record = the master secret.** The member's identity is the
+  master secret from which BOTH the Solana keypair and the Semaphore identity
+  commitment derive. The passkey (Epic 8) is a **device-local unlock** for a
+  locally-encrypted keystore — it is never the credential of record and never
+  gates recovery on its own.
+- **Recovery is a purely local event.** Reconstructing the master secret yields a
+  bit-identical secret, so recovery **emits nothing on chain** — no key rotation,
+  no commitment change, no Merkle-root republication, no transaction. If a design
+  emits anything to the anchor during recovery, the design is wrong. This is
+  distinct from F9/F10/F11 (Council/guardian wallet migration), which are visible
+  on-chain rebinds of the `owner` wallet — a different mechanism.
+- **Shard handling.** Shamir 2-of-3 over the master secret via a **vetted,
+  constant-time** library — never hand-written field arithmetic. One shard with
+  the member, one with each of the two sponsors; any two reconstruct, any one
+  reconstructs nothing. A shard at rest is an opaque blob encrypted under a key
+  the holder does not have, indexed by a one-time code the member supplies at
+  recovery. **No shard, blinded or otherwise, on any server. No structure links a
+  shard to a member. No enumeration path** (no list, count, iteration, or debug
+  view) in custody. In-person device-to-device transfer only (QR and NFC), with
+  **no network code path** a shard could take. Burn and re-issue all shards after
+  any recovery that consumed a sponsor shard, after key rotation, and after a
+  holder replacement.
+- **The two flows.** Member-present (own shard + one sponsor) is immediate and
+  must require a **genuine member shard** — two sponsor shards must not
+  masquerade as member-present. Sponsor-only (two sponsor shards) waits out a
+  **7-day challenge window** (configurable, never client-shortenable); a valid
+  cancellation from the member's existing device aborts and burns the shards. The
+  recovery **intent lives off-chain** in the shard-custody layer — it must not be
+  an on-chain, member-linkable event; even the fact a recovery is pending must not
+  be publicly correlatable to an identity.
+- **Provisional members** (one sponsor) have **no sponsor recovery** — no valid
+  2-of-3 split exists. Onboarding must say so before the member finishes.
+
 ## Non-regression (mandatory)
 
 **After every implementation round, run Sentinel** — the non-regression agent

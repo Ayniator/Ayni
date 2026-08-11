@@ -70,6 +70,19 @@ Also grep the codebase and dependencies for forbidden patterns: analytics/teleme
 ### Layer E — Build health
 Lint, typecheck, unit tests, dependency audit (`npm audit` — new criticals fail), bundle-size snapshot (> 15% growth flagged), and docs drift check (`docs/shipped.md` matches reality).
 
+
+### Layer F — Sponsor recovery (Epic 11) — key-shard invariants (adversarial)
+Assert what Layers A–E do not reach. Each is a hard gate; a failure is CRITICAL. Relaxing an assertion requires a commit note citing the backlog line that authorises it — never a quiet edit.
+- **Recovery emits nothing on chain.** Drive both recovery flows end to end and assert **zero transactions** were built or submitted during reconstruction — no key rotation, no commitment write, no Merkle-root republication. Prove it in a test (spy the RPC/`programWith` send path and assert it was never called), not in review.
+- **No shard on any server.** Grep the shard-custody + transfer code for any network sink (`fetch`, `XMLHttpRequest`, `WebSocket`, `navigator.sendBeacon`, a POST body, a cloud-backup API) reachable from a shard value; assert there is **no code path** a shard could take to the network — not merely an unused one.
+- **No structure links a shard to a member.** Dump the custodian's storage and assert it contains no name, address, public key, identity commitment, or admission-correlated timestamp — only opaque blobs keyed by one-time codes.
+- **No enumeration path.** Assert `ShardCustody` exposes no list, count, iteration, or debug view — statically (no such method on the interface/impl) and dynamically (a test that tries to enumerate fails to compile or returns nothing).
+- **The fast path requires a genuine member shard.** Assert two sponsor shards CANNOT masquerade as member-present recovery.
+- **The passkey never gates recovery on its own**, and no biometric byte is ever read or transmitted (grep for biometric/raw-credential handling).
+- **Shard freshness.** Assert all shards are burned + re-issued after any recovery that consumed a sponsor shard, after key rotation, and after a holder replacement (a stale shard must not remain valid).
+- **Challenge window.** Assert the sponsor-only window is not shortenable by any client-supplied parameter, and that the recovery *intent* is not an on-chain, member-linkable event.
+- **Provisional members** cannot start sponsor recovery (only one sponsor exists).
+
 ## 2. Regression baseline
 
 Snapshots (API schemas, DOM assertions, proof fixtures, cost budgets, bundle sizes) live in `tests/sentinel/baselines/`, committed to git. A round may only update a baseline with an explicit line in the report: *what changed, why it is intentional, who asked for it*. Silent baseline updates are themselves reported as CRITICAL.
