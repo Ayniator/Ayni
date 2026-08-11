@@ -1,15 +1,18 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::AyniError;
-use crate::state::{Circle, CircleRootAnchor, MemberTree, RecentRoots};
+use crate::state::{Circle, CircleRootAnchor, FederationChild, MemberTree, RecentRoots};
 
 /// F56 — publish a Circle's current member root under its foundation, so any
 /// Circle in the same federation can verify a visiting member's proof.
-/// Permissionless crank: it copies verified on-chain state (the Circle's own
-/// MemberTree root) — there is nothing a caller could forge. Parentage is
-/// constraint-checked with the same direct-parent rule the federation
-/// governance fixes hardened: only a Circle whose `parent` IS the given
-/// foundation (or the foundation itself) can be anchored under it.
+/// Permissionless crank ONCE THE CHILD IS APPROVED: it copies verified on-chain
+/// state (the Circle's own MemberTree root), so anyone may refresh it — but the
+/// child must first be vouched by a foundation Council seat
+/// (`approve_federation_child` → the `FederationChild` PDA required below).
+/// Self-claimed `parent` is NOT enough: it is permissionless and would let an
+/// attacker anchor a rogue circle's root and forge fellow-member passes
+/// (ultracode CRITICAL, 2026-08-11b). The parentage constraint remains as a
+/// guard alongside the approval.
 pub fn publish_member_root(ctx: Context<PublishMemberRoot>) -> Result<()> {
     let entry = &mut ctx.accounts.anchor_entry;
     entry.foundation = ctx.accounts.foundation.key();
@@ -36,6 +39,18 @@ pub struct PublishMemberRoot<'info> {
             || circle.parent == foundation.key() @ AyniError::Unauthorized
     )]
     pub circle: Box<Account<'info, Circle>>,
+
+    /// The foundation's approval of this child (F56) — created only by a
+    /// foundation Council seat. Its existence at this exact PDA is the consent
+    /// gate: a rogue self-claimed child has no approval, so it cannot be
+    /// anchored. `has_one` re-binds both keys defensively.
+    #[account(
+        has_one = foundation,
+        has_one = circle,
+        seeds = [b"fedchild", foundation.key().as_ref(), circle.key().as_ref()],
+        bump = federation_child.bump
+    )]
+    pub federation_child: Box<Account<'info, FederationChild>>,
 
     #[account(
         has_one = circle,

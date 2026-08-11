@@ -18,11 +18,13 @@
 
 ---
 
-## 0b. Round update — 2026-08-11b (71 instructions) — the anonymity layer
+## 0b. Round update — 2026-08-11b (72 instructions) — the anonymity layer
 
-Verified natively: `anchor build` clean, **71** instruction files; bare
-`anchor test` = **100 passing / 0 failing** (+`epic2`, +`relayer`, +`mailbox`);
-frontend `tsc --noEmit` clean; privacy-sweep green.
+Verified natively: `anchor build` clean, **72** instruction files; bare
+`anchor test` = **102 passing / 0 failing** (+`epic2`, +`relayer`, +`mailbox`);
+frontend `tsc --noEmit` clean; privacy-sweep green. An **ultracode adversarial
+review** followed the first commit; its confirmed findings were fixed in the
+same round (see below).
 
 New this round:
 - **F55 relayer** (`code`, `exec`) — `app/api/relay/route.ts`, `lib/relayer.ts`,
@@ -41,6 +43,13 @@ New this round:
   tamper→null, forward-secrecy, no-network-sink).
 - **F80 UI**, **F71** geolocation removal, **Message::CT_LEN 1040→528** (a latent
   unsendable-tx bug the F55 test surfaced, not just a rent optimization).
+- **Ultracode fixes (post-first-commit, same round):** F56 `approve_federation_child`
+  — a foundation Council seat must vouch a child before its root can be anchored,
+  closing a CRITICAL federation-infiltration hole (self-claimed `parent` was not
+  consent; `tests/epic2.ts` "federation-infiltration fix"); mailbox reads/deletes
+  now authenticated with a **wallet-derived** id (the IK-derived id was
+  attacker-spoofable); relayer gained a **daily-lamports** money cap; and three
+  LOWs (orderedCommitments undefined-guard, MAX_PLAINTEXT, stale 1040 doc refs).
 - Decisions: ADR **0002** (quantum-resistance architecture), **0007**
   (open-membership→bootstrap), **0008** (public rank accepted, user waiver);
   `docs/sybil.md` rewritten; `docs/emerald-table.md` (E3 hexes).

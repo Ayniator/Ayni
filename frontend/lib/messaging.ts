@@ -39,7 +39,11 @@ const KEY_DERIVATION_MSG = "AHA private messaging key v1 — sign to unlock your
 // off-chain where no transaction limit exists).
 const PLAINTEXT_LEN = 512;             // padded envelope length
 const CT_LEN = PLAINTEXT_LEN + 16;     // + NaCl box MAC = 528 (== Message::CT_LEN)
-export const MAX_PLAINTEXT = 300;      // body cap (envelope overhead ~160–210 b)
+// Body cap chosen so even a worst-case JSON-escaped body (every char escaped to
+// 2 bytes) plus the ~210-byte fixed envelope stays under PLAINTEXT_LEN — pad()
+// still throws on overflow as a hard backstop, but this keeps the UI honest so
+// a user never hits that error from a body within the shown limit.
+export const MAX_PLAINTEXT = 140;
 
 export const messagingKeyPda = (owner: PublicKey) =>
   PublicKey.findProgramAddressSync([seed("msgkey"), owner.toBytes()], PROGRAM_ID)[0];

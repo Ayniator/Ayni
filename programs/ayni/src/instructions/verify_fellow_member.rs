@@ -25,17 +25,15 @@ use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 ///   rebuild + publish. Same snapshot semantics member voting accepts.
 /// * The pass proves "an anonymous member of home_circle" — level, standing
 ///   details, and identity stay home. That is the feature, not a gap.
-/// * TRUST LIMIT (ultracode 2026-08-11b): "federation = sharing a foundation
-///   parent" is only as strong as circle creation. `initialize_circle` is
-///   permissionless and `circle.parent` is caller-set, so an attacker can spin
-///   up a fake child under a real foundation, self-issue a membership, anchor
-///   its root (`publish_member_root`), and mint a VisitPass here. This program
-///   therefore does NOT treat a VisitPass as "vetted by the foundation" — it
-///   attests only "a member of SOME circle claiming this foundation as parent."
-///   A host that wants foundation-vetted federation must additionally check the
-///   home circle against the foundation's own approved-children list (F34
-///   governance territory), which is a broader design decision, not a check
-///   this instruction can make cheaply. Documented, not silently assumed away.
+/// * FOUNDATION CONSENT (ultracode CRITICAL fix, 2026-08-11b): a VisitPass means
+///   "a member of a FOUNDATION-APPROVED child," not merely "a member of some
+///   circle self-claiming this foundation as parent." The anchor this reads
+///   (`CircleRootAnchor`) can only be created by `publish_member_root`, which now
+///   requires the foundation's `FederationChild` approval (created by a
+///   foundation Council seat). So a rogue self-claimed child has no anchor and
+///   cannot mint a pass here — closing the federation-infiltration hole that the
+///   raw `parent` field left open (`initialize_circle` is permissionless and
+///   `parent` is caller-set).
 /// * Submit through the relayer: a fee-payer wallet would link the visit to a
 ///   wallet, which is exactly what this exists to avoid.
 pub fn verify_fellow_member(

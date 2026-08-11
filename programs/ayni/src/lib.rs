@@ -103,8 +103,14 @@ pub mod ayni {
         instructions::reinsert_member(ctx, epoch)
     }
 
-    /// F56 — publish this Circle's member root under its foundation
-    /// (permissionless crank).
+    /// F56 — a foundation Council seat vouches a child into its federation
+    /// (the consent `parent` alone cannot give).
+    pub fn approve_federation_child(ctx: Context<ApproveFederationChild>) -> Result<()> {
+        instructions::approve_federation_child(ctx)
+    }
+
+    /// F56 — publish an APPROVED child's member root under its foundation
+    /// (permissionless crank once approved).
     pub fn publish_member_root(ctx: Context<PublishMemberRoot>) -> Result<()> {
         instructions::publish_member_root(ctx)
     }

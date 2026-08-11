@@ -195,12 +195,21 @@ describe("ayni — F54 recent roots / epochs + F56 fellowship anchor", () => {
     const child = await initCircle(foundation, "fed-child", 365 * 24 * 3600);
     await issue(child, makeCommitment(), anchor.web3.Keypair.generate().publicKey);
 
+    // The foundation must APPROVE the child before its root can be anchored.
+    const fedChild = pda(Buffer.from("fedchild"), foundation.toBuffer(), child.toBuffer());
+    await program.methods
+      .approveFederationChild()
+      .accounts({ foundation, circle: child, federationChild: fedChild, seat: seats[0].publicKey })
+      .signers([seats[0]])
+      .rpc();
+
     const anchorEntry = pda(Buffer.from("anchor"), foundation.toBuffer(), child.toBuffer());
     await program.methods
       .publishMemberRoot()
       .accounts({
         foundation,
         circle: child,
+        federationChild: fedChild,
         memberTree: membersPda(child),
         recentRoots: null,
         anchorEntry,
@@ -216,18 +225,39 @@ describe("ayni — F54 recent roots / epochs + F56 fellowship anchor", () => {
     let threw = false;
     try {
       await program.methods
+        .approveFederationChild()
+        .accounts({ foundation: foreign, circle: child, federationChild: pda(Buffer.from("fedchild"), foreign.toBuffer(), child.toBuffer()), seat: seats[0].publicKey })
+        .signers([seats[0]])
+        .rpc();
+    } catch { threw = true; }
+    assert.isTrue(threw, "a foreign foundation cannot approve a child that doesn't name it as parent");
+  });
+
+  // --- F56: infiltration is refused without foundation approval -------------
+  it("publish_member_root refuses an un-approved child (federation-infiltration fix)", async () => {
+    const rootParent = anchor.web3.Keypair.generate().publicKey;
+    const foundation = await initCircle(rootParent, "inf-found", 365 * 24 * 3600);
+    // A rogue circle self-claims the real foundation as parent (permissionless).
+    const rogue = await initCircle(foundation, "inf-rogue", 365 * 24 * 3600);
+    await issue(rogue, makeCommitment(), anchor.web3.Keypair.generate().publicKey);
+
+    // Parentage passes, but there is NO FederationChild approval — anchoring must fail.
+    let threw = false;
+    try {
+      await program.methods
         .publishMemberRoot()
         .accounts({
-          foundation: foreign,
-          circle: child,
-          memberTree: membersPda(child),
+          foundation,
+          circle: rogue,
+          federationChild: pda(Buffer.from("fedchild"), foundation.toBuffer(), rogue.toBuffer()),
+          memberTree: membersPda(rogue),
           recentRoots: null,
-          anchorEntry: pda(Buffer.from("anchor"), foreign.toBuffer(), child.toBuffer()),
+          anchorEntry: pda(Buffer.from("anchor"), foundation.toBuffer(), rogue.toBuffer()),
           caller: payer.publicKey,
         })
         .rpc();
     } catch { threw = true; }
-    assert.isTrue(threw, "anchoring under a foreign foundation must be refused (parentage rule)");
+    assert.isTrue(threw, "a rogue self-claimed child with no foundation approval cannot be anchored");
   });
 
   // --- F56: the visit gate demands a real proof -----------------------------
@@ -238,10 +268,16 @@ describe("ayni — F54 recent roots / epochs + F56 fellowship anchor", () => {
     const host = await initCircle(foundation, "vf-host", 365 * 24 * 3600);
     await issue(home, makeCommitment(), anchor.web3.Keypair.generate().publicKey);
 
+    const fedChild = pda(Buffer.from("fedchild"), foundation.toBuffer(), home.toBuffer());
+    await program.methods
+      .approveFederationChild()
+      .accounts({ foundation, circle: home, federationChild: fedChild, seat: seats[0].publicKey })
+      .signers([seats[0]])
+      .rpc();
     const anchorEntry = pda(Buffer.from("anchor"), foundation.toBuffer(), home.toBuffer());
     await program.methods
       .publishMemberRoot()
-      .accounts({ foundation, circle: home, memberTree: membersPda(home), recentRoots: null, anchorEntry, caller: payer.publicKey })
+      .accounts({ foundation, circle: home, federationChild: fedChild, memberTree: membersPda(home), recentRoots: null, anchorEntry, caller: payer.publicKey })
       .rpc();
 
     const nullifier = makeCommitment();

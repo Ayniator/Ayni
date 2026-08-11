@@ -633,9 +633,12 @@ features:
     checks:
       - cmd: test -f programs/ayni/src/instructions/publish_member_root.rs
       - cmd: test -f programs/ayni/src/instructions/verify_fellow_member.rs
+      - cmd: test -f programs/ayni/src/instructions/approve_federation_child.rs
       - cmd: grep -q "pub struct CircleRootAnchor" programs/ayni/src/state.rs
       - cmd: grep -q "pub struct VisitPass" programs/ayni/src/state.rs
-      - cmd: grep -q "a foreign foundation is refused" tests/epic2.ts
+      # the federation-infiltration fix: a rogue self-claimed child is refused
+      - cmd: grep -q "pub struct FederationChild" programs/ayni/src/state.rs
+      - cmd: grep -q "federation-infiltration fix" tests/epic2.ts
 
   - id: F63
     name: Off-chain sealed-sender mailbox (E7 v1) — no on-chain message record

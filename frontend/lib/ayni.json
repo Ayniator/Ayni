@@ -313,6 +313,76 @@
       "args": []
     },
     {
+      "name": "approve_federation_child",
+      "docs": [
+        "F56 — a foundation Council seat vouches a child into its federation",
+        "(the consent `parent` alone cannot give)."
+      ],
+      "discriminator": [
+        45,
+        15,
+        67,
+        173,
+        53,
+        108,
+        192,
+        22
+      ],
+      "accounts": [
+        {
+          "name": "foundation"
+        },
+        {
+          "name": "circle",
+          "docs": [
+            "The child to admit — must at least name this foundation as parent."
+          ]
+        },
+        {
+          "name": "federation_child",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  100,
+                  99,
+                  104,
+                  105,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "foundation"
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "docs": [
+            "A foundation Council seat — the consent that makes federation real."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "attest_admission",
       "docs": [
         "Attestation A: the parrain attests for the newcomer they sponsor — one",
@@ -3934,8 +4004,8 @@
     {
       "name": "publish_member_root",
       "docs": [
-        "F56 — publish this Circle's member root under its foundation",
-        "(permissionless crank)."
+        "F56 — publish an APPROVED child's member root under its foundation",
+        "(permissionless crank once approved)."
       ],
       "discriminator": [
         41,
@@ -3949,7 +4019,10 @@
       ],
       "accounts": [
         {
-          "name": "foundation"
+          "name": "foundation",
+          "relations": [
+            "federation_child"
+          ]
         },
         {
           "name": "circle",
@@ -3957,9 +4030,44 @@
             "The Circle being anchored — must genuinely belong to this federation."
           ],
           "relations": [
+            "federation_child",
             "member_tree",
             "recent_roots"
           ]
+        },
+        {
+          "name": "federation_child",
+          "docs": [
+            "The foundation's approval of this child (F56) — created only by a",
+            "foundation Council seat. Its existence at this exact PDA is the consent",
+            "gate: a rogue self-claimed child has no approval, so it cannot be",
+            "anchored. `has_one` re-binds both keys defensively."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  100,
+                  99,
+                  104,
+                  105,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "foundation"
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
         },
         {
           "name": "member_tree",
@@ -6593,6 +6701,19 @@
       ]
     },
     {
+      "name": "FederationChild",
+      "discriminator": [
+        67,
+        109,
+        56,
+        195,
+        118,
+        163,
+        139,
+        29
+      ]
+    },
+    {
       "name": "LevelGrant",
       "discriminator": [
         69,
@@ -7934,6 +8055,44 @@
               "`FAUCET_AMOUNT_COOLDOWN` after a change, so an amount can never be aimed",
               "at an individual."
             ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FederationChild",
+      "docs": [
+        "F56 — a foundation's CONSENT that `circle` is genuinely part of its",
+        "federation. Without this, `circle.parent == foundation` proves nothing:",
+        "`initialize_circle` is permissionless and `parent` is caller-set, so an",
+        "attacker could self-claim a real foundation as parent, anchor an",
+        "attacker-controlled root, and forge a fellow-member `VisitPass` at every",
+        "host in the federation (ultracode CRITICAL, 2026-08-11b). This PDA — created",
+        "only by a **foundation Council seat** via `approve_federation_child` — is the",
+        "missing consent: `publish_member_root` requires it, so only foundation-vetted",
+        "children can be anchored, and `verify_fellow_member` (which needs the anchor)",
+        "is transitively gated. `state.rs`'s own note that `parent` is \"a link, never",
+        "an actor\" is why the actor must be this explicit approval. PDA:",
+        "[\"fedchild\", foundation, circle]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "foundation",
+            "type": "pubkey"
+          },
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "approved_at",
             "type": "i64"
           },
           {

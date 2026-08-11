@@ -70,8 +70,8 @@ export const RELAY_ALLOWLIST: Record<string, AllowedIx> = {
   "26f0779c6009c069": { name: "note_root", payerIndex: 3, accountCount: 5, dataLen: 8 },
   // reinsert_member(epoch)
   "4c1e6e44b8f12854": { name: "reinsert_member", payerIndex: 6, accountCount: 8, dataLen: 8 + 8 },
-  // publish_member_root()
-  "291472b35f621d9a": { name: "publish_member_root", payerIndex: 5, accountCount: 7, dataLen: 8 },
+  // publish_member_root() — caller is account index 6 (after the fedchild gate)
+  "291472b35f621d9a": { name: "publish_member_root", payerIndex: 6, accountCount: 8, dataLen: 8 },
   // verify_fellow_member(nullifier, proofs)
   "48a626c4f1542b52": { name: "verify_fellow_member", payerIndex: 5, accountCount: 7, dataLen: 8 + 32 + 64 + 128 + 64 },
 };

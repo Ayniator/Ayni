@@ -182,10 +182,20 @@ async function orderedCommitments(circle: string): Promise<string[]> {
     .map((x: any) => x.c);
 
   if (explicit.size === 0) return fill;
-  const total = explicit.size + fill.length;
+  // Interleave explicit pins with the chronological fill. Guard against a pin
+  // index beyond the current length (e.g. a directly-issued member revoked
+  // between snapshot and now) so we never emit `undefined`: any gap or overrun
+  // is dropped, and the caller's root-equality check catches a genuine mismatch
+  // rather than proving against a corrupt order.
+  const maxIdx = Math.max(...explicit.keys());
+  const total = Math.max(explicit.size + fill.length, maxIdx + 1);
   const out: string[] = [];
   let fi = 0;
-  for (let i = 0; i < total; i++) out.push(explicit.has(i) ? (explicit.get(i) as string) : fill[fi++]);
+  for (let i = 0; i < total; i++) {
+    if (explicit.has(i)) out.push(explicit.get(i) as string);
+    else if (fi < fill.length) out.push(fill[fi++]);
+    // else: a hole (pin index past the fill) — skip rather than push undefined.
+  }
   return out;
 }
 

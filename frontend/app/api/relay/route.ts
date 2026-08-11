@@ -65,19 +65,35 @@ function rateLimited(ip: string): boolean {
   return recent.length > RATE_LIMIT;
 }
 
-// Daily budget: a count, not lamports — rent varies per instruction and the
-// count is what an abuser multiplies. Resets at UTC midnight, per instance.
+// Daily budget: BOTH a transaction count and a LAMPORTS cap, reset at UTC
+// midnight (per instance). The lamports cap is the money backstop — an
+// allowlisted instruction still creates program-owned PDAs whose rent the
+// relayer pays and cannot reclaim (ultracode MEDIUM, 2026-08-11b: a caller can
+// pick the most rent-expensive allowlisted instruction to burn funds). Counting
+// transactions alone doesn't bound the loss; counting lamports does.
 let dayKey = "";
 let dayCount = 0;
-function overDailyBudget(): boolean {
-  const cap = Number(process.env.AHA_RELAYER_DAILY_TXS || 500);
+let daySpent = 0;
+function newDay(): void {
   const today = new Date().toISOString().slice(0, 10);
   if (today !== dayKey) {
     dayKey = today;
     dayCount = 0;
+    daySpent = 0;
   }
+}
+function overDailyTxBudget(): boolean {
+  newDay();
   dayCount += 1;
-  return dayCount > cap;
+  return dayCount > Number(process.env.AHA_RELAYER_DAILY_TXS || 500);
+}
+function overDailyLamports(pending: number): boolean {
+  newDay();
+  const cap = Number(process.env.AHA_RELAYER_DAILY_LAMPORTS || 200_000_000); // ~0.2 SOL/day default
+  return daySpent + pending > cap;
+}
+function recordSpend(lamports: number): void {
+  daySpent += lamports;
 }
 
 export async function GET() {
@@ -91,7 +107,7 @@ export async function POST(req: NextRequest) {
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
   if (rateLimited(ip)) return NextResponse.json({ error: "rate limited" }, { status: 429 });
-  if (overDailyBudget()) return NextResponse.json({ error: "relayer daily budget exhausted" }, { status: 503 });
+  if (overDailyTxBudget()) return NextResponse.json({ error: "relayer daily budget exhausted" }, { status: 503 });
 
   let body: RelayRequest;
   try {
@@ -107,9 +123,14 @@ export async function POST(req: NextRequest) {
 
   // Solvency floor: keep enough to stay operable rather than draining to zero.
   const minBalance = Number(process.env.AHA_RELAYER_MIN_LAMPORTS || 50_000_000);
-  const balance = await conn.getBalance(kp.publicKey);
-  if (balance < minBalance) {
+  const balanceBefore = await conn.getBalance(kp.publicKey);
+  if (balanceBefore < minBalance) {
     return NextResponse.json({ error: "relayer balance too low" }, { status: 503 });
+  }
+  // Pre-flight money cap: if today's spend already hit the lamports budget,
+  // refuse before signing anything.
+  if (overDailyLamports(0)) {
+    return NextResponse.json({ error: "relayer daily lamports budget exhausted" }, { status: 503 });
   }
 
   try {
@@ -127,6 +148,22 @@ export async function POST(req: NextRequest) {
     tx.sign(kp);
     const signature = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false });
     await conn.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+
+    // Charge the ACTUAL cost (fee + any rent) against the daily lamports cap;
+    // once exhausted, further relays are refused until UTC midnight — this is
+    // the money backstop against rent-burn drain.
+    try {
+      const spent = Math.max(0, balanceBefore - (await conn.getBalance(kp.publicKey)));
+      recordSpend(spent);
+      if (overDailyLamports(0)) {
+        // Already over after this tx; the NEXT request will be refused below.
+      }
+    } catch {
+      recordSpend(6000); // conservative fee estimate if the balance re-read fails
+    }
+    if (overDailyLamports(0)) {
+      return NextResponse.json({ signature, warning: "relayer daily lamports budget reached" });
+    }
     return NextResponse.json({ signature });
   } catch (e: any) {
     // Surface the failure class without echoing accounts or data back.

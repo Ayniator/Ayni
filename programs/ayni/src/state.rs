@@ -818,6 +818,30 @@ impl CircleRootAnchor {
     pub const SPACE: usize = 8 + 32 + 32 + 32 + 8 + 8 + 1;
 }
 
+/// F56 — a foundation's CONSENT that `circle` is genuinely part of its
+/// federation. Without this, `circle.parent == foundation` proves nothing:
+/// `initialize_circle` is permissionless and `parent` is caller-set, so an
+/// attacker could self-claim a real foundation as parent, anchor an
+/// attacker-controlled root, and forge a fellow-member `VisitPass` at every
+/// host in the federation (ultracode CRITICAL, 2026-08-11b). This PDA — created
+/// only by a **foundation Council seat** via `approve_federation_child` — is the
+/// missing consent: `publish_member_root` requires it, so only foundation-vetted
+/// children can be anchored, and `verify_fellow_member` (which needs the anchor)
+/// is transitively gated. `state.rs`'s own note that `parent` is "a link, never
+/// an actor" is why the actor must be this explicit approval. PDA:
+/// ["fedchild", foundation, circle].
+#[account]
+pub struct FederationChild {
+    pub foundation: Pubkey,
+    pub circle: Pubkey,
+    pub approved_at: i64,
+    pub bump: u8,
+}
+
+impl FederationChild {
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 1;
+}
+
 /// F56 — proof that AN anonymous member of `home_circle` verified themselves to
 /// `host_circle`. The nullifier is Poseidon(secret, host_circle_field) — one
 /// pass per member per host Circle, deterministic, naming no one. PDA:
