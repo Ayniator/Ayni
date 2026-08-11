@@ -98,6 +98,11 @@ export default function MemberPage() {
         </div>
       )}
 
+      {/* The stone-mark avatar is served from the E5 encrypted profile object
+          (F60) — not yet built, so a visitor sees the neutral silhouette (a bare
+          triangle, never a lock). The audience is the avatar tier; when the
+          served object lands, a permitted viewer gets the real mark here. */}
+
       {/* Presence + bio arrive with the disclosure layer (Epic 5 / F59). Shown
           as not-yet-attested rather than faked — the repo's honest-degradation
           rule. */}

@@ -24,14 +24,30 @@ describe("quipu — knot-date codec + colours", () => {
     assert.equal(knotDateLabel(toKnots(at(2027, 1, 5))), "2027-01-05");
   });
 
-  it("maps steps to the alchemical sequence (provisional boundaries)", () => {
+  it("maps steps to the five alchemical stages (final boundaries)", () => {
+    // nigredo 1–4 (the moral inventory at step 4 stays in the blackening)
     assert.equal(stageOf(1), "nigredo");
-    assert.equal(stageOf(2), "nigredo");
-    assert.equal(stageOf(5), "albedo");
+    assert.equal(stageOf(4), "nigredo");
+    // cauda pavonis 5 — the peacock's tail, on its own
+    assert.equal(stageOf(5), "cauda_pavonis");
+    // albedo 6–7, citrinitas 8–9, rubedo 10–12
+    assert.equal(stageOf(6), "albedo");
+    assert.equal(stageOf(7), "albedo");
     assert.equal(stageOf(8), "citrinitas");
     assert.equal(stageOf(9), "citrinitas");
     assert.equal(stageOf(12), "rubedo");
-    // the whole 1..=12 range yields a colour, none undefined
-    for (let s = 1; s <= 12; s++) assert.isString(colourOf(s).hex);
+  });
+
+  it("paints every step; step 5 is iridescent, the rest solid", () => {
+    for (let s = 1; s <= 12; s++) {
+      const paint = colourOf(s).paint;
+      if (s === 5) {
+        assert.equal(paint.kind, "iridescent");
+        if (paint.kind === "iridescent") assert.isAtLeast(paint.stops.length, 2);
+      } else {
+        assert.equal(paint.kind, "solid");
+        if (paint.kind === "solid") assert.match(paint.hex, /^#[0-9a-fA-F]{6}$/);
+      }
+    }
   });
 });

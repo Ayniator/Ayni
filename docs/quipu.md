@@ -40,28 +40,54 @@ from `step` off-chain, so the mapping can be finalised without a chain change.
 
 ## Colours — the alchemical sequence
 
-The stages are fixed: **nigredo → albedo → citrinitas → rubedo** (black →
-white → yellow → red), the classical alchemical opus, walked as the twelve
-steps are walked.
+Five stages, walked as the twelve steps are walked. The **boundaries are final**
+(settled v0.2) and ship now; only the exact **hex values** stay provisional, for
+the reason given below.
 
-> **⚠ Provisional — needs the Emerald correspondence table.** The exact step
-> boundaries and the precise colour values must be confirmed against the
-> **Emerald correspondence table** (Epic 3: *"Depends on: Emerald correspondence
-> table — needs the color column confirmed"*). That table is **not yet in the
-> repo.** The mapping below follows the epic's own text and is implemented in
-> `frontend/lib/quipu.ts`; when the table lands, change **only** the colour
-> block there — nothing else depends on the specific values.
+| Steps | Stage | Cords | Dye | Paint |
+|---|---|---|---|---|
+| 1–4 | nigredo | 4 | iron-tannate black | solid |
+| 5 | **cauda pavonis** | 1 | indigo · cochineal · weld (3-strand ply) | **iridescent** |
+| 6–7 | albedo | 2 | undyed scoured wool | solid |
+| 8–9 | citrinitas | 2 | weld yellow | solid |
+| 10–12 | rubedo | 3 | madder red | solid |
 
-| Steps | Stage | Colour (provisional) |
-|---|---|---|
-| 1–2 | nigredo | black |
-| 3–7 | albedo | white |
-| 8–9 | citrinitas | yellow |
-| 10–12 | rubedo | red |
+Two boundaries differ from the epic's earlier hedged text, both deliberate:
 
-The one column that is genuinely blocked on the Emerald table is the **exact
-colour value** (and any per-step distinction within a stage); the sequence and
-the rough boundaries above are the epic's own and are safe to ship provisionally.
+- **The moral inventory (step 4) stays in the nigredo.** In Jungian terms the
+  inventory is the encounter with the shadow, the putrefaction — the blackening,
+  not the whitening. The necklace stays dark for four cords. (The earlier text
+  started albedo at step 3, which would have whitened the inventory; that
+  inverts the operation.)
+- **Step 5 is cauda pavonis on its own** — the peacock's tail, the iridescence
+  at the end of the blackening, the first sign the work is alive. Step 5 is the
+  only step whose defining feature is being *witnessed by another person*, the
+  hinge the whole program turns on. It earns its own colour, and that colour is
+  iridescent — hence a three-strand ply, not a single dip, and a gradient in the
+  render rather than a flat stroke (`StagePaint = solid | iridescent` in
+  `frontend/lib/quipu.ts`).
+
+A pleasing accident: the four solid stages land exactly on the four classic
+natural-dye families.
+
+### The hex values — sampled from yarn, not chosen on a monitor
+
+The hexes remain provisional **on purpose**, not for lack of a table. A cord is
+a physical object a member wears for life; the render exists to *depict* it, so
+the colour must be taken from the dyed yarn — choose the hex from the yarn, never
+the yarn from the hex. The values in `STAGE_PAINT` today are dye-representative
+placeholders; `HEXES_ARE_PROVISIONAL` stays true until real samples replace them,
+and that flag now covers **only** the hexes (the boundaries are done).
+
+**Excluded, hard constraint:** turmeric and safflower — however good the first
+dip looks, they fade to nothing in a couple of years, disqualifying for an object
+worn for life.
+
+**Sampling protocol (the one remaining physical task):** dye five sample cords
+(the four solids + the cauda ply); photograph all five in one frame in
+north-facing daylight against a grey card; shoot RAW; white-balance off the card;
+sample a 20×20-pixel average from each cord. Put those five values (four hexes +
+the cauda's strand stops) into `STAGE_PAINT` — nothing else changes.
 
 ## Reading knot-dates (the one-page guide)
 
@@ -105,6 +131,7 @@ draws real knots from the same data.
   one-per-step, 1..=12.
 - ✅ Colour + knot-date logic (`frontend/lib/quipu.ts`), with the codec fully
   specified and tested.
-- 🟡 Colour **values** provisional — awaiting the Emerald correspondence table
+- ✅ Stage **boundaries** final (five stages incl. cauda pavonis).
+- 🟡 Colour **hex values** provisional — awaiting physical dye samples (see the sampling protocol above); the Emerald table never had a colour column, so this is a dyeing task, not a lookup
   (the only external dependency).
 - ⬜ The rendered necklace on the member page is **Epic 4** (the Quipu Page).

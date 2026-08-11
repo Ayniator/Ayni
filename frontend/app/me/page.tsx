@@ -43,6 +43,8 @@ import { flushLedgerQueue, recordGrantInLedger } from "../../lib/faucetLedger";
 import { attestAdmission, getTwoSponsorPolicy, hasAttestation, issueProvisionalMembership } from "../../lib/admission";
 import { attestAdmissionAnonymously, castMemberVote, haveVotingKey, newMemberIdentity } from "../../lib/zk-vote";
 import { ALL_MEMBERS, CHOSEN, DEFAULT_VISIBILITY, MY_CIRCLE, TIER_LABEL, Tier, Visibility, getVisibility, setVisibility } from "../../lib/visibility";
+import { StoneMark } from "../../components/StoneMark";
+import { setStoneMark } from "../../lib/stonemark";
 
 const sol = (lamports: number) => (lamports / LAMPORTS_PER_SOL).toFixed(4).replace(/\.?0+$/, "") || "0";
 const day = (unix: number) => new Date(unix * 1000).toLocaleDateString();
@@ -546,7 +548,16 @@ function VisibilityCard({ wallet, memberships }: { wallet: any; memberships: MyM
 function ProfileCard() {
   const [profile, setProfile] = useState(() => getUserProfile());
   const [busy, setBusy] = useState(false);
+  const [drawing, setDrawing] = useState(false);
   const tzs = useMemo(() => listTimezones(), []);
+
+  function saveMark(url: string) {
+    setStoneMark(url);
+    const next = { ...profile, avatar: url };
+    setProfile(next);
+    setUserProfile(next);
+    setDrawing(false);
+  }
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -597,7 +608,17 @@ function ProfileCard() {
           {tzs.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
         </select>
       </div>
-      <p className="muted sm" style={{ marginBottom: 0 }}>Stored on this device. The avatar replaces your Jazzicon here; the timezone localises message times.</p>
+      {/* Epic 6: draw the stone-mark from the Cavern Ceremony as your avatar — a
+          symbolic sign, not a face, so even "all members" stays anonymity-safe.
+          Its audience is your Epic 5 avatar visibility tier. */}
+      <div style={{ marginTop: 10 }}>
+        {drawing ? (
+          <StoneMark onSave={saveMark} onCancel={() => setDrawing(false)} />
+        ) : (
+          <button className="btn btn-sm btn-ghost" onClick={() => setDrawing(true)}>Draw your stone-mark</button>
+        )}
+      </div>
+      <p className="muted sm" style={{ marginBottom: 0 }}>Stored on this device. The avatar replaces your Jazzicon here; the timezone localises message times. Who sees your avatar is set under “Who can see you”.</p>
     </div>
   );
 }

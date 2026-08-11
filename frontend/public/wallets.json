@@ -1,0 +1,61 @@
+{
+  "_comment": "F67 — the vetted non-custodial wallet list shown at onboarding Step 1. Each wallet is self-custodial (the member holds their own keys/seed phrase; no wallet here holds funds on the member's behalf). Reviewed each equinox — links, store IDs, and the set of wallets are re-checked twice a year (around 20 March and 22 September) and any wallet that has turned custodial, unmaintained, or hostile to Solana is removed. Order here is NOT the display order: WalletChooser shuffles uniformly on every load so no wallet holds a permanent first position (Tradition T6 — no endorsements).",
+  "reviewedEach": "equinox",
+  "wallets": [
+    {
+      "id": "phantom",
+      "name": "Phantom",
+      "custody": "self",
+      "note": "Solana-native; browser extension + mobile.",
+      "links": {
+        "ios": "https://apps.apple.com/app/phantom-crypto-wallet/id1598432977",
+        "android": "https://play.google.com/store/apps/details?id=app.phantom",
+        "web": "https://phantom.app/download"
+      }
+    },
+    {
+      "id": "solflare",
+      "name": "Solflare",
+      "custody": "self",
+      "note": "Solana-native; extension, mobile, and hardware-wallet support.",
+      "links": {
+        "ios": "https://apps.apple.com/app/solflare/id1580902717",
+        "android": "https://play.google.com/store/apps/details?id=com.solflare.mobile",
+        "web": "https://solflare.com/download"
+      }
+    },
+    {
+      "id": "glow",
+      "name": "Glow",
+      "custody": "self",
+      "note": "Solana wallet; iOS app + browser extension. No Android build at last review.",
+      "links": {
+        "ios": "https://apps.apple.com/app/glow-solana-wallet/id1599584512",
+        "android": null,
+        "web": "https://glow.app/download"
+      }
+    },
+    {
+      "id": "trust",
+      "name": "Trust Wallet",
+      "custody": "self",
+      "note": "Multi-chain (Solana included); mobile + browser extension.",
+      "links": {
+        "ios": "https://apps.apple.com/app/trust-crypto-bitcoin-wallet/id1288339409",
+        "android": "https://play.google.com/store/apps/details?id=com.wallet.crypto.trustapp",
+        "web": "https://trustwallet.com/browser-extension"
+      }
+    },
+    {
+      "id": "jupiter",
+      "name": "Jupiter Mobile",
+      "custody": "self",
+      "note": "Solana-native mobile wallet from Jupiter. Mobile only (no extension).",
+      "links": {
+        "ios": "https://apps.apple.com/app/jupiter-mobile/id6484069900",
+        "android": "https://play.google.com/store/apps/details?id=ag.jup.jupiter.android",
+        "web": "https://jup.ag/mobile"
+      }
+    }
+  ]
+}

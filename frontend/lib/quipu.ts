@@ -16,48 +16,80 @@ export const LAST_STEP = 12;
 
 // --- alchemical colours ----------------------------------------------------
 //
-// PROVISIONAL MAPPING. The alchemical sequence (nigredo → albedo → citrinitas
-// → rubedo) is fixed; the exact step boundaries and the precise colour values
-// must be confirmed against the **Emerald correspondence table** (Epic 3
-// "Depends on: Emerald correspondence table — needs the color column
-// confirmed"). That table is not yet in the repo. The stage boundaries below
-// follow the epic's own text ("nigredo black (Steps 1–2), albedo white (middle
-// steps), citrinitas yellow (≈8–9), rubedo red (10–12)"); the hex values are
-// placeholders chosen to read correctly in both themes. When the table lands,
-// change ONLY this block — nothing else depends on the specific values.
+// The stage BOUNDARIES are FINAL (settled by ElectaZ, v0.2) — five stages, not
+// four, and the moral inventory (step 4) stays in the nigredo where it belongs
+// (the encounter with the shadow, the putrefaction — not the whitening), and
+// step 5 becomes cauda pavonis on its own: the peacock's tail, the iridescence
+// at the end of the blackening, the first sign the work is alive. Step 5 is the
+// only step whose defining feature is being witnessed by another, the hinge the
+// program turns on — it earns its own colour.
+//
+//   nigredo        steps 1–4    iron-tannate black       (solid)
+//   cauda pavonis  step  5      indigo·cochineal·weld ply (iridescent)
+//   albedo         steps 6–7    undyed scoured wool        (solid)
+//   citrinitas     steps 8–9    weld yellow                (solid)
+//   rubedo         steps 10–12  madder red                 (solid)
+//
+// The HEX VALUES remain provisional — deliberately, not for lack of a table.
+// A cord is a physical object worn for life; the render exists to depict it, so
+// the hex must be sampled from the DYED YARN, never chosen on a monitor. The
+// settled dyes and the sampling protocol are in docs/quipu.md; the placeholders
+// below are dye-representative and read correctly in both themes. When the yarn
+// is sampled, change ONLY the hex/stops in STAGE_PAINT — the boundaries, the
+// renderer, and everything else stay put.
 
-export type AlchemicalStage = "nigredo" | "albedo" | "citrinitas" | "rubedo";
+export type AlchemicalStage = "nigredo" | "cauda_pavonis" | "albedo" | "citrinitas" | "rubedo";
+
+/** How a cord is painted. Solid stages are a flat stroke; cauda pavonis is
+ *  iridescent (a three-strand ply of indigo, cochineal and weld — iridescence
+ *  cannot come from a single dip), so it needs a gradient, not one hex. */
+export type StagePaint =
+  | { kind: "solid"; hex: string }
+  | { kind: "iridescent"; stops: string[] };
 
 export interface StepColour {
   stage: AlchemicalStage;
   /** Human name of the stage's colour. */
   name: string;
-  /** Placeholder hex — REPLACE from the Emerald table. */
-  hex: string;
+  paint: StagePaint;
 }
 
-/** The stage a step belongs to (provisional boundaries — see note above). */
+/** The stage a step belongs to. Boundaries are FINAL. */
 export function stageOf(step: number): AlchemicalStage {
-  if (step <= 2) return "nigredo";
+  if (step <= 4) return "nigredo";
+  if (step === 5) return "cauda_pavonis";
   if (step <= 7) return "albedo";
   if (step <= 9) return "citrinitas";
   return "rubedo";
 }
 
-const STAGE_COLOUR: Record<AlchemicalStage, StepColour> = {
-  nigredo: { stage: "nigredo", name: "black", hex: "#1a1a1a" },
-  albedo: { stage: "albedo", name: "white", hex: "#f2f0ea" },
-  citrinitas: { stage: "citrinitas", name: "yellow", hex: "#e6b800" },
-  rubedo: { stage: "rubedo", name: "red", hex: "#a01818" },
+const STAGE_PAINT: Record<AlchemicalStage, StepColour> = {
+  // Provisional hexes — sample from the dyed yarn (see docs/quipu.md).
+  nigredo: { stage: "nigredo", name: "iron-tannate black", paint: { kind: "solid", hex: "#1c1a17" } },
+  cauda_pavonis: {
+    stage: "cauda_pavonis",
+    name: "peacock's tail (indigo·cochineal·weld)",
+    paint: { kind: "iridescent", stops: ["#26456e", "#9e2b3f", "#d8b830", "#26456e"] },
+  },
+  albedo: { stage: "albedo", name: "undyed scoured wool", paint: { kind: "solid", hex: "#ece7db" } },
+  citrinitas: { stage: "citrinitas", name: "weld yellow", paint: { kind: "solid", hex: "#d8b830" } },
+  rubedo: { stage: "rubedo", name: "madder red", paint: { kind: "solid", hex: "#a72f2a" } },
 };
 
-/** The cord colour for a step (1..=12). Provisional until the Emerald table. */
+/** The cord colour for a step (1..=12). Boundaries final; hexes provisional. */
 export function colourOf(step: number): StepColour {
-  return STAGE_COLOUR[stageOf(step)];
+  return STAGE_PAINT[stageOf(step)];
 }
 
-/** True while the Emerald table is unconfirmed — the UI shows a quiet note. */
-export const COLOURS_ARE_PROVISIONAL = true;
+/** A single representative hex for a stage (for knots, legends, swatches).
+ *  Solid stages return their hex; the iridescent stage returns its lead stop. */
+export function repHex(c: StepColour): string {
+  return c.paint.kind === "solid" ? c.paint.hex : c.paint.stops[0];
+}
+
+/** Boundaries are final and ship now. Only the HEX VALUES stay provisional —
+ *  pending physical dye samples, per docs/quipu.md. */
+export const HEXES_ARE_PROVISIONAL = true;
 
 // --- knot-dates (Inca quipu positional knots) -------------------------------
 //
