@@ -18,6 +18,30 @@
 
 ---
 
+## 0. Round update — 2026-08-11 (66 instructions)
+
+Verified natively this round (host now has cargo/anchor/solana + portable node 18):
+`anchor build` clean, **66** instruction files, `.so` = **1,189,664 bytes**; bare
+`anchor test` = **83 passing / 0 failing**; frontend `tsc --noEmit` clean; Sentinel
+Layer D privacy-sweep + Layer F (Epic 11) green (NRR-2026-08-11-5, **PASS**).
+
+New / changed since the 58-instruction snapshot below:
+- **E1 two-sponsor admission** instructions (attest_admission, attest_admission_zk,
+  issue_provisional_membership, confirm_admission, set_two_sponsor_admission).
+- **F80 `withdraw_treasury_token`** + `ProposalAction::WithdrawTreasuryToken` —
+  closes a confirmed permanent SPL/Token-2022 fund-lock in `donate_token`
+  (`docs/security-review-2026-08-11.md`). Tested e2e in `tests/audit-fixes.ts`.
+- **Security fixes** (same review): federation parentage binding (2 CRITICAL,
+  `tests/federation.ts`), member_migrate owner-only (HIGH, `tests/cosign.ts`),
+  MigrateWallet seat-dedup + negative-timelock reject (`tests/audit-fixes.ts`).
+- **Epic 11 handover** (F74/F79): `frontend/lib/shardHandover.ts` (pure, no network
+  sink) + `frontend/components/ShardHandover.tsx` (NDEFReader + honest disclosure);
+  `tests/sharding.ts` now 13 cases.
+- **Deploy cost**: `opt-level = "z"` + strip + `anchor-spl` default-features off.
+
+Sections 1–7 below are the Round-1 (2026-08-10) snapshot at `aea1438`; treat this
+section as the current head. `BACKLOG.md`'s 2026-08-11 round note is authoritative.
+
 ## 1. Ground truth: the toolchain
 
 Sentinel Round 1 found **no native toolchain** on this host — no `cargo`,

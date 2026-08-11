@@ -8,33 +8,43 @@
 # test:adversarial, Playwright); none of that exists in this repo, so the layers
 # are mapped onto what is real here. Do not delete a gap to make a round pass.
 
-round: 4
+round: 5
 established: 2026-08-11
-baseline_report: reports/sentinel/NRR-2026-08-11-4.md
-previous_baseline_report: reports/sentinel/NRR-2026-08-10-2.md
+baseline_report: reports/sentinel/NRR-2026-08-11-5.md
+previous_baseline_report: reports/sentinel/NRR-2026-08-11-4.md
 
 # Round F (2026-08-11) was a focused addendum: Layer F (Epic 11 sponsor
 # recovery) coverage only. See reports/sentinel/NRR-2026-08-11-F.md.
 layer_F_report: reports/sentinel/NRR-2026-08-11-F.md
 
-# Round 4 (2026-08-11) verdict: FAIL. Native run (this host has a real
-# toolchain: cargo/anchor-cli 0.31.1/solana-cli 2.1.21/node 18 on PATH — no
-# containers needed this round). Security-fix round (2 CRITICAL + 1 HIGH + 3
-# lower findings, docs/security-review-2026-08-11.md) + Epic 11 handover
-# (F74/F79 in-person QR/NFC codec). Root cause of the FAIL: this round's
-# Anchor.toml flips [provider] cluster localnet -> devnet, which breaks the
-# documented `anchor test`/`make test`/`scripts/test.sh` path outright (anchor
-# no longer starts a local validator; it tries to deploy to devnet and fails
-# on insufficient funds — reproduced directly). With an explicit
-# `--provider.cluster localnet` override the full suite is genuinely green:
-# 80 passing / 0 failing, matching the round's own claimed ground truth
-# exactly (66 instructions, .so 1,189,664 bytes, confirmed by a native
-# `anchor build`). See reports/sentinel/NRR-2026-08-11-4.md for full detail,
-# including a privacy-sweep gate false positive (the word "plausible" in a
-# test description collides with the Plausible-Analytics-SDK substring match)
-# and 3 of 6 security fixes (InvalidTimelock, withdraw_treasury_token/F80,
-# MigrateWallet DuplicateSeat dedup) shipping with no regression test despite
-# the security-review doc claiming fix #6 is tested.
+# Round 4 (2026-08-11) verdict: FAIL, for three reasons: (1) Anchor.toml
+# [provider] cluster flipped localnet -> devnet, breaking bare `anchor test` /
+# `make test`; (2) privacy-sweep.sh false-positived on the English word
+# "plausible" (collides with the Plausible-Analytics substring match) in two
+# new comments; (3) 3 of 6 security-audit fixes (InvalidTimelock, F80
+# withdraw_treasury_token, MigrateWallet DuplicateSeat dedup) shipped with no
+# regression test, one of them (#6) despite the security-review doc claiming
+# it was tested. See reports/sentinel/NRR-2026-08-11-4.md.
+#
+# Round 5 (2026-08-11, commit a3dbfd2) verdict: PASS. All three round-4
+# reasons independently re-verified closed: (1) `grep cluster Anchor.toml` ->
+# "localnet"; bare `anchor test` (no override) spins a real local validator
+# (`.anchor/test-ledger` created fresh) and runs 83 passing / 0 failing,
+# matching the round's own claimed ground truth exactly. (2)
+# `bash tests/sentinel/privacy-sweep.sh` exits 0, all 5 gates pass; the two
+# "plausible" occurrences were reworded to "valid-looking" in
+# frontend/lib/shardHandover.ts:90 and tests/sharding.ts:163 (grep confirms
+# zero "plausible" hits left in any .ts/.rs/.tsx file; the two remaining hits
+# are in this checklist.yaml itself, a .yaml the sweep does not scan). (3)
+# tests/audit-fixes.ts (3 new cases: negative recovery_timelock rejection,
+# MigrateWallet one-holder-per-seat dedup, full donate_token ->
+# withdraw_treasury_token SPL e2e + one-shot replay guard) exists, is wired
+# into Anchor.toml's [scripts] test glob, and all 3 pass natively as part of
+# the same 83-test run. Native rebuild independently confirmed 66
+# instructions, target/deploy/ayni.so = 1,189,664 bytes, frontend
+# `tsc --noEmit` clean, zk-integrity clean, npm audit 0 critical (root: 26
+# findings/0 critical; frontend: 28/0 critical, unchanged shape from prior
+# rounds). See reports/sentinel/NRR-2026-08-11-5.md.
 
 layers:
   E_build_health:
@@ -329,33 +339,40 @@ features:
          automated dump-and-inspect test"
 
   - id: SEC-2026-08-11
-    name: "Round 4 — security audit fixes (2 CRITICAL, 1 HIGH, 3 lower) +
-      new instruction F80 (withdraw_treasury_token)"
+    name: "Security audit fixes (2 CRITICAL, 1 HIGH, 3 lower) + new
+      instruction F80 (withdraw_treasury_token)"
     shipped_round: 4
-    covered_by: [tests/federation.ts, tests/cosign.ts]
+    covered_by: [tests/federation.ts, tests/cosign.ts, tests/audit-fixes.ts]
     cases:
       - "CRITICAL #1/#2: propose/execute_child_close and
          propose/execute_child_rotation reject a foundation whose child.parent
          does not equal foundation.key() (tests/federation.ts, 2 cases, native
-         PASS this round)"
+         PASS)"
       - "HIGH #3: a lone guardian cannot member_migrate an owner-set membership
-         (tests/cosign.ts, 1 new case, native PASS this round)"
+         (tests/cosign.ts, 1 case, native PASS)"
+      - "MEDIUM #4 (InvalidTimelock): initialize_circle rejects a NEGATIVE
+         recovery_timelock; 0 remains an allowed explicit opt-out
+         (tests/audit-fixes.ts, native PASS this round — closes the round-4
+         gap)"
+      - "MEDIUM #5 / F80 (withdraw_treasury_token): full donate_token ->
+         withdraw_treasury_token e2e — 400 donated, 250 withdrawn via an
+         executed 4-of-7 proposal, balances asserted on both sides, PLUS a
+         replay attempt against the drained proposal is refused
+         (tests/audit-fixes.ts, native PASS this round — closes the round-4
+         gap, first-ever coverage for this instruction)"
+      - "LOW #6 (DuplicateSeat dedup on MigrateWallet in execute_proposal.rs):
+         migrating seats[0] -> seats[1] where seats[1] already holds a seat is
+         refused; seat 0 is unchanged after the refused migration
+         (tests/audit-fixes.ts, native PASS this round — closes the round-4
+         gap AND the documentation-accuracy finding: the security-review doc's
+         '1/2/3/6 tested' claim is now true)"
     uncovered:
-      - "MEDIUM #4 (InvalidTimelock — negative recovery_timelock rejected in
-         initialize_circle): NO test. WARNING this round, FAILs round 5 if
-         still uncovered."
-      - "MEDIUM #5 / F80 (new instruction withdraw_treasury_token): NO test at
-         all — zero references to withdrawTreasuryToken anywhere in tests/.
-         WARNING this round (new feature shipped uncovered per spec §4), FAILs
-         round 5 if still uncovered."
-      - "LOW #6 (DuplicateSeat — one-holder-per-seat dedup on MigrateWallet in
-         execute_proposal.rs): NO test, DESPITE docs/security-review-2026-08-11.md
-         explicitly claiming '1/2/3/6' are all tested. Documentation-accuracy
-         finding, not just a coverage gap — flag to the main agent."
       - "execute-time re-assertion in execute_child_close.rs/
          execute_child_rotation.rs (defense-in-depth beyond the propose-time
-         constraint) is never independently exercised — federation.ts only
-         proves the propose-time gate blocks the attack before a vote exists."
+         constraint) is still never independently exercised — federation.ts
+         only proves the propose-time gate blocks the attack before a vote
+         exists. Carried forward, unchanged since round 4 — not a new gap,
+         not escalating (the propose-time gate alone prevents the exploit)."
 
   - id: F74-handover
     name: "Epic 11 — in-person shard handover (QR/NFC codec + honest
@@ -366,9 +383,10 @@ features:
       - "a real shard round-trips through the handover codec exactly (native
          PASS)"
       - "a corrupted or truncated handover payload fails LOUDLY, never a
-         plausible-looking shard (native PASS) — NOTE: this test's own
-         description is what trips the privacy-sweep false positive, see
-         round 4 report Regression #2"
+         valid-looking shard (native PASS) — reworded from \"plausible-
+         looking\" this round to close the round-4 privacy-sweep false-
+         positive (Regression #2); the underlying invariant was never
+         violated, only the gate's regex collided with the English word"
       - "the handover codec is deterministic and DOM/network-free (native
          PASS)"
       - "no-network-sink static gate widened to include shardHandover.ts, per
