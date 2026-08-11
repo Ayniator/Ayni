@@ -34,7 +34,9 @@ import {
 import { emailNote, notifyCircleEmail } from "../../lib/circleEmail";
 import CircleAdmin from "../admin/CircleAdmin";
 import { fileToAvatarDataUrl, getUserProfile, listTimezones, setUserProfile } from "../../lib/profile";
-import { Chip, WingPeerInfo, endWingPeer, establishWingPeer, getWingPeer, listProgressTokens, memberCommitmentOf, milestoneLabel } from "../../lib/peers";
+import { Chip, WingPeerInfo, endWingPeer, establishWingPeer, getWingPeer, listProgressTokens, listQuipuCords, memberCommitmentOf, milestoneLabel } from "../../lib/peers";
+import QuipuNecklace from "../../components/QuipuNecklace";
+import { Cord } from "../../lib/quipu";
 import { MemberProposal, SeatElectionInfo, SEAT_ROLES, listCircleMembers, listMemberProposals, listSeatElections } from "../../lib/admin";
 import { activateFaucet, getFaucet, hasFaucetGrant, listMenteesOf } from "../../lib/faucet";
 import { flushLedgerQueue, recordGrantInLedger } from "../../lib/faucetLedger";
@@ -308,6 +310,7 @@ function VotesCard({ wallet, memberships }: { wallet: any; memberships: MyMember
 function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyMembership[] }) {
   const [wings, setWings] = useState<Record<string, WingPeerInfo | null>>({});
   const [chips, setChips] = useState<Record<string, Chip[]>>({});
+  const [cords, setCords] = useState<Record<string, Cord[]>>({});
   const [wingInput, setWingInput] = useState<Record<string, string>>({});
   const [attestInput, setAttestInput] = useState<Record<string, string>>({});
   // Neophytes I sponsor who can still receive the one-time first-gas grant.
@@ -322,6 +325,7 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
     for (const m of memberships) {
       getWingPeer(m.circle, m.commitment).then((w) => setWings((p) => ({ ...p, [m.circle]: w }))).catch(() => {});
       listProgressTokens(m.circle).then((all) => setChips((p) => ({ ...p, [m.circle]: all.filter((c) => c.member === m.commitment) }))).catch(() => {});
+      listQuipuCords(m.circle).then((all) => setCords((p) => ({ ...p, [m.circle]: all.filter((c) => c.member === m.commitment).map((c) => ({ step: c.step, completedAt: c.completedAt, sponsor: c.sponsor })) }))).catch(() => {});
       // Parrain action (Epic 0): if I'm someone's wing, their faucet grant is
       // unspent, and they have a wallet — offer the one-time activation.
       getFaucet(new PublicKey(m.circle))
@@ -441,6 +445,11 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
         return (
           <div key={m.pubkey} style={{ padding: "10px 0", borderTop: "1px solid var(--border)" }}>
             <div className="name">{m.circleName}</div>
+            {/* The member's quipu (Epic 4): the cords as they hang. A member
+                with none sees the bare cord — a beginning, not an absence. */}
+            <div style={{ marginTop: 4 }}>
+              <QuipuNecklace cords={cords[m.circle] ?? []} height={120} />
+            </div>
             <div className="sub" style={{ marginTop: 4 }}>
               {cs.length ? cs.map((c) => <span key={c.milestone} className="badge badge-alt" style={{ marginRight: 4 }}>🏅 {milestoneLabel(c.milestone)}</span>) : <span className="muted">No chips yet.</span>}
             </div>

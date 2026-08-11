@@ -213,6 +213,23 @@ features:
          adversarial suite — no suite exists to re-run this check
          mechanically next round."
 
+  - id: F58
+    name: Epic 4 — the Quipu page (member trust page)
+    shipped_round: 4
+    covered_by: [tests/quipu.ts]
+    cases:
+      - knot-date codec round-trips (encode/decode) — 4/4 headless
+      - step→alchemical-stage colour mapping over the whole 1..=12 range
+    non_comparative_assertion:
+      - "components/QuipuNecklace.tsx and lib/trustpage.ts read/compute NO score,
+         fraction, %, 'of 12', progress bar, star, or count. The step numeral in
+         the SVG names WHICH step, never how many. A DOM-level Playwright
+         assertion is still the proper gate (no e2e suite yet — Layer A gap)."
+    uncovered:
+      - "no Playwright DOM test asserting the rendered page has no forbidden
+         counts/ratings (Layer A gap — the highest-value E4 coverage)"
+      - bio + service history + ZK presence not built (E5/F59)
+
   - id: F25
     name: Circle email notifications
     covered_by: []
