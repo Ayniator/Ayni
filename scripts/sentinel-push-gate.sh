@@ -34,6 +34,7 @@ cd "$(dirname "$0")/.."
 
 REPORTS="reports/sentinel"
 LATEST="$REPORTS/latest.md"
+REVIEWED="$REPORTS/REVIEWED.md"
 
 say() { printf '%s\n' "$*" >&2; }
 
@@ -56,8 +57,16 @@ if [ -n "${SENTINEL_OVERRIDE:-}" ]; then
     else
       rng="$remote_sha..$local_sha"
     fi
+    # Touching the file was not enough — a blank-line append satisfied it. The
+    # log must actually NAME the tip being pushed, so the entry is about this
+    # push and not decoration.
     if git diff --name-only "$rng" 2>/dev/null | grep -q '^reports/sentinel/OVERRIDES.md$'; then
-      range_touches_log=1
+      tip_short="$(git rev-parse --short "$local_sha" 2>/dev/null || echo "$local_sha")"
+      if grep -qE "\b($local_sha|$tip_short)\b" "$OVERRIDES" 2>/dev/null; then
+        range_touches_log=1
+      else
+        say "  OVERRIDES.md was touched but does not name $tip_short."
+      fi
     fi
   done < /dev/stdin
 
@@ -96,8 +105,17 @@ fi
 # The verdict line looks like: "Verdict: **FAIL**" / "**PASS**" /
 # "**PASS WITH WARNINGS**".
 verdict="$(grep -m1 -iE '^[[:space:]]*Verdict:' "$LATEST" | tr -d '*' | sed -E 's/.*[Vv]erdict:[[:space:]]*//' | tr -d '\r')"
-case "$(printf '%s' "$verdict" | tr '[:lower:]' '[:upper:]')" in
-  PASS*) ;;
+# Exact match only. A prefix glob (PASS*) let "PASS (just kidding, actually
+# FAIL)" through — a verdict is a controlled vocabulary, not a free-text field
+# to be matched loosely. Anything mentioning FAIL is vetoed outright, so a
+# report cannot pass by leading with the right word.
+verdict_uc="$(printf '%s' "$verdict" | tr '[:lower:]' '[:upper:]' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
+case "$verdict_uc" in
+  *FAIL*|*CRITICAL*)
+    verdict_uc="__VETOED__" ;;
+esac
+case "$verdict_uc" in
+  "PASS"|"PASS WITH WARNINGS") ;;
   *)
     say ""
     say "  BLOCKED: the latest Sentinel round did not pass."
@@ -128,7 +146,24 @@ while read -r _localref localsha _remoteref remotesha; do
   fi
   for sha in $(git rev-list "$range" 2>/dev/null); do
     short="$(git rev-parse --short "$sha")"
-    if ! grep -rqE "\b($sha|$short)\b" "$REPORTS" 2>/dev/null; then
+    # A commit cannot name its own SHA, so the registry commit would otherwise
+    # deadlock the gate forever. Exempt commits that touch NOTHING but Sentinel's
+    # own bookkeeping — reports, the registry, the override log, the checklist.
+    # These carry no application change, so "was this reviewed" is not a
+    # meaningful question about them; anything outside that set is still judged.
+    outside="$(git show --pretty=format: --name-only "$sha" 2>/dev/null \
+                | grep -vE '^[[:space:]]*$' \
+                | grep -vE '^(reports/sentinel/|tests/sentinel/checklist\.yaml$)' \
+                | head -1)"
+    if [ -z "$outside" ]; then
+      continue
+    fi
+    # A bare grep across $REPORTS counted a commit as "reviewed" even when a
+    # report named it only to say it was BAD. Require instead a structured
+    # registry line: reports/sentinel/REVIEWED.md, one SHA per line (optionally
+    # "- <sha> note"). Sentinel appends to it when a round genuinely covers a
+    # commit, so mentioning a SHA in prose no longer launders it.
+    if ! grep -qE "^[[:space:]]*[-*]?[[:space:]]*($sha|$short)\b" "$REVIEWED" 2>/dev/null; then
       say "  unreviewed commit: $short $(git log -1 --format=%s "$sha" | cut -c1-60)"
       unreviewed=$((unreviewed + 1))
     fi
