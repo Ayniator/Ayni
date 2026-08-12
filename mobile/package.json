@@ -1,0 +1,21 @@
+{
+  "name": "aha-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AHA / Ayni native mobile shells (Capacitor). v1 loads the deployed web app in the native WebView; see docs/mobile.md.",
+  "scripts": {
+    "sync": "cap sync",
+    "sync:android": "cap sync android",
+    "sync:ios": "cap sync ios",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}

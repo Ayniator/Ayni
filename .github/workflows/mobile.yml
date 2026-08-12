@@ -1,0 +1,116 @@
+# F88/F89 (Epic E12) — native mobile shell builds.
+#
+# Manual trigger ONLY (workflow_dispatch): this workflow must never run on
+# push/PR — a failing required PR workflow was previously removed from this
+# repo and we are not reintroducing that failure mode. Run it from the GitHub
+# UI: Actions -> "Mobile builds" -> "Run workflow".
+#
+# Both jobs produce UNSIGNED artifacts. Store signing requires the user's own
+# Google Play / Apple credentials and keystores, which are NEVER stored in this
+# repository. See docs/mobile.md for the signing + submission checklist.
+
+name: Mobile builds
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android APK (debug + unsigned release)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync web assets + config into android/
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Build unsigned release APK
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aha-android-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload unsigned release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aha-android-release-unsigned-apk
+          path: mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS archive (unsigned)
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ensure iOS platform exists
+        # The ios/ scaffold is committed; `cap add ios` is a no-op fallback in
+        # case it is ever absent (it fails harmlessly when ios/ already exists).
+        run: npx cap add ios || true
+
+      - name: Sync web assets + config into ios/ (runs pod install)
+        run: npx cap sync ios
+
+      - name: Archive (unsigned)
+        working-directory: mobile/ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/App.xcarchive" \
+            archive \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Zip archive
+        working-directory: mobile/ios/App
+        run: zip -r -y App.xcarchive.zip App.xcarchive
+
+      - name: Upload xcarchive
+        uses: actions/upload-artifact@v4
+        with:
+          name: aha-ios-xcarchive-unsigned
+          path: mobile/ios/App/App.xcarchive.zip
+          if-no-files-found: error

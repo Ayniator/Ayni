@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AHA</string>
+    <string name="title_activity_main">AHA</string>
+    <string name="package_name">org.a13z.aha</string>
+    <string name="custom_url_scheme">org.a13z.aha</string>
+</resources>

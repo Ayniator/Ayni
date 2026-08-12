@@ -4,6 +4,7 @@ import Nav from "../components/Nav";
 import WalletProviders from "../components/WalletProviders";
 import SettingsProvider from "../components/SettingsProvider";
 import SeatMessagingGate from "../components/SeatMessagingGate";
+import EmbeddedWalletBoot from "../components/EmbeddedWalletBoot";
 import Footer from "../components/Footer";
 
 export const metadata: Metadata = {
@@ -40,6 +41,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <SettingsProvider>
           <WalletProviders>
+            {/* F86: registers the embedded "AHA Wallet" with the Wallet
+                Standard so it appears in the connect modal like any other. */}
+            <EmbeddedWalletBoot />
             <Nav />
             <SeatMessagingGate />
             <main className="container">{children}</main>

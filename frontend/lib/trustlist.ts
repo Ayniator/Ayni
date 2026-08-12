@@ -22,9 +22,22 @@
 // box secret, so it is a DISTINCT key from the one that opens the inbox: a bug
 // that leaked one does not hand over the other.
 
+// F65 ADDITION — the passkey-wrapped trust/block/mute map. Alongside the
+// original wallet-signature-sealed handle list below (unchanged, still
+// exported), this file now also holds the F64 per-commitment relationship map
+// ("trust" | "block" | "mute"), stored ONLY as a blob sealed by the F65
+// keystore (lib/keystore.ts) under the exact name "trustlist" — never on
+// chain, never in plaintext localStorage, no plaintext copy anywhere at rest.
+//
+// RE-DERIVATION (locked position: losing a passkey never loses identity):
+// if the passkey is lost, this map is simply re-created by re-marking peers
+// in the UI. It is preference data, not identity material; nothing here is
+// unrecoverable and nothing here gates recovery.
+
 import nacl from "tweetnacl";
 import { PublicKey } from "@solana/web3.js";
 import { deriveBoxKeypair } from "./messaging";
+import { passkeyCreated, unlock } from "./keystore";
 
 const seed = (s: string) => new TextEncoder().encode(s);
 const TRUST_KEY = "aha:trust-list"; // localStorage map { ownerBase58 -> sealed }
@@ -84,12 +97,23 @@ function open(key: Uint8Array, sealed: string): string[] {
 
 // --- public API ------------------------------------------------------------
 
-/** The (decrypted) list of handles this wallet trusts. Requires a signature to
- *  derive the at-rest key (session-cached, so at most one prompt). */
-export async function getTrustList(publicKey: PublicKey, signMessage: SignMessage): Promise<string[]> {
-  const sealed = readAll()[publicKey.toBase58()];
-  if (!sealed) return [];
-  return open(await trustKey(publicKey, signMessage), sealed);
+/** F65 form: the passkey-sealed trust/block/mute map for this device.
+ *  Returns {} when no keystore has been created yet (nothing stored). */
+export async function getTrustList(): Promise<TrustEntries>;
+/** Legacy form (unchanged): the wallet-signature-sealed list of trusted
+ *  handles. Requires a signature to derive the at-rest key (session-cached,
+ *  so at most one prompt). */
+export async function getTrustList(publicKey: PublicKey, signMessage: SignMessage): Promise<string[]>;
+export async function getTrustList(
+  publicKey?: PublicKey,
+  signMessage?: SignMessage
+): Promise<TrustEntries | string[]> {
+  if (publicKey && signMessage) {
+    const sealed = readAll()[publicKey.toBase58()];
+    if (!sealed) return [];
+    return open(await trustKey(publicKey, signMessage), sealed);
+  }
+  return readEntries();
 }
 
 /** Replace the whole list (deduped, order-preserving). Returns the new list. */
@@ -125,4 +149,83 @@ export function forgetTrustList(publicKey: PublicKey): void {
   const all = readAll();
   delete all[publicKey.toBase58()];
   writeAll(all);
+}
+
+// ===========================================================================
+// F65 — passkey-wrapped trust/block/mute map (keystore-sealed, F64 seed)
+// ===========================================================================
+//
+// One relationship state per member commitment (or other opaque handle).
+// Stored ONLY as the F65 keystore blob named "trustlist": AES-GCM under the
+// passkey-derived key, in the "aha-keystore" IndexedDB. Never on chain, never
+// in plaintext localStorage. Unlocking prompts the platform biometric at most
+// once per tab session (the keystore session-caches the derived key).
+//
+// If no keystore has been created yet, reads report "nothing marked" (an
+// empty map / false) rather than throwing — a member who never set up the
+// passkey has, observably, marked no one. Writes DO throw, with a pointer to
+// Settings → Security, because silently storing the map anywhere weaker would
+// break the "never in plaintext" rule.
+
+export type TrustState = "trust" | "block" | "mute";
+/** commitment (or opaque handle) -> relationship state */
+export type TrustEntries = Record<string, TrustState>;
+
+const KEYSTORE_BLOB = "trustlist"; // exact name — the keystore has no enumeration
+
+const TRUST_STATES: readonly TrustState[] = ["trust", "block", "mute"];
+
+function parseEntries(bytes: Uint8Array | null): TrustEntries {
+  if (!bytes) return {};
+  try {
+    const parsed = JSON.parse(new TextDecoder().decode(bytes));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: TrustEntries = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (TRUST_STATES.includes(v as TrustState)) out[k] = v as TrustState;
+    }
+    return out;
+  } catch {
+    return {}; // tampered / unparseable → treat as empty, never a mystery throw
+  }
+}
+
+async function readEntries(): Promise<TrustEntries> {
+  if (!(await passkeyCreated())) return {}; // no keystore ⇒ nothing was ever marked
+  const ks = await unlock();
+  return parseEntries(await ks.open(KEYSTORE_BLOB));
+}
+
+async function writeEntries(entries: TrustEntries): Promise<void> {
+  if (!(await passkeyCreated())) {
+    throw new Error(
+      "No device keystore yet — create one in Settings → Security before marking members."
+    );
+  }
+  const ks = await unlock();
+  await ks.seal(KEYSTORE_BLOB, new TextEncoder().encode(JSON.stringify(entries)));
+}
+
+/** Set (or clear, with null) the relationship state for one commitment.
+ *  Returns the updated map. */
+export async function setEntry(commitment: string, state: TrustState | null): Promise<TrustEntries> {
+  const handle = commitment.trim();
+  if (!handle) throw new Error("Empty commitment.");
+  const entries = await readEntries();
+  if (state === null) delete entries[handle];
+  else entries[handle] = state;
+  await writeEntries(entries);
+  return entries;
+}
+
+/** Is this commitment blocked? False when no keystore exists yet. */
+export async function isBlocked(commitment: string): Promise<boolean> {
+  return (await readEntries())[commitment.trim()] === "block";
+}
+
+/** Is this commitment muted? (A block also silences, so callers that only
+ *  check mute still honour a block.) False when no keystore exists yet. */
+export async function isMuted(commitment: string): Promise<boolean> {
+  const s = (await readEntries())[commitment.trim()];
+  return s === "mute" || s === "block";
 }

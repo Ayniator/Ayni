@@ -163,6 +163,12 @@ build/*_0.zkey
 build/*.r1cs
 build/*.sym
 
+# F44 phase-2 ceremony working directory (zkey chains, transcript-in-progress,
+# candidate VKs). Published ceremony artifacts are released deliberately, not
+# committed from here. See docs/ceremony.md + scripts/ceremony/ (which must
+# stay tracked — hence the root-anchored pattern).
+/ceremony/
+
 # graphify knowledge-graph cache (generated)
 graphify-out/
 
@@ -173,3 +179,18 @@ graphify-out/
 desktop.ini
 *:Zone.Identifier
 *.Zone.Identifier
+
+# === Mobile shells (F88/F89, Epic E12) ===
+# The Capacitor android/ and ios/ scaffolds ARE committed (they carry their own
+# .gitignore for generated/synced files). Ignore deps and build outputs only.
+mobile/node_modules/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/app/release/
+mobile/android/local.properties
+mobile/ios/App/Pods/
+mobile/ios/App/build/
+mobile/ios/App/output/
+mobile/ios/App/App/public/
+mobile/*.xcarchive

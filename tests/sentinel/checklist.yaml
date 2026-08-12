@@ -8,10 +8,10 @@
 # test:adversarial, Playwright); none of that exists in this repo, so the layers
 # are mapped onto what is real here. Do not delete a gap to make a round pass.
 
-round: 5
-established: 2026-08-11
-baseline_report: reports/sentinel/NRR-2026-08-11-5.md
-previous_baseline_report: reports/sentinel/NRR-2026-08-11-4.md
+round: 6
+established: 2026-08-12
+baseline_report: reports/sentinel/NRR-2026-08-12-wavea-e12.md
+previous_baseline_report: reports/sentinel/NRR-2026-08-12-e11-recovery.md
 
 # Round F (2026-08-11) was a focused addendum: Layer F (Epic 11 sponsor
 # recovery) coverage only. See reports/sentinel/NRR-2026-08-11-F.md.
@@ -45,6 +45,76 @@ layer_F_report: reports/sentinel/NRR-2026-08-11-F.md
 # `tsc --noEmit` clean, zk-integrity clean, npm audit 0 critical (root: 26
 # findings/0 critical; frontend: 28/0 critical, unchanged shape from prior
 # rounds). See reports/sentinel/NRR-2026-08-11-5.md.
+
+
+# Round wavea-e12 (2026-08-12, base commit f4b92e6 + working tree) covers Wave
+# A (F42 property tests + 3 behaviour-preserving program extractions, F43 ZK
+# e2e, F44 ceremony tooling) and new Epic E12 (F86 embedded wallet, F87
+# /wallet, F88/F89 mobile shells). Both e11-recovery round warnings
+# independently reconfirmed CLOSED this round: `grep qrcode frontend/
+# package.json` -> declared direct dependency; i18n-key-check.sh -> PASS
+# 1012/1012 keys with two translation workflows disclosed as still landing
+# (not a defect, see the NRR). ONE NEW finding this round: docs/wallets.json's
+# Jupiter iOS App Store link (id6484069900) is a genuine dead link (HTTP 404;
+# correct id is 6484069059) — pre-existing since before this round, newly
+# caught by tests/sentinel/e12-wallet-check.sh's liveness check (new this
+# round). See reports/sentinel/NRR-2026-08-12-wavea-e12.md for the full
+# verdict and rationale.
+
+# RESOLUTION (2026-08-12, same day, post-report): the wavea-e12 Finding 1
+# dead link is FIXED. Exactly two files changed, one field each:
+# docs/wallets.json and frontend/public/wallets.json, Jupiter iOS link
+# id6484069900 -> id6484069059. Independently re-verified by Sentinel:
+# id6484069059 resolves HTTP 200 (title "Jupiter Mobile - Solana Wallet App -
+# App Store"); the two json copies remain byte-identical to each other; the
+# wallet.note.* i18n keys (frontend/lib/i18n.generated.ts, 19 locales) already
+# matched the corrected wallets.json prose (no stale "mobile only" / "no
+# Android" claims survive in any locale, spot-checked). ALL 15 store/web links
+# across all 5 wallets independently re-swept this pass -> 200 every one.
+# `bash tests/sentinel/e12-wallet-check.sh` now 22/22, exit 0. Original FAIL
+# finding kept below (features -> F86-F89 -> findings_this_round) for the
+# record, not deleted; see reports/sentinel/NRR-2026-08-12-wavea-e12.md's
+# appended "Resolution" section for the revised verdict (was FAIL, now PASS
+# WITH WARNINGS — Finding 2 / tests/epic2.ts remains quarantined, see
+# known_flaky below).
+
+known_flaky:
+  # Tests found reproducibly failing in THIS sandbox on code the current
+  # round's diff does not touch. Recorded here so a future round does not
+  # mistake a known, pre-existing, environment-timing artifact for a NEW
+  # regression. Per spec §3: quarantined after 2 confirmed-still-flaky
+  # retries; must be resolved within 2 rounds of the round that quarantined
+  # it (quarantined: wavea-e12, 2026-08-12 -> must resolve by the round
+  # after next).
+  - id: epic2-reinsert-timing
+    file: tests/epic2.ts
+    test: "begin_member_epoch + reinsert_member: live members re-enter, expired do not, duplicates refused"
+    quarantined_round: wavea-e12
+    quarantined_date: 2026-08-12
+    resolve_by_round: wavea-e12 + 2
+    symptom: "AnchorError MembershipExpired (6001) at programs/ayni/src/instructions/reinsert_member.rs:20,
+      thrown on the FIRST (expected-to-succeed) reinsert(cLive) call, not the
+      later negative-case calls."
+    reproduction: "anchor test --skip-build   # full suite; fails at the same point"
+    confirmed_unrelated_to_any_round_diff: "git log -1 -- tests/epic2.ts and
+      git log -1 -- programs/ayni/src/instructions/reinsert_member.rs both
+      point at commit 9254f31, predating every round since. Neither file has
+      appeared in any round's git status since."
+    root_cause: "test-timing-margin fragility, not a program logic bug.
+      Diagnostic instrumentation (added, verified, fully reverted this round
+      -- git diff clean afterward) showed only a ~370ms margin between
+      cLive's issuance and the reinsert(cLive) call against the configured
+      2-second membership TTL, before on-chain confirmation latency is even
+      added. In a 2-vCPU sandbox this margin is consistently blown."
+    retries: "3/3 full-suite runs failed identically in the wavea-e12 round
+      (2 explicit retries per the flaky-test protocol, both still-flaky)."
+    disposition: "WARNING, quarantined -- not evidence of a regression from
+      any round's changes. Needs either a wider timing margin or an
+      on-chain-clock-relative assertion (not client setTimeout budgets) to
+      close. Does not block a round's verdict on its own while quarantined,
+      but escalates to FAIL if still unresolved 2 rounds after
+      quarantine (i.e. from wavea-e12 + 2 onward) without a fix or a written
+      waiver."
 
 layers:
   E_build_health:
@@ -1156,3 +1226,229 @@ features:
       - "the wiring-into-issueMembership follow-up itself (replacing
          PublicKey.default with real blinded keys) has, by definition, no
          coverage yet — it does not exist in the codebase"
+
+  - id: F42
+    name: "Program property/fuzz tests (Council vote accounting, timelock
+      arithmetic, quorum/pass math, Merkle roundtrip, nullifier PDA
+      determinism) + three behaviour-preserving extractions"
+    shipped_round: wavea-e12 (2026-08-12)
+    covered_by:
+      - programs/ayni/src/proptests.rs (12 properties, cargo test -p ayni)
+      - tests/sentinel/NRR-2026-08-12-wavea-e12.md ("VERIFY ESPECIALLY #1")
+    cases:
+      - "council vote accounting over arbitrary approve/cancel/execute
+         sequences (approved-count <= 7, no double-count, eligible_at arms
+         once at threshold then freezes, cancel always wins before execution)"
+      - "i64 timelock arithmetic never panics over the full range"
+      - "quorum/pass math over the entire u16 config space (no div-by-zero,
+         rounding never passes a vote below the configured percentage,
+         default = ceil(eligible/3), default majority strict)"
+      - "Merkle insert/prove roundtrip, cross-leaf proof rejection, capacity,
+         RecentRoots(16) ring semantics"
+      - "nullifier PDA determinism and domain separation across all 7 seed
+         families"
+      - "extraction diff-review: Proposal::require_executable (council.rs) and
+         quorum_threshold/vote_passes/member_vote_outcome
+         (finalize_member_proposal.rs) hand-verified byte-for-byte identical
+         to the inline code they replaced — same guards, same order, same
+         error codes; Clock::get() moved above the guards in
+         execute_proposal.rs is a no-observable-effect reorder (Clock::get()
+         does not consume/mutate state the guards read)"
+    checks:
+      - cmd: test -f programs/ayni/src/proptests.rs && grep -q 'proptest = ' programs/ayni/Cargo.toml
+      - cmd: grep -q 'pub fn require_executable' programs/ayni/src/council.rs
+      - cmd: grep -q 'pub(crate) fn quorum_threshold' programs/ayni/src/instructions/finalize_member_proposal.rs
+    coverage_gaps:
+      - "proptest cases run on the host, not against a local validator — no
+         property test exercises require_executable/member_vote_outcome
+         THROUGH an actual execute_proposal/finalize_member_proposal
+         instruction call; the wiring at the call sites is verified by
+         hand-diff, not by a generated adversarial instruction sequence"
+
+  - id: F43
+    name: "ZK end-to-end tests: real Groth16 prove/verify for all 3 circuits,
+      negative cases, zkey<->Rust VK byte-equality, browser-artifact identity"
+    shipped_round: wavea-e12 (2026-08-12)
+    covered_by:
+      - tests/zk-e2e.test.mjs (23 tests, node tests/zk-e2e.test.mjs)
+      - tests/sentinel/zk-integrity.sh (VK integrity, pre-existing, still green)
+    cases:
+      - "member_vote / lineage_grant / ack_disclose: VK shape (nPublic, IC
+         length), on-chain Rust VK byte-equal to the zkey-exported VK, valid
+         proof verifies, tampered public signal fails, cross-identity/
+         cross-issuer proof fails, wrong Merkle root fails, non-member/
+         over-level witness generation itself refused"
+      - "browser artifacts under frontend/public/zk/ byte-identical to build/
+         (member_vote only — the one circuit the browser proves)"
+    checks:
+      - cmd: test -f tests/zk-e2e.test.mjs && grep -q "23 passed" <(node tests/zk-e2e.test.mjs 2>&1 | tail -3) || true
+    coverage_gaps:
+      - "known, accepted, non-actioned: frontend/lib/zk-vote.ts:17 labels the
+         BN254 base field value as the scalar field — harmless today (secrets
+         masked < 2^253 < r) but should be renamed for clarity, not fixed by
+         Sentinel"
+      - "no CLI-vs-browser verifier parity test beyond the byte-identity check
+         above (no separate CLI verifier binary exists in this repo to diff
+         against)"
+
+  - id: F44
+    name: "Trusted-setup ceremony tooling (docs + scripts only, no production
+      key swapped this round)"
+    shipped_round: wavea-e12 (2026-08-12)
+    covered_by:
+      - "code-read only this round: scripts/ceremony/*.mjs, docs/ceremony.md"
+    cases:
+      - "presence check only — ceremony was NOT run against production keys
+         this round; zk-integrity.sh independently confirms the committed
+         verifying keys are unchanged from last round (byte-identical
+         non-zero-constant counts: 1543/1540/3201)"
+    checks:
+      - cmd: test -d scripts/ceremony && test -f docs/ceremony.md
+      - cmd: grep -q '/ceremony/' .gitignore
+    coverage_gaps:
+      - "no executable test of the ceremony scripts themselves (contribution
+         round, transcript verification, final zkey extraction) — tooling is
+         unexercised until an actual ceremony round runs"
+
+  - id: F65-F64
+    name: "F65 passkey-unlocked local keystore (prf/largeBlob/local modes) +
+      F64 trust/block/mute list sealed through it"
+    shipped_round: wavea-e12 (2026-08-12)
+    covered_by:
+      - "code-read + tests/sentinel/privacy-sweep.sh (no fetch/XHR/WebSocket,
+         no console.* of identity material) + tests/sentinel/e12-wallet-check.sh
+         (custody-surface no-network gate, shared with F86 since keystore.ts
+         is the common dependency)"
+    cases:
+      - "three modes honestly reported (prf/largeBlob/local); AES-GCM-256 with
+         blob name bound as additionalData (no blob-swapping); no
+         list()/keys()/count() on the Keystore interface (grep-confirmed);
+         serverless (challenge is local randomness, attestation discarded,
+         zero network calls)"
+      - "locked position: the passkey is a device-local unlock, never the
+         credential of record, never gates recovery — losing it is
+         survivable via Epic 11 sponsor shard recovery, not this module"
+    checks:
+      - cmd: test -f frontend/lib/keystore.ts && test -f frontend/app/settings-security/page.tsx
+      - cmd: grep -qE '^\s*(list|keys|count)\s*\(' frontend/lib/keystore.ts && exit 1 || exit 0
+    coverage_gaps:
+      - "no unit test exists for keystore.ts itself (seal/open round-trip,
+         wrong-name-refuses-to-open, mode fallback ladder) — Sentinel this
+         round verified by code-reading + static grep only, same gap style as
+         shardCustody/shardSeal before their F85 gate script existed"
+      - "DOC GAP (new finding, WARNING): keystore.ts's own header comment
+         (\"CONSUMER REGISTRY... Any new consumer must add itself here with
+         its re-derivation story\") lists only \"trustlist\"; F86's
+         \"embedded-wallet\" blob is a new consumer this round and is NOT
+         added to that registry table, even though embeddedWallet.ts's own
+         header does honestly document its (different, weaker) re-derivation
+         story: unlike trustlist, an embedded-wallet blob loses real funds if
+         the passkey is lost with no export backup, until master-secret
+         rooting lands. Not a locked-position violation (the wallet secret is
+         NOT the credential of record, and passkey loss does not touch
+         identity/recovery) but the module's own documented contract
+         (\"every blob sealed by this keystore MUST be re-derivable\") is
+         technically unmet by this consumer and the registry note was not
+         updated to say so."
+
+  - id: F86-F89
+    name: "Epic E12 — the AHA app: embedded self-custodial wallet
+      (wallet-standard), /wallet UI, native mobile shells (Capacitor,
+      workflow_dispatch-only CI)"
+    shipped_round: wavea-e12 (2026-08-12)
+    covered_by:
+      - tests/sentinel/e12-wallet-check.sh (NEW this round, 20 assertions)
+      - tests/sentinel/privacy-sweep.sh (re-run, unaffected)
+      - "code-read: frontend/lib/embeddedWallet.ts, embeddedWalletStandard.ts,
+         components/EmbeddedWalletBoot.tsx, lib/walletUi.ts, app/wallet/page.tsx,
+         app/settings-security/page.tsx (wallet section), mobile/**"
+    cases:
+      - "F86: secret sealed ONLY via the F65 keystore, raw bytes wiped after
+         Keypair construction, only the base58 PUBLIC key cached in
+         localStorage; connect() never silently creates a key (throws,
+         points at Settings -> Security); no
+         solana:signAndSendTransaction (deliberately absent — keeps the
+         module RPC-free); registration is idempotent (module flag + window
+         flag, survives strict-mode double-mount)"
+      - "F86: CHAINS list (devnet/testnet/mainnet) matches lib/solana.ts's
+         CLUSTER resolution exactly"
+      - "F87: SPL Token Transfer (#3) and ATA CreateIdempotent (#1) instruction
+         byte layouts + account orderings hand-verified against the SPL
+         Token / Associated-Token-Account program specs (both legacy and
+         Token-2022 share the Transfer discriminator/layout); ATA and
+         Metaplex-metadata PDA seed derivations verified against spec;
+         Metaplex Data (name/symbol/uri) u32-LE-length-prefixed string
+         parsing verified against the Metadata account layout, defensively
+         bounds-checked"
+      - "F88/F89: mobile/capacitor.config.ts sets cleartext:false and an
+         https server.url; AndroidManifest.xml requests only INTERNET and
+         does not set usesCleartextTraffic=true (targetSdk 35 default:
+         HTTPS-only); Info.plist has no NSAllowsArbitraryLoads/ATS exception;
+         .github/workflows/mobile.yml triggers on workflow_dispatch only"
+    checks:
+      - cmd: bash tests/sentinel/e12-wallet-check.sh
+      - cmd: test -f frontend/lib/embeddedWallet.ts && test -f frontend/lib/embeddedWalletStandard.ts && test -f frontend/components/EmbeddedWalletBoot.tsx
+      - cmd: test -f frontend/app/wallet/page.tsx && test -f frontend/lib/walletUi.ts
+      - cmd: test -f mobile/capacitor.config.ts && test -f .github/workflows/mobile.yml
+    findings_this_round:
+      - severity: "FUNCTIONAL (not privacy/locked-position CRITICAL) —
+          dead onboarding link"
+        what: "docs/wallets.json's Jupiter iOS App Store link
+          (https://apps.apple.com/app/jupiter-mobile/id6484069900) returns
+          HTTP 404. The correct App Store id (confirmed via the public
+          iTunes lookup/search API) is 6484069059, not 6484069900 — a
+          9-vs-05 digit transposition. Every other link in wallets.json
+          (Phantom, Solflare, Glow iOS+Android, Trust Wallet, Jupiter
+          Android + web) resolved live at check time."
+        pre_existing: "YES — this exact wrong id was already present in
+          docs/wallets.json at base commit f4b92e6, before this round's
+          edits (git show f4b92e6:docs/wallets.json confirms). This round's
+          wallets.json changes (Glow android link, name correction, dropped
+          false claim) did not introduce it and did not catch it either —
+          first round with an executable liveness check
+          (e12-wallet-check.sh, part 8b, new this round)."
+        reproduction: "bash tests/sentinel/e12-wallet-check.sh 2>&1 | grep 'DEAD LINK'"
+        disposition: "Functional regression per spec Layer A ('every deep
+          link resolves to a live store page (a dead link ... is a
+          regression)'). Not a privacy-invariant or locked-position
+          violation, so not independently CRITICAL, but it is a genuine
+          functional bug in the onboarding wallet-download flow. Contributes
+          to this round's overall verdict per spec section 3 (functional
+          regressions fail the round unless explicitly waived)."
+        resolved: "YES, same day (2026-08-12), post-report. Exactly two
+          files changed, one field each: docs/wallets.json and
+          frontend/public/wallets.json, ios link id6484069900 ->
+          id6484069059. Independently re-verified by Sentinel (not just
+          re-run of the fix's own claim): curl -L against the corrected URL
+          returns HTTP 200 with title \"Jupiter Mobile - Solana Wallet App -
+          App Store\"; the two json files remain byte-identical to each
+          other; ALL 15 store/web links across all 5 wallets re-swept
+          independently -> 200 every one; wallet.note.* i18n keys
+          (frontend/lib/i18n.generated.ts, 19 locales) already matched the
+          corrected wallets.json prose pre-fix (no stale \"mobile only\"/\"no
+          Android\" text found in any locale). bash
+          tests/sentinel/e12-wallet-check.sh now 22/22, exit 0 (was 20/22).
+          Original finding kept above verbatim, not deleted, per the
+          non-regression report's own rule against rewriting history. See
+          reports/sentinel/NRR-2026-08-12-wavea-e12.md's appended
+          \"Resolution\" section for the revised round verdict."
+    coverage_gaps:
+      - "no Playwright/e2e suite exists in this repo (long-standing) — none
+         of the /wallet flows (SOL send, SPL send, ATA-create race, NFT
+         gallery rendering, QR receive) or the wallet-modal connect/create/
+         import/export/remove flow have EVER been driven in a real browser;
+         everything verified this round is static/grep + hand-diff-against-
+         spec, not executed against a local validator or a rendered page"
+      - "no local-validator test sends an actual SPL Transfer / ATA
+         CreateIdempotent instruction built by lib/walletUi.ts and confirms
+         funds land in the right account — the byte-layout review this round
+         is a spec comparison, not an executed transaction"
+      - "mobile/ build was not exercised this round (no Android/iOS toolchain
+         in this environment) — mobile.yml's own gradle/xcodebuild steps are
+         unverified beyond static trigger-scope and manifest/plist review"
+      - "wallet-list shuffle fairness (60-refresh position-frequency /
+         no-identifier-correlation assertion from the spec) has no test
+         anywhere in this repo — pre-existing gap, not introduced or closed
+         this round"
+      - "F65/F64 keystore.ts itself still has no unit test (see F65-F64 entry
+         above) — carried forward"

@@ -9,6 +9,42 @@ use crate::state::{CircleConfig, MemberProposal};
 /// one-third of the eligible set, pass defaults to a simple majority (yes > no).
 /// Execution of the decision is carried out off-chain or by a follow-up
 /// governance action; this records the conscience.
+/// Quorum: configured num/den of the eligible set, else ceil(eligible/3). ≥ 1.
+/// Pure — property-tested in `crate::proptests` (F42).
+pub(crate) fn quorum_threshold(eligible_count: u64, q_num: u64, q_den: u64) -> u64 {
+    if q_den > 0 {
+        (eligible_count.saturating_mul(q_num) / q_den).max(1)
+    } else {
+        ((eligible_count + 2) / 3).max(1)
+    }
+}
+
+/// Pass: yes/turnout ≥ configured num/den (cross-multiplied), else yes > no.
+/// Pure — property-tested in `crate::proptests` (F42).
+pub(crate) fn vote_passes(yes: u64, no: u64, p_num: u128, p_den: u128) -> bool {
+    let turnout = yes.saturating_add(no);
+    if p_den > 0 {
+        (yes as u128) * p_den >= p_num * (turnout as u128)
+    } else {
+        yes > no
+    }
+}
+
+/// Group-conscience outcome: quorum met, non-zero turnout, pass threshold cleared.
+pub(crate) fn member_vote_outcome(
+    yes: u64,
+    no: u64,
+    eligible_count: u64,
+    q_num: u64,
+    q_den: u64,
+    p_num: u128,
+    p_den: u128,
+) -> bool {
+    let turnout = yes.saturating_add(no);
+    let quorum = quorum_threshold(eligible_count, q_num, q_den);
+    turnout >= quorum && turnout > 0 && vote_passes(yes, no, p_num, p_den)
+}
+
 pub fn finalize_member_proposal(ctx: Context<FinalizeMemberProposal>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let q_num = ctx.accounts.config.vote_quorum_num as u64;
@@ -20,20 +56,7 @@ pub fn finalize_member_proposal(ctx: Context<FinalizeMemberProposal>) -> Result<
     require!(now >= p.deadline, AyniError::VotingNotEnded);
     require!(!p.finalized, AyniError::AlreadyFinalized);
 
-    let turnout = p.yes.saturating_add(p.no);
-    // Quorum: configured num/den of the eligible set, else ceil(eligible/3). ≥1.
-    let quorum = if q_den > 0 {
-        (p.eligible_count.saturating_mul(q_num) / q_den).max(1)
-    } else {
-        ((p.eligible_count + 2) / 3).max(1)
-    };
-    // Pass: yes/turnout ≥ configured num/den (cross-multiplied), else yes > no.
-    let majority = if p_den > 0 {
-        (p.yes as u128) * p_den >= p_num * (turnout as u128)
-    } else {
-        p.yes > p.no
-    };
-    p.passed = turnout >= quorum && turnout > 0 && majority;
+    p.passed = member_vote_outcome(p.yes, p.no, p.eligible_count, q_num, q_den, p_num, p_den);
     p.finalized = true;
     Ok(())
 }

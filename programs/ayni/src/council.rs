@@ -167,4 +167,20 @@ impl Proposal {
             self.eligible_at = now.saturating_add(recovery_timelock).max(1);
         }
     }
+
+    /// The execution guard shared by `execute_proposal` (and property-tested in
+    /// `crate::proptests`): not yet executed, not cancelled, threshold met, and
+    /// armed with the contest window elapsed. Pure over `(self, threshold, now)`.
+    pub fn require_executable(&self, threshold: u8, now: i64) -> Result<()> {
+        require!(!self.executed, AyniError::AlreadyExecuted);
+        require!(!self.cancelled, AyniError::ProposalCancelled);
+        require!(self.approval_count() >= threshold, AyniError::ThresholdNotMet);
+        // Armed (eligible_at != 0) once threshold was reached; the action must
+        // also wait out the contest window before `now` reaches eligible_at.
+        require!(
+            self.eligible_at != 0 && now >= self.eligible_at,
+            AyniError::TimelockNotElapsed
+        );
+        Ok(())
+    }
 }

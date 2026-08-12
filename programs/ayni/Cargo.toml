@@ -1,6 +1,6 @@
 [package]
 name = "ayni"
-version = "0.5.0"
+version = "0.6.0"
 description = "Ayni — Solana implementation of AHA (Ancestral Humanity Anonymous)"
 edition = "2021"
 license = "AGPL-3.0-or-later"
@@ -31,3 +31,8 @@ anchor-spl = { version = "0.31.1", default-features = false, features = ["token"
 groth16-solana = "0.2.0"
 # Poseidon syscall (moved out of solana-program in Solana 2.x).
 solana-poseidon = "2.3"
+
+[dev-dependencies]
+# F42 property/fuzz tests over the pure vote-accounting / quorum / Merkle /
+# nullifier-PDA logic (src/proptests.rs). Host-only; never in the SBF binary.
+proptest = "1.5"

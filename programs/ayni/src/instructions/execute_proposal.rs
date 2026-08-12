@@ -13,19 +13,10 @@ pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
     let circle = &mut ctx.accounts.circle;
     let proposal = &mut ctx.accounts.proposal;
 
-    require!(!proposal.executed, AyniError::AlreadyExecuted);
-    require!(!proposal.cancelled, AyniError::ProposalCancelled);
-    require!(
-        proposal.approval_count() >= circle.council.threshold,
-        AyniError::ThresholdNotMet
-    );
-    // Armed (eligible_at != 0) once threshold was reached; MigrateWallet must
-    // also wait out the contest window before `now` reaches eligible_at.
+    // Not executed / not cancelled / threshold met / contest window elapsed —
+    // the pure guard lives on `Proposal` so it can be property-tested (F42).
     let now = Clock::get()?.unix_timestamp;
-    require!(
-        proposal.eligible_at != 0 && now >= proposal.eligible_at,
-        AyniError::TimelockNotElapsed
-    );
+    proposal.require_executable(circle.council.threshold, now)?;
 
     match &proposal.action {
         ProposalAction::RotateSeat { seat_index, new_holder } => {

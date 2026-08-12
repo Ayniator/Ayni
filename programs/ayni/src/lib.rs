@@ -18,6 +18,9 @@ pub mod verifying_key;
 pub mod verifying_key_ack;
 pub mod verifying_key_vote;
 
+#[cfg(test)]
+mod proptests;
+
 use council::ProposalAction;
 use instructions::*;
 use instructions::verify_disclosure::DisclosureGate;

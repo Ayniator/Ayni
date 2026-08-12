@@ -18,6 +18,114 @@
 
 ---
 
+## E12 (F86–F89) — the AHA app: embedded wallet + native mobile shells (2026-08-12d)
+
+A new epic: AHA becomes an app you install, with its own wallet — while every
+existing web feature comes along unchanged.
+
+**F86 — embedded wallet core.** A self-custodial wallet registered through the
+**wallet-standard** runtime as "AHA Wallet" (`registerWallet` from
+`@wallet-standard/wallet`, already present transitively — no new dependency).
+Because the whole app talks to wallets through `useWallet()`, **no existing page
+changed**: the embedded wallet simply appears in the wallet modal beside Phantom
+and Solflare. Chains cover devnet/testnet/mainnet (matching what `lib/solana.ts`
+can resolve to). The secret key is sealed **only** through the F65 keystore, raw
+bytes wiped after the `Keypair` is built, and just the *public* key is cached so
+the wallet can appear before unlock. Explicit connect **never silently creates a
+key** — it refuses and points at Settings → Security; auto-connect restores from
+the cached public key with no biometric prompt and defers unlock to the first
+signature. `solana:signAndSendTransaction` is deliberately not implemented: it
+would need an RPC connection inside the wallet module, and wallet-adapter already
+falls back to sign-then-send app-side, which keeps the no-network boundary.
+
+**F87 — `/wallet`.** Wallet-agnostic, so it serves the embedded wallet and any
+external one identically: SOL balance and send (with fee headroom), QR receive
+rendered locally, SPL token list and transfer across **both** Token and
+Token-2022 with hand-encoded instructions and idempotent recipient-ATA creation
+(no `@solana/spl-token` dependency added), and an NFT gallery that parses
+Metaplex metadata PDAs defensively, resolves IPFS images, and isolates failures
+per item.
+
+**F88/F89 — native shells + pipeline.** `mobile/` is a Capacitor project
+(appId `org.a13z.aha`) with android/ and ios/ scaffolds. **v1 deliberately loads
+the deployed web app in the native WebView**, so every feature — reflections,
+board, inbox, recovery, the embedded wallet — ships on mobile from day one; the
+v2 path (bundled static export, deep links, push) is documented rather than
+half-built. `.github/workflows/mobile.yml` is **workflow_dispatch only** (never
+on push/PR, since this repo removed a failing required check): the Android job
+produces debug + unsigned release APKs, the macOS job an unsigned `.xcarchive`,
+both as artifacts. Store signing credentials stay with the user and never enter
+the repo (`docs/mobile.md`).
+
+## F42 / F43 / F65 / F64 — test hardening + passkey keystore (2026-08-12c)
+
+**F42 — property/fuzz tests** (`programs/ayni/src/proptests.rs`, `proptest` 1.5
+dev-dep): 12 properties, `cargo test -p ayni` 12/12 in 7.3s. Council vote
+accounting over arbitrary approve/cancel/execute sequences (approved-count ≤ 7,
+no double-count, `eligible_at` arms once at threshold then freezes, cancel always
+wins before execution); full-range `i64` timelock arithmetic never panics;
+quorum/pass math over the entire `u16` config space (no div-by-zero, rounding can
+never pass a vote below the configured percentage, default = ceil(eligible/3),
+default majority strict); Merkle insert/prove roundtrip, cross-leaf proof
+rejection, capacity, `RecentRoots(16)` ring semantics; nullifier PDA determinism
+and domain separation across all 7 seed families. Three behaviour-preserving
+extractions (`Proposal::require_executable`, `quorum_threshold`, `vote_passes`,
+`member_vote_outcome`) so the logic is testable; original call sites now call
+them. `cargo check --workspace` clean.
+
+**F43 — ZK end-to-end tests** (`tests/zk-e2e.test.mjs`, 23 tests, ~8s): real
+Groth16 prove→verify roundtrips for **all three** circuits plus negative cases
+(tampered signals, nullifier substitution, wrong/empty roots, refused witnesses
+for non-members and over-level grants, forged disclosure values). Verifying-key
+integrity checked byte-for-byte from zkey → in-tree Rust for all three keys, and
+the browser artifacts under `frontend/public/zk/` proven byte-identical to
+`build/` — the prover users run is the prover we test. **No drift found
+anywhere.** Noted for cleanup: `frontend/lib/zk-vote.ts:17` labels the BN254
+*base* field value as the scalar field (harmless today; secrets are masked
+< 2^253 < r).
+
+**F65 — passkey-unlocked local keystore** (`frontend/lib/keystore.ts`): three
+modes, chosen honestly and reported to the member — **prf** (key derived from the
+WebAuthn PRF output at each unlock, never stored), **largeBlob** (secret lives
+inside the credential), **local** (non-extractable AES-GCM key in IndexedDB,
+documented as weaker). AES-GCM-256 with the blob name bound as `additionalData`;
+no enumeration API, mirroring `shardCustody`; serverless (local challenge,
+attestation discarded, zero network calls). `/settings-security` surfaces the
+mode. **The locked position holds:** the passkey is a device-local *unlock*,
+never the credential of record, and never gates recovery — losing it is
+survivable, and Epic 11 shard recovery remains the identity safety net.
+
+**F64 (seeded)** — `frontend/lib/trustlist.ts` gains trust/block/mute per member
+commitment, stored only as a keystore-sealed blob; writes refuse rather than
+silently downgrade to plaintext when no keystore exists. UI consumers remain.
+
+## F44 (partial) — Phase-2 ceremony tooling + runbook (2026-08-12c)
+
+**Tooling and documentation only — no live zkey/VK was swapped; `programs/`
+and `frontend/` untouched.** The ceremony itself (real contributors, published
+transcript, key swap) remains open; the swap is specified as its own
+Sentinel-gated, program-redeploy round (`docs/ceremony.md` §7).
+
+- `scripts/ceremony/{init,contribute,verify,finalize,transcript,common}.mjs` —
+  plain node 18, snarkjs 0.7.6 from `frontend/node_modules`; all output confined
+  to the gitignored `ceremony/` dir (`.gitignore` entry added). `verify.mjs` is
+  tiered (full r1cs+ptau → init+ptau → init-only partial → unverified listing)
+  and states exactly what a verifier machine still needs. `finalize.mjs` applies
+  the beacon, exports the vkey JSON, and **prints** the `verifying_key*.rs` diff
+  (candidate written under `ceremony/`, never to `programs/`). `exec`: dry-run
+  on `member_vote` with 2 simulated contributors + simulated beacon — chain
+  verified (tier 3 partial pass: everything except the ptau-dependent H-section
+  check), tampered-zkey negative test correctly INVALID, VK diff showed only
+  `vk_delta_g2` changing.
+- `docs/ceremony.md` — threat model (1-of-N honest participant; beacon closes
+  last-contributor bias), Mode A (extend current chain) vs Mode B (fresh setup
+  from a public ptau — recommended for mainnet), Solana-blockhash beacon rule,
+  independent verification tiers, and the exact swap-round procedure
+  (`scripts/vk_to_rust.js` + const renames + `tests/sentinel/zk-integrity.sh`).
+- Known gaps for the real ceremony (documented in §8): the original
+  `pot16_final.ptau` and `*.r1cs` are not in git, and the circom version used
+  for the shipped build was never recorded.
+
 ## F85 / F66 — Epic 11 recovery UX + blinded guardian keys (2026-08-12b)
 
 **F85 — the recovery UX** over F72–F78's tested cores. Everything below is

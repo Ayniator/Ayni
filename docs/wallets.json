@@ -28,10 +28,10 @@
       "id": "glow",
       "name": "Glow",
       "custody": "self",
-      "note": "Solana wallet; iOS app + browser extension. No Android build at last review.",
+      "note": "Solana wallet; iOS and Android apps + browser extension.",
       "links": {
         "ios": "https://apps.apple.com/app/glow-solana-wallet/id1599584512",
-        "android": null,
+        "android": "https://play.google.com/store/apps/details?id=com.luma.wallet.prod",
         "web": "https://glow.app/download"
       }
     },
@@ -48,11 +48,11 @@
     },
     {
       "id": "jupiter",
-      "name": "Jupiter Mobile",
+      "name": "Jupiter",
       "custody": "self",
-      "note": "Solana-native mobile wallet from Jupiter. Mobile only (no extension).",
+      "note": "Solana-native mobile wallet from Jupiter.",
       "links": {
-        "ios": "https://apps.apple.com/app/jupiter-mobile/id6484069900",
+        "ios": "https://apps.apple.com/app/jupiter-mobile/id6484069059",
         "android": "https://play.google.com/store/apps/details?id=ag.jup.jupiter.android",
         "web": "https://jup.ag/mobile"
       }
