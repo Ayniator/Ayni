@@ -61,11 +61,19 @@ if [ -n "${SENTINEL_OVERRIDE:-}" ]; then
     # log must actually NAME the tip being pushed, so the entry is about this
     # push and not decoration.
     if git diff --name-only "$rng" 2>/dev/null | grep -q '^reports/sentinel/OVERRIDES.md$'; then
-      tip_short="$(git rev-parse --short "$local_sha" 2>/dev/null || echo "$local_sha")"
-      if grep -qE "\b($local_sha|$tip_short)\b" "$OVERRIDES" 2>/dev/null; then
+      # The entry must NAME a commit in this push — but not necessarily the tip:
+      # the commit that appends the entry cannot contain its own future SHA.
+      # Naming any commit in the range is enough to tie the entry to this push
+      # while keeping it writable.
+      named=0
+      for c in $(git rev-list "$rng" 2>/dev/null); do
+        c_short="$(git rev-parse --short "$c" 2>/dev/null || echo "$c")"
+        if grep -qE "\b($c|$c_short)\b" "$OVERRIDES" 2>/dev/null; then named=1; break; fi
+      done
+      if [ "$named" -eq 1 ]; then
         range_touches_log=1
       else
-        say "  OVERRIDES.md was touched but does not name $tip_short."
+        say "  OVERRIDES.md was touched but names no commit in this push."
       fi
     fi
   done < /dev/stdin

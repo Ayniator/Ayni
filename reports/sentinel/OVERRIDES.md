@@ -38,3 +38,29 @@ reading — the override left no trace anyone else could check. That is precisel
 the weakness this file now closes.
 
 ---
+
+## 2026-08-12 · `3b59ac7`, `4396960` · coordinating session
+
+**Reason:** tests and Sentinel tooling only — no application or program code, and
+nothing that reaches devnet. Verified with
+`git diff --name-only origin/solana..HEAD`.
+
+**Verdict at the time:** FAIL (`NRR-2026-08-12-f60-f61-verify`).
+
+**Why the FAIL did not block these:** the FAIL is carried by the process
+regression and the `epic2-reinsert-timing` flake. `3b59ac7` *fixes* that flake
+(2s → 12s term; Sentinel independently reproduced the fix 6/6 on two isolated
+validators), and `4396960` closes the three bypasses Sentinel demonstrated
+against the gate itself. Holding them back would leave the next session running
+the weaker guard and the red flake.
+
+**What was NOT reviewed:** no Sentinel round has yet reviewed `4396960` — the
+hardened gate went in reacting to Sentinel's own findings, so its fixes are
+verified by targeted adversarial tests (each attack string from the report,
+re-run against the new logic, both directions) but not by a full round. The next
+round should re-attack `scripts/sentinel-push-gate.sh`, especially the new
+registry and the bookkeeping-exemption path, which is new attack surface.
+
+**Attribution:** this session. The shared `Ayniator` git identity still makes
+overrides unattributable at the git level; per-session identities remain an open
+request to the user.
