@@ -37,7 +37,7 @@
   --bg-grad-a: #1c1d3a; --bg-grad-b: #14233a;
   /* Very dark grey bar with white menu titles (explicit, not derived
      from --muted, so nav labels stay legible against it). */
-  --nav-bg: rgba(22, 22, 26, 0.92);
+  --nav-bg: #333333;
   --nav-link: #ffffff;
   --nav-link-hover: #ffffff;
 }
@@ -72,6 +72,7 @@ a:hover { text-decoration: underline; }
   z-index: 1000;
 }
 .nav { flex-wrap: wrap; row-gap: 8px; }
+.nav .brand, .nav .brand:hover { text-decoration: none; }
 .nav .brand { color: var(--nav-link-hover); font-weight: 700; font-size: 18px; display: flex; align-items: center; gap: 9px; white-space: nowrap; flex-shrink: 0; }
 .nav .brand-logo {
   width: 32px; height: 32px; border-radius: 50%; object-fit: contain;

@@ -1,6 +1,6 @@
 {
   "name": "ayni",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "description": "Ayni — Solana implementation of AHA (Ancestral Humanity Anonymous)",
   "license": "MIT",
   "scripts": {
