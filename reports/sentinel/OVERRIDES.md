@@ -203,3 +203,32 @@ next round should still attack them independently.
 
 **Attribution:** this session — accepted as unattributable at the git level under
 the user's waiver of 2026-08-12.
+
+---
+
+## 2026-08-12 · `96786f1` · mobile toolchain install script
+
+**Reason given:** a documentation-grade shell script for the user to run as
+root; installs adb udev rules, a system JDK 21 and `gh`. No application code,
+no program change, nothing deployable, never executed by an agent.
+
+**Verdict at the time:** FAIL (`NRR-2026-08-12-f60-f61-verify2`), carried by the
+open attribution finding — unrelated to this commit.
+
+**What was NOT reviewed:** no round has read the script. It is executed with
+root privileges by a human, so it deserves a read before anyone runs it. It
+adds the GitHub CLI apt repository and a signing key, adds the invoking user to
+`plugdev`, and installs three packages; it creates no keys and touches no
+application code. Next round should confirm it does nothing beyond that.
+
+**Not deployed — and a deploy was deliberately declined this round.**
+`target/deploy/ayni.so` on disk hashes `14d8fe97969373cf…`, which does NOT match
+the bytes on devnet (`309c838e018bbcc3…`, slot 483217663) and does NOT
+correspond to any commit: it was built from another session's UNCOMMITTED work
+in progress (the authority/payer split being extended to `create_post`,
+`tie_quipu_cord`, `set_visibility`, `establish_wing_peer`, `attest_admission`).
+Deploying it would have put unreviewed, uncommitted code onto a live network.
+Devnet remains at the reviewed `dbd1719` build.
+
+**Attribution:** this session; unverifiable at the git level, per the still-open
+attribution finding.
