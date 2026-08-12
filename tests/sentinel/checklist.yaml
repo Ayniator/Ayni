@@ -821,3 +821,36 @@ features:
     checks:
       - cmd: grep -q "acting together, can reconstruct" frontend/components/ShardHandover.tsx
       - cmd: test -f .claude/agents/sentinel.md && test -f backlog/sentinel-agent.md
+
+  # --- 2026-08-12 F81 full-page localisation ---------------------------------
+  - id: F81
+    name: Full-page localisation (19 locales) — page-body t() coverage
+    covered_by: []  # no e2e/Playwright suite exists (Layer A gap, carried
+                     # forward); the static regression gate below is what
+                     # exists today.
+    checks:
+      - cmd: test -f frontend/lib/i18n.generated.ts
+      - cmd: grep -q "PAGE_STRINGS" frontend/lib/i18n.ts
+      - cmd: grep -q '"qu"' frontend/lib/i18n.ts   # Quechua, the 19th locale
+      # Regression gate: every literal t("...") key call site anywhere in the
+      # app must resolve to an English string via curated `en` (i18n.ts) or
+      # PAGE_STRINGS.en (i18n.generated.ts) — otherwise it renders the raw key
+      # string on screen, in every locale including English. A short,
+      # enumerated allow-list of known dynamic (template-literal) call sites
+      # is checked too; see the script header if a new dynamic call site is
+      # added and needs enumerating there.
+      #
+      # STATUS AT 2026-08-12: FAILING — 244 admin.* keys (all of
+      # frontend/app/admin/CircleAdmin.tsx + the /admin redirect page) were
+      # generated into frontend/lib/i18n.generated.ts WITHOUT their "admin."
+      # namespace prefix (e.g. source calls t("admin.config.add") but the
+      # generated dict only has the key "config.add"), so the entire Circle
+      # administration console — mounted for every connected wallet at /me —
+      # renders raw key strings instead of text, in all 19 languages
+      # including English. This regressed working hardcoded-English text that
+      # existed before this round (commit 9254f31). See
+      # reports/sentinel/NRR-2026-08-12-f81-i18n.md. Do not remove or weaken
+      # this check to make a round pass (Sentinel spec §4) — fix the
+      # generated dictionary (add the "admin." prefix to all 244 keys, in all
+      # 19 locale blocks) instead.
+      - cmd: bash tests/sentinel/i18n-key-check.sh

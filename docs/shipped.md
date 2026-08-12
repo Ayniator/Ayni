@@ -122,6 +122,44 @@ no redeploy implication.
 
 ---
 
+## F81 — Full-page localisation, 19 locales (2026-08-12)
+
+Before this round only the app **chrome** (~13 keys: nav, tagline, hero, footer,
+control labels) was localised; every page **body** rendered hardcoded English no
+matter the chosen locale (the reported symptom: picking ไทย/Thai translated only
+the top menu). This round extends `t()` to the bodies of every page —
+`me`, `foundation`, `admin`, `board`, `create`, `onboarding`, `inbox`,
+`reflections`, `documents`, `notifications`, `member` — under per-page key
+namespaces (749 page keys), and **fills all non-English dictionaries**.
+
+- **Quechua (`qu`, "Runa Simi") added** as the 19th language; the switcher now
+  carries en, fr, es, se, th, hi, zh, de, sv, nb, da, ar, lo, dz, bo, my, vi, tl, qu.
+- Page-body strings live in a generated registry (`frontend/lib/i18n.generated.ts`,
+  `PAGE_STRINGS`): `en` (749 keys) + 18 non-English locales, each with the 749 page
+  keys plus the 8 curated `msg.*` keys, all translated. Resolution chain:
+  `DICT[lang] ?? PAGE_STRINGS[lang] ?? en ?? PAGE_STRINGS.en ?? key`, so a missing
+  translation degrades to English, never to a raw key.
+- `Key` loosened from a closed union to `string`; the hand-written `en` dict stays
+  the canonical registry and fallback.
+- Localised the shared messaging-enable UI and added a **Devnet network-mismatch
+  caveat** (`DevnetSignNote`, shown only when `CLUSTER === "devnet"`): tells the
+  member to switch their wallet to Devnet when it warns of a network mismatch.
+- **Honest inbox metadata explainer** — deliberately does **not** claim the
+  contact graph is hidden. The sealed-sender design hides *who wrote* to you, but
+  the v1 relay still sees recipient-side metadata (which mailbox, when); mixing/PIR
+  is the un-shipped v2 step. The copy says exactly that (same discipline as not
+  advertising un-shipped coercion-resistance).
+- Board Circle-picker now lists only Circles the connected wallet **belongs to**
+  (active membership), falling back to the full public list for non-members so the
+  board stays browsable — no cross-member membership leak.
+- Proper nouns (AHA, Ayni, Solana, SOL, Devnet) and dynamic values stay unwrapped.
+
+Frontend/UI only — no program, circuit, or on-chain surface touched; the locked
+recovery/shard positions are untouched. `tsc --noEmit` clean. (`next build` needs
+Node ≥20; sandbox has 18 — environment limitation, not a code issue.)
+
+---
+
 ## 0. Round update — 2026-08-11 (66 instructions)
 
 Verified natively this round (host now has cargo/anchor/solana + portable node 18):
