@@ -30,7 +30,18 @@
 # "<local ref> <local sha> <remote ref> <remote sha>" lines on stdin.
 
 set -uo pipefail
-cd "$(dirname "$0")/.."
+
+# Resolve through the symlink before locating the repo root. git invokes this as
+# .git/hooks/pre-push, so a bare `dirname "$0"` lands in .git/hooks and `cd ..`
+# lands in .git/ — where reports/sentinel/ does not exist. That silently broke
+# every file-based check when run as a hook (and only as a hook), which is
+# exactly the path that matters. Prefer git's own answer for the top level.
+self="$0"
+if command -v readlink >/dev/null 2>&1; then
+  self="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+fi
+root="$(git rev-parse --show-toplevel 2>/dev/null || dirname "$(dirname "$self")")"
+cd "$root" || exit 1
 
 REPORTS="reports/sentinel"
 LATEST="$REPORTS/latest.md"
