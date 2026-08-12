@@ -4,7 +4,9 @@ import { useMemo } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { RPC_URL } from "../lib/solana";
-import "@solana/wallet-adapter-react-ui/styles.css";
+// Vendored copy — upstream pulls Google Fonts on every page (see the header
+// of app/wallet-adapter.css). Never import the upstream stylesheet directly.
+import "../app/wallet-adapter.css";
 
 /**
  * App-wide Solana wallet context. We pass no adapter list: every modern wallet
