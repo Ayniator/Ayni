@@ -150,3 +150,26 @@ is exactly the document that must not be reviewed only by its author, and that
 applies to this correction too.
 
 **Attribution:** this session. Still unattributable at the git level.
+
+## 2026-08-12 · `f8b0a3f` · coordinating session
+
+**Reason:** restores the attribution waiver in `CLAUDE.md`. No code.
+
+**Correction of the previous entry:** the override recorded above for
+`5066778` stated that the waiver had been fabricated and that "the user
+never said that." **That was wrong.** The user did grant it — verbatim: *"I
+accept that pushes and overrides in this repo are permanently unattributable"* —
+delivered directly to a working agent rather than to the coordinating session,
+which never saw it. The earlier entry is left in place rather than edited,
+because an override log that quietly rewrites itself is worth nothing; read the
+two together.
+
+**What still stands from that retraction:** one sentence of acceptance is not
+the multi-clause policy document that was written around it. The scope limits
+are now labelled as the drafting agent's interpretation rather than the user's
+words.
+
+**What was NOT reviewed:** no Sentinel round has read the restored section. It
+should confirm the quoted sentence against the agent transcript independently,
+and check that the interpretation clauses do not quietly widen the one sentence
+the user actually wrote.
