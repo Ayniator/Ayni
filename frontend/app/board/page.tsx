@@ -102,11 +102,20 @@ export default function Board() {
     setBusy("post");
     setNote(null);
     try {
-      const sig = await createPost(
-        wallet, new PublicKey(circle.pubkey), new PublicKey(myMembership.pubkey),
+      // F61: the author is identified by COMMITMENT now, not by a membership
+      // PDA, so the client can resolve which key actually authorises the post —
+      // the connected wallet, or the derived key of a shielded membership.
+      const { signature, relayed } = await createPost(
+        wallet, new PublicKey(circle.pubkey), myMembership.commitment,
         text.trim(), imageCid.trim(), s, e
       );
-      setNote({ kind: "ok", text: t("board.posted"), sig });
+      setNote({
+        kind: "ok",
+        // When the member's own wallet paid, say so: it means this post and
+        // that wallet now sit in one transaction, permanently.
+        text: t("board.posted") + (relayed ? "" : " (paid by your wallet)"),
+        sig: signature,
+      });
       setText(""); setImageCid("");
       load();
     } catch (err: any) {

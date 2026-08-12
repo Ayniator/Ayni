@@ -429,11 +429,31 @@ field to memcmp and the address is uncomputable without the member's secret;
 `owner` is rebound in the SAME instruction to a key derived from the master
 secret (atomic, so no window exists where the tag is written and the wallet is
 still bound). `findMyMemberships` resolves both generations. NO layout change,
-so no account migration. **Honestly still open**: shielding is OPT-IN and no UI
-exposes it, so existing memberships stay enumerable until they shield; frontend
-write paths other than profile/grant do not yet carry the derived signer;
-transaction history still links wallet↔membership (fees are not relayed);
-`recovery_keys` remain enumerable by the same attack. `docs/visibility.md`.) | Hidden ≡ absent: no lock icons, no "this is private" indicators, identical layout for a sparse newcomer and a private elder. Retrofit so nothing is readable by an unconnected visitor — today `/board` renders posts and author identicons with no wallet connected (posting is gated, reading is not), `Membership.owner` wallets are enumerable via memcmp, and shared material is served through a public IPFS gateway. |
+so no account migration. **2026-08-12 (R2) — the mechanism became a usable
+feature.** Previously `shieldedSigner` had zero call sites, there was no UI, and
+every member-signed write still assumed `owner == connected wallet`, so a member
+who shielded lost posting, cords, visibility, wing bonds and attestations — and
+therefore nobody shielded and the leak stayed open in practice. Now:
+`memberAuthority()` (`frontend/lib/shielded.ts`) resolves owner / derived key /
+guardian per membership and every write path is threaded through it
+(`createPost`, `setVisibility`, `establishWingPeer`, `endWingPeer`,
+`tieQuipuCord`, `attestAdmission`, `publishProfile`, `grantElementKeys`); the
+five instructions that made the member pay their own rent now take a separate
+`payer`, so the derived key never needs a lamport; the **F55 relayer** pays,
+via a policy extension allowing exactly ONE pinned co-signer per instruction
+(`authorityIndex`) — the relayer itself may never be the authority, and its
+signature still only means "paid". A shielded member's write therefore contains
+the relayer and the derived key and no wallet of theirs at all. A shield UI on
+`/me` states the cost before the member commits. `/recovery/setup` now shards
+the same keystore-sealed master the shield derives from, and `/recovery` adopts
+the reconstructed one, so shielding costs no recoverability.
+**Honestly still open**: shielding is OPT-IN (shield-at-issuance is the end
+state); the shield transaction is signed by the wallet being unbound, so
+transaction history links that wallet↔membership permanently — only
+shield-at-issuance fixes it; with NO relayer configured the client falls back to
+wallet-paid and says so in the UI; shielded-ness and its count remain public;
+`recovery_keys` remain enumerable by the same attack. `docs/visibility.md`
+§3b/§4.) | Hidden ≡ absent: no lock icons, no "this is private" indicators, identical layout for a sparse newcomer and a private elder. Retrofit so nothing is readable by an unconnected visitor — today `/board` renders posts and author identicons with no wallet connected (posting is gated, reading is not), `Membership.owner` wallets are enumerable via memcmp, and shared material is served through a public IPFS gateway. |
 
 ### E6 — avatar / stone-mark
 | # | Epic | Item | Status | Notes |

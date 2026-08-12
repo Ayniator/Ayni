@@ -4,6 +4,7 @@
 
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { PROGRAM_ID, SigningWallet, findMyMemberships, membershipPda, programWith, readOnlyProgram } from "./member";
+import { memberAuthority, sendMemberTx } from "./shielded";
 
 const seed = (s: string) => new TextEncoder().encode(s);
 const toBytes = (hex: string) => Uint8Array.from((hex.match(/.{1,2}/g) ?? []).map((b) => parseInt(b, 16)));
@@ -32,32 +33,48 @@ export async function memberCommitmentOf(circle: string, wallet: string): Promis
 
 // --- WingPeer ---
 
-export async function establishWingPeer(wallet: SigningWallet, circle: PublicKey, menteeHex: string, wingHex: string): Promise<string> {
+/** The mentee chooses their wing. Authorised by whichever key the MENTEE's
+ *  membership answers to — the derived key when it is shielded (F61), so a
+ *  shielded member does not lose the ability to choose a sponsor. */
+export async function establishWingPeer(wallet: SigningWallet, circle: PublicKey, menteeHex: string, wingHex: string): Promise<{ signature: string; relayed: boolean }> {
   const mentee = toBytes(menteeHex);
   const wing = toBytes(wingHex);
-  return programWith(wallet)
-    .methods.establishWingPeer()
-    .accounts({
-      circle,
-      menteeMembership: membershipPda(circle, mentee),
-      wingMembership: membershipPda(circle, wing),
-      wingPeer: wingPeerPda(circle, mentee),
-      signer: wallet.publicKey,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
+  const auth = await memberAuthority(wallet, circle, menteeHex);
+  const program = programWith(wallet);
+  return sendMemberTx(wallet, auth, (payer) =>
+    program.methods
+      .establishWingPeer()
+      .accounts({
+        circle,
+        menteeMembership: membershipPda(circle, mentee),
+        wingMembership: membershipPda(circle, wing),
+        wingPeer: wingPeerPda(circle, mentee),
+        signer: auth.authority,
+        payer,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction()
+  );
 }
 
-export async function endWingPeer(wallet: SigningWallet, circle: PublicKey, menteeHex: string, myHex: string): Promise<string> {
-  return programWith(wallet)
-    .methods.endWingPeer()
-    .accounts({
-      circle,
-      wingPeer: wingPeerPda(circle, toBytes(menteeHex)),
-      membership: membershipPda(circle, toBytes(myHex)),
-      signer: wallet.publicKey,
-    })
-    .rpc();
+/** Either party ends the bond. `myHex` is the SIGNER's own membership, so the
+ *  authority is resolved against that one — a shielded wing can end a bond for
+ *  a mentee who is not shielded, and vice versa. No account is created here, so
+ *  the relayer (when present) is the transaction fee-payer only. */
+export async function endWingPeer(wallet: SigningWallet, circle: PublicKey, menteeHex: string, myHex: string): Promise<{ signature: string; relayed: boolean }> {
+  const auth = await memberAuthority(wallet, circle, myHex);
+  const program = programWith(wallet);
+  return sendMemberTx(wallet, auth, () =>
+    program.methods
+      .endWingPeer()
+      .accounts({
+        circle,
+        wingPeer: wingPeerPda(circle, toBytes(menteeHex)),
+        membership: membershipPda(circle, toBytes(myHex)),
+        signer: auth.authority,
+      })
+      .instruction()
+  );
 }
 
 export interface WingPeerInfo { wing: string; active: boolean; establishedAt: number }
@@ -108,21 +125,29 @@ export const quipuCordPda = (circle: PublicKey, member: Uint8Array, step: number
   PublicKey.findProgramAddressSync([seed("quipu"), circle.toBytes(), member, Uint8Array.of(step)], PROGRAM_ID)[0];
 
 /** The sponsor (the member's wing) ties a cord for a completed step (1..=12). */
-export async function tieQuipuCord(wallet: SigningWallet, circle: PublicKey, memberHex: string, sponsorHex: string, step: number): Promise<string> {
+export async function tieQuipuCord(wallet: SigningWallet, circle: PublicKey, memberHex: string, sponsorHex: string, step: number): Promise<{ signature: string; relayed: boolean }> {
   const member = toBytes(memberHex);
   const sponsor = toBytes(sponsorHex);
-  return programWith(wallet)
-    .methods.tieQuipuCord(step)
-    .accounts({
-      circle,
-      memberMembership: membershipPda(circle, member),
-      sponsorMembership: membershipPda(circle, sponsor),
-      wingPeer: wingPeerPda(circle, member),
-      cord: quipuCordPda(circle, member, step),
-      sponsor: wallet.publicKey,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
+  // The SPONSOR signs the cord, so the authority is resolved against the
+  // sponsor's membership — a shielded sponsor keeps the one act that is theirs
+  // alone to perform.
+  const auth = await memberAuthority(wallet, circle, sponsorHex);
+  const program = programWith(wallet);
+  return sendMemberTx(wallet, auth, (payer) =>
+    program.methods
+      .tieQuipuCord(step)
+      .accounts({
+        circle,
+        memberMembership: membershipPda(circle, member),
+        sponsorMembership: membershipPda(circle, sponsor),
+        wingPeer: wingPeerPda(circle, member),
+        cord: quipuCordPda(circle, member, step),
+        sponsor: auth.authority,
+        payer,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction()
+  );
 }
 
 export interface CordRow { member: string; step: number; completedAt: number; sponsor: string }

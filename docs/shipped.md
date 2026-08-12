@@ -50,14 +50,54 @@ audience graph materialises.
 | Enumeration regression tests (before/after memcmp, index holds no wallet, drop names nobody, hidden ≡ absent, epoch revocation) | `tests/epic5.ts` | code |
 | Design, before/after enumerability table, migration, stated limits | `docs/visibility.md` | code |
 
-**Stated honestly, not closed:** transaction history still links a wallet to a
-membership it signs for (fees are not relayed — the shield tx itself is signed by
-the wallet being unbound); shielded-ness and its count are public; **unshielded
-memberships remain exactly as enumerable as before** (shielding is opt-in, no UI
-yet, and frontend write paths other than profile/grant do not yet carry the
-derived signer); `recovery_keys` are still memcmp-enumerable by the same attack;
-granting is O(audience), so wide tiers still depend on the owner granting rather
-than on a proof. See `docs/visibility.md` §1 and §4.
+**Stated honestly, not closed (as of this first round):** transaction history
+still links a wallet to a membership it signs for; shielded-ness and its count
+are public; **unshielded memberships remain exactly as enumerable as before**;
+`recovery_keys` are still memcmp-enumerable by the same attack; granting is
+O(audience). See `docs/visibility.md` §1 and §4.
+
+## F61-R2 — shielding becomes a feature a member can actually use (2026-08-12)
+
+The round above shipped the *mechanism* and no member could use it.
+`shieldedSigner` appeared in exactly one file and no call site; there was no UI;
+`create_post`, `tie_quipu_cord`, `set_visibility`, wing-peer and attestation
+paths all still assumed `owner == connected wallet`. So a member who shielded
+lost those actions, and because nothing shielded, the roster leak stayed open in
+practice. Honest status then: "mechanism built, feature not delivered."
+
+**Shipped:**
+
+| Piece | Where | Verified |
+|---|---|---|
+| Separate rent `payer` on the five member-signed instructions that lacked one, so the authority account never needs lamports | `instructions/{create_post,tie_quipu_cord,set_visibility,establish_wing_peer,attest_admission}.rs` | `cargo check --workspace` clean, `anchor build` clean (no SBF stack-frame warning), `cargo test -p ayni --lib` 22/22 |
+| `memberAuthority()` — resolves owner / shielded derived key / guardian, per membership; `sendMemberTx()` — routes relayer-paid vs wallet-paid | `frontend/lib/shielded.ts` | `tsc --noEmit` clean |
+| Every member-signed write path threaded: `createPost`, `setVisibility`, `establishWingPeer`, `endWingPeer`, `tieQuipuCord`, `attestAdmission`, `publishProfile`, `grantElementKeys` | `lib/{posts,peers,visibility,admission}.ts` | `tsc --noEmit` clean, on-chain tests in `tests/epic5.ts` |
+| Relay policy: one pinned co-signer (`authorityIndex`), fee-payer-only relays (`payerIndex: null`), bounded variable-length data; 9 new allowlist entries | `frontend/lib/relayPolicy.ts` | discriminators verified two ways (computed + IDL) and asserted in `tests/relayer.ts`, incl. that each `authorityIndex` is a signer in the IDL and never the payer |
+| Relay route: accepts a client-signed authority signature, rebuilds the identical message, adds only the fee-payer signature | `frontend/app/api/relay/route.ts` | `tsc --noEmit` clean |
+| Shield UI with the full cost stated before the member commits | `frontend/app/me/page.tsx` (`ShieldCard`) | `tsc --noEmit` clean |
+| Master secret at rest, keystore-sealed, one exact blob name, no enumeration | `frontend/lib/masterSecret.ts` | `tsc --noEmit` clean |
+| `/recovery/setup` shards the SAME master; `/recovery` adopts the reconstructed one, so a shielded membership survives recovery | `app/recovery/setup/page.tsx`, `app/recovery/page.tsx` | `tsc --noEmit` clean |
+| On-chain proof a shielded member keeps every action, and the derived key's balance is still 0 after all of them | `tests/epic5.ts` | code |
+
+**The funding answer:** the **relayer**, not self-pay and not a transfer. Funding
+the derived key from the member's wallet is refused outright — it is the
+funding-source heuristic and a stronger link than the one shielding removes.
+With a relayer configured, a shielded member's write contains the relayer
+(fee-payer) and the derived key (authority) and no wallet of theirs at all.
+Without one, the client falls back to wallet-paid and **says so in the UI before
+the member shields**. See `docs/visibility.md` §3b.
+
+**Still true after a member shields, stated plainly:** an observer can see that
+*some* membership was shielded and count how many; the shield transaction itself
+is signed by the wallet being unbound, so transaction history links that wallet
+to that membership permanently (only shield-at-issuance fixes that); a shielded
+member's posts are groupable with each other and with their membership via the
+derived key, which names nobody; `recovery_keys` remain enumerable. **And one
+pre-existing defect found while auditing this round, not introduced by it:**
+`MemberProfile.enc_pub` is derived without the Circle, so a member who publishes
+a profile in two Circles publishes identical bytes in both — a memcmp handle
+that regroups what shielding un-grouped. Not fixed here (the fix strands every
+published profile and drop); see `docs/visibility.md` §4.
 
 ## F35 (Traditions fix) — anonymous faucet activation (2026-08-12f)
 

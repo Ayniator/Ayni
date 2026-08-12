@@ -21,9 +21,19 @@
 //
 // Why the policy is strict (see lib/relayPolicy.ts for the allowlist): this
 // route signs attacker-supplied bytes with a funded key. The policy pins the
-// program, the instruction set, the account shapes, and "the relayer is the
-// ONLY signer" — its signature can only ever mean "paid the fee", never
-// authority.
+// program, the instruction set, the account shapes, and who may sign — the
+// relayer's own signature can only ever mean "paid the fee", never authority.
+//
+// F61 — CO-SIGNED RELAYS. Some allowlisted instructions now carry exactly one
+// further signer at an index the policy pins: the key derived from a shielded
+// member's master secret. That key has zero lamports by construction and must
+// never be funded (a transfer from the member's known wallet would link the two
+// harder than paying the fee ever did), so it can only act if somebody else
+// pays. The relayer never holds it, never sees it, and cannot produce its
+// signature — the client signs the message and sends only the signature. The
+// route rebuilds the identical message from the validated parts and adds its
+// fee-payer signature; `Transaction.serialize()` then verifies both before
+// anything leaves the process, so a forged co-signature costs nothing.
 
 import { NextRequest, NextResponse } from "next/server";
 import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
@@ -189,9 +199,50 @@ export async function POST(req: NextRequest) {
       })),
       data: Buffer.from(body.data, "base64"),
     });
-    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+
+    // F61 — the co-signed form. When the policy pins an `authorityIndex`, the
+    // client has already signed the exact message below with a key the relayer
+    // never sees and never holds: the derived key of a shielded membership,
+    // which has zero lamports by construction. The relayer supplies the
+    // blockhash the client chose (it has to — a signature is over a specific
+    // message) and adds only the fee-payer signature.
+    //
+    // `tx.serialize()` verifies every signature before anything is sent, so a
+    // forged or stale co-signature is rejected here without touching the
+    // network or the budget.
+    let blockhash: string;
+    let lastValidBlockHeight: number;
+    if (verdict.authority) {
+      const a = body.authority;
+      if (!a || typeof a.pubkey !== "string" || typeof a.signature !== "string" || typeof a.blockhash !== "string") {
+        outstanding = Math.max(0, outstanding - EST_COST);
+        return NextResponse.json({ error: "authority signature required" }, { status: 400 });
+      }
+      if (a.pubkey !== verdict.authority) {
+        outstanding = Math.max(0, outstanding - EST_COST);
+        return NextResponse.json({ error: "authority signature is for the wrong account" }, { status: 400 });
+      }
+      blockhash = a.blockhash;
+      lastValidBlockHeight = Number(a.lastValidBlockHeight);
+      if (!Number.isSafeInteger(lastValidBlockHeight) || lastValidBlockHeight <= 0) {
+        outstanding = Math.max(0, outstanding - EST_COST);
+        return NextResponse.json({ error: "malformed blockhash window" }, { status: 400 });
+      }
+    } else {
+      if (body.authority) {
+        // An unexpected signature means the caller and the policy disagree
+        // about what is being relayed. Refuse rather than reconcile.
+        outstanding = Math.max(0, outstanding - EST_COST);
+        return NextResponse.json({ error: "this instruction takes no co-signer" }, { status: 400 });
+      }
+      ({ blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed"));
+    }
+
     const tx = new Transaction({ blockhash, lastValidBlockHeight, feePayer: kp.publicKey }).add(ix);
-    tx.sign(kp);
+    if (verdict.authority && body.authority) {
+      tx.addSignature(new PublicKey(verdict.authority), Buffer.from(body.authority.signature, "base64"));
+    }
+    tx.partialSign(kp);
     const signature = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false });
     await conn.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
 

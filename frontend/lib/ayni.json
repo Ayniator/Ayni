@@ -2,7 +2,7 @@
   "address": "AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG",
   "metadata": {
     "name": "ayni",
-    "version": "0.8.0",
+    "version": "0.8.1",
     "spec": "0.1.0",
     "description": "Ayni — Solana implementation of AHA (Ancestral Humanity Anonymous)"
   },
@@ -771,6 +771,21 @@
           "name": "parrain",
           "docs": [
             "A key the parrain's membership recognises (owner or guardian)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Rent payer — SEPARATE from the authority above, and that separation is",
+            "the whole of F61's usability story. A shielded membership's authority is",
+            "the key derived in `shield_membership`, which has never held a lamport",
+            "and must never need to: funding a freshly-derived \"anonymous\" pubkey from",
+            "a wallet the member is already known by is a single-hop funding transfer,",
+            "one of the most reliable clustering heuristics in chain analysis, and a",
+            "far STRONGER link than the co-signature this instruction already implies.",
+            "The derived key signs; somebody else's lamports pay — an ordinary wallet,",
+            "or the F55 relayer, which takes this slot with no program change."
           ],
           "writable": true,
           "signer": true
@@ -1868,8 +1883,9 @@
           "name": "membership",
           "docs": [
             "The author's membership in this Circle — proves membership and ties the",
-            "post to a wallet-bound member (anonymous, owner-less memberships cannot",
-            "post; a Council seat can post via its own membership if it holds one)."
+            "post to the key that membership answers to, wallet or derived (anonymous,",
+            "owner-less memberships cannot post; a Council seat can post via its own",
+            "membership if it holds one)."
           ]
         },
         {
@@ -1903,6 +1919,21 @@
         },
         {
           "name": "author",
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Rent payer — SEPARATE from the authority above, and that separation is",
+            "the whole of F61's usability story. A shielded membership's authority is",
+            "the key derived in `shield_membership`, which has never held a lamport",
+            "and must never need to: funding a freshly-derived \"anonymous\" pubkey from",
+            "a wallet the member is already known by is a single-hop funding transfer,",
+            "one of the most reliable clustering heuristics in chain analysis, and a",
+            "far STRONGER link than the co-signature this instruction already implies.",
+            "The derived key signs; somebody else's lamports pay — an ordinary wallet,",
+            "or the F55 relayer, which takes this slot with no program change."
+          ],
           "writable": true,
           "signer": true
         },
@@ -2329,6 +2360,21 @@
           "name": "signer",
           "docs": [
             "A key the mentee controls (owner or guardian)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Rent payer — SEPARATE from the authority above, and that separation is",
+            "the whole of F61's usability story. A shielded membership's authority is",
+            "the key derived in `shield_membership`, which has never held a lamport",
+            "and must never need to: funding a freshly-derived \"anonymous\" pubkey from",
+            "a wallet the member is already known by is a single-hop funding transfer,",
+            "one of the most reliable clustering heuristics in chain analysis, and a",
+            "far STRONGER link than the co-signature this instruction already implies.",
+            "The derived key signs; somebody else's lamports pay — an ordinary wallet,",
+            "or the F55 relayer, which takes this slot with no program change."
           ],
           "writable": true,
           "signer": true
@@ -6678,7 +6724,23 @@
         {
           "name": "member",
           "docs": [
-            "A key the member controls (owner or guardian); signs + pays rent."
+            "A key the member controls (owner or guardian). AUTHORISES ONLY — for a",
+            "shielded membership this is the derived key, which holds nothing."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Rent payer — SEPARATE from the authority above, and that separation is",
+            "the whole of F61's usability story. A shielded membership's authority is",
+            "the key derived in `shield_membership`, which has never held a lamport",
+            "and must never need to: funding a freshly-derived \"anonymous\" pubkey from",
+            "a wallet the member is already known by is a single-hop funding transfer,",
+            "one of the most reliable clustering heuristics in chain analysis, and a",
+            "far STRONGER link than the co-signature this instruction already implies.",
+            "The derived key signs; somebody else's lamports pay — an ordinary wallet,",
+            "or the F55 relayer, which takes this slot with no program change."
           ],
           "writable": true,
           "signer": true
@@ -6933,7 +6995,23 @@
         {
           "name": "sponsor",
           "docs": [
-            "The sponsor (signs + pays the cord's rent — the closing act of the rite)."
+            "The sponsor — the closing act of the rite. AUTHORISES ONLY; a shielded",
+            "sponsor signs with their derived key, which holds nothing."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Rent payer — SEPARATE from the authority above, and that separation is",
+            "the whole of F61's usability story. A shielded membership's authority is",
+            "the key derived in `shield_membership`, which has never held a lamport",
+            "and must never need to: funding a freshly-derived \"anonymous\" pubkey from",
+            "a wallet the member is already known by is a single-hop funding transfer,",
+            "one of the most reliable clustering heuristics in chain analysis, and a",
+            "far STRONGER link than the co-signature this instruction already implies.",
+            "The derived key signs; somebody else's lamports pay — an ordinary wallet,",
+            "or the F55 relayer, which takes this slot with no program change."
           ],
           "writable": true,
           "signer": true

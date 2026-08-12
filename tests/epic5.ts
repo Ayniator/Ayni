@@ -56,7 +56,7 @@ describe("ayni — per-element visibility (Epic 5)", () => {
 
   const setVis = (memberC: Buffer, av: number, q: number, bio: number, signer: anchor.web3.Keypair) =>
     program.methods.setVisibility(av, q, bio)
-      .accounts({ circle, memberMembership: membershipPda(memberC), policy: visPda(memberC), member: signer.publicKey })
+      .accounts({ circle, memberMembership: membershipPda(memberC), policy: visPda(memberC), member: signer.publicKey, payer: signer.publicKey })
       .signers([signer]).rpc();
 
   before(async () => {
@@ -249,6 +249,145 @@ describe("ayni — per-element visibility (Epic 5)", () => {
         .accounts({ membership: membershipPda(cViewer), ownerTag: ownerTagPda(tag), member: viewerOwner.publicKey, payer: viewerOwner.publicKey })
         .signers([viewerOwner]).rpc(),
       "MembershipWouldBeUnusable"
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // F61 — A SHIELDED MEMBER LOSES NOTHING.
+  //
+  // The mechanism shipped before this suite existed, and it was useless: every
+  // member-signed write assumed `owner == connected wallet`, so shielding
+  // silently cost the member the ability to post, set visibility, choose a
+  // wing, tie a cord or sponsor a newcomer. These tests are the contract that
+  // it does not — each one is signed by the DERIVED key and paid for by a
+  // DIFFERENT account, and the last one asserts the derived key never held a
+  // lamport while doing it. That separation is not a convenience: funding a
+  // derived "anonymous" key from a wallet the member is known by is a
+  // single-hop transfer, the strongest clustering heuristic in chain analysis,
+  // and a worse link than the one shielding removes.
+  // -------------------------------------------------------------------------
+
+  const cNewcomerF61 = makeCommitment();
+  const postNonce = new anchor.BN(20260812);
+  const postPda = (author: anchor.web3.PublicKey, nonce: anchor.BN) =>
+    pda(Buffer.from("post"), circle.toBuffer(), author.toBuffer(), nonce.toArrayLike(Buffer, "le", 8));
+  const wingPeerPda = (mentee: Buffer) => pda(Buffer.from("wingpeer"), circle.toBuffer(), mentee);
+  const cordPda = (member: Buffer, step: number) =>
+    pda(Buffer.from("quipu"), circle.toBuffer(), member, Buffer.from([step]));
+  const attestPda = (newcomer: Buffer) => pda(Buffer.from("attest"), circle.toBuffer(), newcomer);
+
+  it("a shielded member still sets their own visibility — derived key signs, someone else pays", async () => {
+    await program.methods.setVisibility(2, 1, 0)
+      .accounts({
+        circle,
+        memberMembership: membershipPda(cShielded),
+        policy: visPda(cShielded),
+        member: shieldedOwner.publicKey,
+        payer: payer.publicKey,
+      })
+      .signers([shieldedOwner]).rpc();
+
+    const p: any = await program.account.visibilityPolicy.fetch(visPda(cShielded));
+    assert.deepEqual([p.avatar, p.quipu, p.bio], [2, 1, 0]);
+  });
+
+  it("a shielded member still posts, and the post names no wallet", async () => {
+    await program.methods
+      .createPost(postNonce, "one day at a time", "", new anchor.BN(0), new anchor.BN(4102444800))
+      .accounts({
+        circle,
+        membership: membershipPda(cShielded),
+        post: postPda(shieldedOwner.publicKey, postNonce),
+        author: shieldedOwner.publicKey,
+        payer: payer.publicKey,
+      })
+      .signers([shieldedOwner]).rpc();
+
+    const post: any = await program.account.post.fetch(postPda(shieldedOwner.publicKey, postNonce));
+    assert.equal(post.author.toBase58(), shieldedOwner.publicKey.toBase58());
+    // The thing that matters: the wallet the member is known by is not in it.
+    assert.notEqual(post.author.toBase58(), shieldOwner.publicKey.toBase58());
+    const raw = (await provider.connection.getAccountInfo(postPda(shieldedOwner.publicKey, postNonce)))!.data;
+    assert.isFalse(raw.includes(shieldOwner.publicKey.toBuffer()), "no wallet may appear in a shielded member's post");
+  });
+
+  it("a shielded member is still a usable sponsor: wing, cord, and admission attestation", async () => {
+    // The viewer (unshielded) takes the shielded member as their wing.
+    await program.methods.establishWingPeer()
+      .accounts({
+        circle,
+        menteeMembership: membershipPda(cViewer),
+        wingMembership: membershipPda(cShielded),
+        wingPeer: wingPeerPda(cViewer),
+        signer: viewerOwner.publicKey,
+        payer: payer.publicKey,
+      })
+      .signers([viewerOwner]).rpc();
+
+    // ...and the shielded member ties their cord — the one act only a sponsor
+    // can perform. Before this round, shielding took it away.
+    await program.methods.tieQuipuCord(1)
+      .accounts({
+        circle,
+        memberMembership: membershipPda(cViewer),
+        sponsorMembership: membershipPda(cShielded),
+        wingPeer: wingPeerPda(cViewer),
+        cord: cordPda(cViewer, 1),
+        sponsor: shieldedOwner.publicKey,
+        payer: payer.publicKey,
+      })
+      .signers([shieldedOwner]).rpc();
+    const cord: any = await program.account.quipuCord.fetch(cordPda(cViewer, 1));
+    assert.deepEqual([...cord.sponsor], [...cShielded]);
+
+    // ...and sponsors a newcomer through the named admission path.
+    await program.methods.attestAdmission([...cNewcomerF61])
+      .accounts({
+        circle,
+        parrainMembership: membershipPda(cShielded),
+        attestation: attestPda(cNewcomerF61),
+        parrain: shieldedOwner.publicKey,
+        payer: payer.publicKey,
+      })
+      .signers([shieldedOwner]).rpc();
+    const att: any = await program.account.admissionAttestation.fetch(attestPda(cNewcomerF61));
+    assert.deepEqual([...att.parrain], [...cShielded]);
+
+    // ...and can end the bond, which creates nothing and so takes no payer.
+    await program.methods.endWingPeer()
+      .accounts({
+        circle,
+        wingPeer: wingPeerPda(cViewer),
+        membership: membershipPda(cShielded),
+        signer: shieldedOwner.publicKey,
+      })
+      .signers([shieldedOwner]).rpc();
+    const wp: any = await program.account.wingPeer.fetch(wingPeerPda(cViewer));
+    assert.isFalse(wp.active);
+  });
+
+  it("the derived key never held a lamport while doing any of it", async () => {
+    // The invariant the whole design rests on. If this ever fails, someone has
+    // made the shielded key pay for something, and the only practical way to
+    // fund it is a transfer from the member's known wallet.
+    assert.equal(await provider.connection.getBalance(shieldedOwner.publicKey), 0);
+  });
+
+  it("refuses a shielded member's write signed by the wallet they shielded away from", async () => {
+    // The other half of "shielding actually did something": the old wallet must
+    // no longer authorise this membership.
+    await expectFail(
+      program.methods
+        .createPost(new anchor.BN(1), "should not land", "", new anchor.BN(0), new anchor.BN(4102444800))
+        .accounts({
+          circle,
+          membership: membershipPda(cShielded),
+          post: postPda(shieldOwner.publicKey, new anchor.BN(1)),
+          author: shieldOwner.publicKey,
+          payer: shieldOwner.publicKey,
+        })
+        .signers([shieldOwner]).rpc(),
+      "Unauthorized"
     );
   });
 

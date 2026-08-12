@@ -161,6 +161,12 @@ export function forgetViewingSecret(): void {
 
 // --- shielded ownership -----------------------------------------------------
 
+/** How many derivation indices a device looks at per Circle when resolving its
+ *  own memberships or its own shielded signing key. Small on purpose: this is a
+ *  fixed, private derivation walk, never a scan of anything, and it must not
+ *  grow into one. */
+export const SHIELD_INDEX_SCAN = 3;
+
 /**
  * The owner tag for one membership: SHA-256(TAG ‖ vk ‖ circle ‖ u32le(index)).
  *

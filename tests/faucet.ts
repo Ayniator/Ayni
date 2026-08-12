@@ -158,6 +158,7 @@ describe("ayni — gas faucet (Epic 0)", () => {
         wingMembership: membershipPda(cParrain),
         wingPeer: wingPeerPda(menteeCommitment),
         signer: signer.publicKey,
+        payer: signer.publicKey,
       })
       .signers([signer])
       .rpc();

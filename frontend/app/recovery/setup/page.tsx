@@ -31,7 +31,8 @@ import { useState } from "react";
 import Link from "next/link";
 import ShardSend from "../../../components/ShardSend";
 import { useT } from "../../../components/SettingsProvider";
-import { newMasterSecret, splitMaster } from "../../../lib/sharding";
+import { splitMaster } from "../../../lib/sharding";
+import { getOrCreateMaster } from "../../../lib/masterSecret";
 import { localShardCustody } from "../../../lib/shardCustody";
 import { encodeShardPayload } from "../../../lib/shardHandover";
 import { sponsorRecoveryAvailable } from "../../../lib/recovery";
@@ -74,13 +75,17 @@ export default function RecoverySetupPage() {
   async function beginCeremony() {
     setBusy(true);
     setErr(null);
-    // INTEGRATION POINT — master-secret source. zk-vote.ts newMemberIdentity()
-    // currently draws its own random Semaphore secret instead of deriving it
-    // via deriveFromMaster(master).zkSecret, so there is no existing master to
-    // adopt; we generate a fresh one here. When the identity layer re-roots on
-    // the master secret (credential of record), this call becomes "load or
-    // create the member's master" instead of always-fresh.
-    const master = newMasterSecret();
+    // MASTER-SECRET SOURCE — adopt, do not invent (F61).
+    //
+    // This used to generate a fresh master every time and wipe it in the same
+    // function, which was harmless while nothing else derived from it. It stopped
+    // being harmless the moment shielding shipped: a shielded membership answers
+    // to a key derived from the master, so sharding a DIFFERENT master would hand
+    // the sponsors shards that restore an identity which cannot sign for the
+    // member's own memberships — and nobody would find out until recovery day.
+    // `getOrCreateMaster()` seals one device-local copy (lib/masterSecret.ts) and
+    // every consumer takes it from there.
+    const { master } = await getOrCreateMaster();
     let shards: Uint8Array[] = [];
     try {
       const oneTime = newOneTimeCode();
@@ -104,10 +109,12 @@ export default function RecoverySetupPage() {
     } catch (e: any) {
       setErr(String(e?.message || e));
     } finally {
-      // Buffer hygiene (locked position): the master and every raw shard are
-      // wiped the moment the sealed artefacts exist — nothing raw survives
-      // this function, in state or anywhere else.
-      master.fill(0);
+      // Buffer hygiene (locked position): every raw shard is wiped the moment
+      // the sealed artefacts exist — nothing raw survives this function, in
+      // state or anywhere else. The MASTER is deliberately not wiped here: it is
+      // no longer this function's to destroy, it belongs to the sealed keystore
+      // blob, and zeroing the shared buffer would break the member's own
+      // shielded memberships on this device. `forgetMaster()` is the lock.
       for (const s of shards) s.fill(0);
       setBusy(false);
     }

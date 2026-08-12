@@ -55,7 +55,10 @@ describe("ayni — F55 relayer policy + third-party fee-payer contract", () => {
 
   it("accepts a well-formed allowlisted request with the relayer as sole signer", () => {
     const v = validateRelayRequest(goodCastVote(), relayer58);
-    assert.deepEqual(v, { ok: true, name: "cast_vote" });
+    // `authority: null` is the F61 addition: a sole-signer instruction reports
+    // that nobody but the relayer signed it, which is what the route relies on
+    // to refuse a co-signature it was not expecting.
+    assert.deepEqual(v, { ok: true, name: "cast_vote", authority: null });
   });
 
   it("refuses everything outside the boundary", () => {
@@ -98,6 +101,104 @@ describe("ayni — F55 relayer policy + third-party fee-payer contract", () => {
 
     // Truncated data (no discriminator).
     fail({ keys: [], data: Buffer.alloc(4).toString("base64") }, "short data");
+  });
+
+  // --- (1b) F61: the ONE permitted co-signer --------------------------------
+  //
+  // A shielded membership's authority is a derived key with zero lamports which
+  // must never be funded, so it has to be able to sign while the relayer pays.
+  // The boundary is "the relayer pays, and at most one PINNED account
+  // authorises" — these tests are that boundary, not a happy path.
+
+  const disc = (name: string) => Buffer.from(idl.instructions.find((i: any) => i.name === name).discriminator);
+
+  /** A well-formed set_visibility relay request: 6 accounts, member at 3, relayer at 4. */
+  function goodSetVisibility(): RelayRequest {
+    return {
+      keys: [meta(k()), meta(k()), meta(k(), false, true), meta(k(), true), meta(relayer58, true, true), meta(k())],
+      data: Buffer.concat([disc("set_visibility"), Buffer.from([1, 1, 1])]).toString("base64"),
+    };
+  }
+
+  it("accepts a co-signed request and reports which account authorised it", () => {
+    const req = goodSetVisibility();
+    const v = validateRelayRequest(req, relayer58);
+    assert.isTrue(v.ok);
+    assert.equal((v as any).name, "set_visibility");
+    assert.equal((v as any).authority, req.keys[3].pubkey, "the authority must be the pinned index, reported back");
+  });
+
+  it("sole-signer instructions still refuse a co-signer — the original rule is untouched", () => {
+    const extra = goodCastVote();
+    extra.keys[0] = { ...extra.keys[0], isSigner: true };
+    assert.isFalse(validateRelayRequest(extra, relayer58).ok);
+  });
+
+  it("refuses the relayer as the authority — its signature may only ever mean 'paid'", () => {
+    const req = goodSetVisibility();
+    req.keys[3] = meta(relayer58, true);
+    assert.isFalse(validateRelayRequest(req, relayer58).ok, "the relayer must never authorise");
+  });
+
+  it("refuses a co-signed request with the authority slot unsigned", () => {
+    const req = goodSetVisibility();
+    req.keys[3] = meta(req.keys[3].pubkey, false);
+    assert.isFalse(validateRelayRequest(req, relayer58).ok);
+  });
+
+  it("refuses a THIRD signer — one co-signer, at one index, and no more", () => {
+    const req = goodSetVisibility();
+    req.keys[0] = { ...req.keys[0], isSigner: true };
+    assert.isFalse(validateRelayRequest(req, relayer58).ok);
+  });
+
+  it("end_wing_peer: the relayer pays the fee and must appear in NO account", () => {
+    const ok: RelayRequest = {
+      keys: [meta(k()), meta(k(), false, true), meta(k()), meta(k(), true)],
+      data: disc("end_wing_peer").toString("base64"),
+    };
+    const v = validateRelayRequest(ok, relayer58);
+    assert.isTrue(v.ok, "fee-payer-only relays are allowed");
+
+    // ...and a caller may not aim one of its accounts at the relayer's own key.
+    const smuggled = { ...ok, keys: [meta(relayer58), ...ok.keys.slice(1)] };
+    assert.isFalse(validateRelayRequest(smuggled, relayer58).ok);
+  });
+
+  it("create_post: variable-length data is bounded by the program's own limits", () => {
+    const body = (textLen: number, cidLen: number) =>
+      Buffer.concat([
+        disc("create_post"),
+        Buffer.alloc(8), // nonce
+        Buffer.alloc(4 + textLen), // text (borsh len + bytes)
+        Buffer.alloc(4 + cidLen), // image_cid
+        Buffer.alloc(16), // start_date + end_date
+      ]);
+    const req = (b: Buffer): RelayRequest => ({
+      keys: [meta(k()), meta(k()), meta(k(), false, true), meta(k(), true), meta(relayer58, true, true), meta(k())],
+      data: b.toString("base64"),
+    });
+    assert.isTrue(validateRelayRequest(req(body(0, 0)), relayer58).ok, "an empty post is within bounds");
+    assert.isTrue(validateRelayRequest(req(body(500, 64)), relayer58).ok, "the program's maxima are within bounds");
+    assert.isFalse(validateRelayRequest(req(body(501, 64)), relayer58).ok, "one byte over Post::MAX_TEXT is refused");
+  });
+
+  it("every co-signed entry pins a signer index the IDL agrees is a signer", () => {
+    // Guards against the quietest possible skew: an entry whose authorityIndex
+    // points at a non-signer account would make the relayer refuse every real
+    // request, and the client would silently fall back to self-paying — which
+    // is exactly the disclosure the entry exists to prevent.
+    for (const entry of Object.values(RELAY_ALLOWLIST)) {
+      const accounts = idl.instructions.find((i: any) => i.name === entry.name).accounts;
+      if (entry.authorityIndex !== undefined) {
+        assert.isTrue(accounts[entry.authorityIndex].signer === true, `${entry.name}: authorityIndex is not a signer in the IDL`);
+        assert.notEqual(entry.authorityIndex, entry.payerIndex, `${entry.name}: authority and payer must be different accounts`);
+      }
+      if (entry.payerIndex !== null) {
+        assert.isTrue(accounts[entry.payerIndex].signer === true, `${entry.name}: payerIndex is not a signer in the IDL`);
+        assert.isTrue(accounts[entry.payerIndex].writable === true, `${entry.name}: a payer must be writable`);
+      }
+    }
   });
 
   // --- (2) the on-chain contract -------------------------------------------

@@ -10,13 +10,20 @@
 //   * only known instructions of the Ayni program (8-byte Anchor
 //     discriminators, pinned below and asserted against the IDL in
 //     tests/relayer.ts);
-//   * only instructions whose ONLY signer is the fee-payer — the relayer never
-//     co-signs anything (no seat votes, no membership issuance, nothing where
-//     a signature means authority; here it means only "paid the rent");
+//   * only instructions whose signers are (a) the fee-payer, which is always the
+//     relayer, and (b) at most ONE further account, at an index pinned per
+//     instruction (`authorityIndex`). The RELAYER still never co-signs anything
+//     — no seat votes, no membership issuance, nothing where a signature means
+//     authority; its signature means only "paid the rent". The second slot
+//     exists for F61: a shielded membership's authority is a derived key with
+//     zero lamports which must never be funded, so it has to be able to sign
+//     while somebody else pays. Instructions without an `authorityIndex` keep
+//     the original sole-signer rule exactly;
 //   * the payer account must sit at the instruction's known payer index and be
 //     the relayer's own key;
-//   * account count and data length must match the instruction exactly (all
-//     allowlisted instructions have fixed-size arguments).
+//   * account count must match the instruction exactly, and data length must
+//     match exactly — except for `create_post`, the one entry with borsh
+//     strings, which is bounded by the program's own field maxima instead.
 //
 // Everything else is refused before a single lamport moves. The route adds
 // rate limiting and a spend floor on top; this module is the part that decides
@@ -44,16 +51,62 @@ export interface RelayRequest {
   keys: RelayAccountMeta[];
   /** Instruction data, base64. */
   data: string;
+  /**
+   * F61 — the co-signer's signature, present only for instructions the
+   * allowlist gives an `authorityIndex`. The client picks the blockhash,
+   * builds the transaction with the relayer as fee-payer, signs it with the
+   * derived key and sends the signature here; the route rebuilds the identical
+   * message and adds its own signature. Nothing secret travels.
+   */
+  authority?: {
+    /** Must equal `keys[authorityIndex].pubkey`. */
+    pubkey: string;
+    /** ed25519 signature over the compiled message, base64. */
+    signature: string;
+    /** The blockhash the client signed over. */
+    blockhash: string;
+    lastValidBlockHeight: number;
+  };
 }
 
-interface AllowedIx {
+export interface AllowedIx {
   name: string;
-  /** Position of the fee-payer (the only permitted signer). */
-  payerIndex: number;
+  /**
+   * Position of the fee-payer in the account metas, or `null` when the
+   * instruction takes no payer account at all and the relayer is the
+   * transaction fee-payer only (it must then appear in NO meta — see
+   * `end_wing_peer`).
+   */
+  payerIndex: number | null;
   /** Exact number of account metas. */
   accountCount: number;
-  /** Exact instruction-data length (discriminator + fixed-size args). */
-  dataLen: number;
+  /** Exact instruction-data length, or an inclusive [min, max] for the one
+   *  instruction with variable-length arguments (`create_post`'s strings). */
+  dataLen: number | [number, number];
+  /**
+   * F61 — position of the ONE permitted non-relayer signer, or undefined when
+   * the relayer must be the sole signer (the original rule, unchanged for every
+   * instruction that had it).
+   *
+   * WHY THIS EXISTS, and why it does not weaken the boundary. The original rule
+   * was "the relayer never co-signs anything ... nothing where a signature means
+   * authority". That rule is about the RELAYER's signature, and it still holds
+   * absolutely: the relayer's key is never at `authorityIndex`, and its
+   * signature can still only ever mean "paid the fee". What changes is that
+   * SOMEBODY ELSE may sign in one pinned slot — and for F61 that somebody is a
+   * key derived from the member's master secret which, by construction, has zero
+   * lamports and must never be funded (funding it from the member's known wallet
+   * is a single-hop transfer, the strongest chain-analysis link there is, and
+   * would defeat the whole mechanism). Without this, a shielded member can act
+   * only by paying with the wallet they were shielding away from.
+   *
+   * The residual is the same one already accepted for `send_message`: the
+   * relayer pays rent for accounts it cannot inspect. It is *smaller* here,
+   * because every co-signed instruction below is authorised on chain against a
+   * `Membership` — a request from a key the program does not recognise fails
+   * preflight and never reaches the ledger, so it burns no rent.
+   */
+  authorityIndex?: number;
 }
 
 /** Anchor discriminator (hex) → allowed instruction. */
@@ -95,13 +148,89 @@ export const RELAY_ALLOWLIST: Record<string, AllowedIx> = {
   "291472b35f621d9a": { name: "publish_member_root", payerIndex: 6, accountCount: 8, dataLen: 8 },
   // verify_fellow_member(nullifier, proofs)
   "48a626c4f1542b52": { name: "verify_fellow_member", payerIndex: 5, accountCount: 7, dataLen: 8 + 32 + 64 + 128 + 64 },
+
+  // grant_visibility_key(drop_id, sealed, epoch) — F60 Phase-2. Needs no member
+  // signature at all by design (an authority field would be a memcmp handle on
+  // the granter, and the audience sizes derived from it would be the interest
+  // graph Epic 5 forbids), so it is a sole-signer entry like the ones above.
+  // Relaying it removes the last thing that named the granter: the fee-payer.
+  "405770eaf0da8a5a": { name: "grant_visibility_key", payerIndex: 1, accountCount: 3, dataLen: 8 + 32 + 104 + 2 },
+
+  // ---------------------------------------------------------------------
+  // F61 — the shielded member's write paths. ONE co-signer each, at the
+  // pinned index: the key derived from the member's master secret, which
+  // holds nothing and must never be funded. The relayer pays; the derived
+  // key authorises. Together these are what make shielding survivable —
+  // without them a shielded member either cannot act or must pay from the
+  // very wallet the shield exists to detach.
+  //
+  // Discriminators verified TWO ways, as the entries above are: computed
+  // independently as sha256("global:<name>")[0..8], and cross-checked
+  // against the generated IDL — which also pins the account counts and the
+  // signer positions below (asserted in tests/relayer.ts).
+  // ---------------------------------------------------------------------
+
+  // shield_membership(tag, shielded_owner) — accounts:
+  //   0 membership · 1 owner_tag · 2 member(sig) · 3 payer(sig,w) · 4 system
+  // The co-signer here is the member's ORDINARY WALLET (only the current owner
+  // may shield). Relaying does not hide that — nothing can, see docs — but it
+  // means a member with an empty wallet can still shield.
+  "4ab2b47e0bba603c": { name: "shield_membership", payerIndex: 3, accountCount: 5, dataLen: 8 + 32 + 32, authorityIndex: 2 },
+
+  // upsert_member_profile(enc_pub, epoch, bio_ct[200], avatar_ref[64]) —
+  //   0 circle · 1 member_membership · 2 profile · 3 member(sig) · 4 payer(sig,w) · 5 system
+  "14c4ffb1f4680f36": { name: "upsert_member_profile", payerIndex: 4, accountCount: 6, dataLen: 8 + 32 + 2 + 200 + 64, authorityIndex: 3 },
+
+  // set_visibility(avatar, quipu, bio) —
+  //   0 circle · 1 member_membership · 2 policy · 3 member(sig) · 4 payer(sig,w) · 5 system
+  "b61749a6ffea24c4": { name: "set_visibility", payerIndex: 4, accountCount: 6, dataLen: 8 + 1 + 1 + 1, authorityIndex: 3 },
+
+  // create_post(nonce, text, image_cid, start_date, end_date) —
+  //   0 circle · 1 membership · 2 post · 3 author(sig) · 4 payer(sig,w) · 5 system
+  // The ONLY variable-length entry: disc(8) + nonce(8) + borsh text(4+n) +
+  // borsh cid(4+n) + start(8) + end(8) = 40 + text + cid, so [40, 604].
+  // The bounds are the
+  // program's own limits (Post::MAX_TEXT 500, Post::MAX_CID 64), so a request
+  // outside them could not succeed on chain anyway — the range is a budget
+  // guard, not a semantic check.
+  "7b5cb81de7180fca": { name: "create_post", payerIndex: 4, accountCount: 6, dataLen: [8 + 8 + 4 + 4 + 8 + 8, 8 + 8 + 4 + 500 + 4 + 64 + 8 + 8], authorityIndex: 3 },
+
+  // tie_quipu_cord(step) —
+  //   0 circle · 1 member_membership · 2 sponsor_membership · 3 wing_peer
+  //   · 4 cord · 5 sponsor(sig) · 6 payer(sig,w) · 7 system
+  "d2dd754a880d804d": { name: "tie_quipu_cord", payerIndex: 6, accountCount: 8, dataLen: 8 + 1, authorityIndex: 5 },
+
+  // establish_wing_peer() —
+  //   0 circle · 1 mentee_membership · 2 wing_membership · 3 wing_peer
+  //   · 4 signer(sig) · 5 payer(sig,w) · 6 system
+  "91152f076c655741": { name: "establish_wing_peer", payerIndex: 5, accountCount: 7, dataLen: 8, authorityIndex: 4 },
+
+  // end_wing_peer() —
+  //   0 circle · 1 wing_peer · 2 membership · 3 signer(sig)
+  // No rent, no payer ACCOUNT: the relayer is the transaction fee-payer only and
+  // must appear in no meta at all. `payerIndex: null` is that rule.
+  "f75c8f2915606379": { name: "end_wing_peer", payerIndex: null, accountCount: 4, dataLen: 8, authorityIndex: 3 },
+
+  // attest_admission(newcomer_commitment) —
+  //   0 circle · 1 parrain_membership · 2 attestation · 3 parrain(sig) · 4 payer(sig,w) · 5 system
+  // The named admission path: the parrain's COMMITMENT is recorded on chain by
+  // design (confirm_admission needs it for the distinct-persons rule), so this
+  // does not make the attestation anonymous — `attest_admission_zk` above is the
+  // anonymous form. What relaying removes is the parrain's WALLET as fee-payer.
+  "fd0df13174cad9d4": { name: "attest_admission", payerIndex: 4, accountCount: 6, dataLen: 8 + 32, authorityIndex: 3 },
 };
 
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-export type RelayVerdict = { ok: true; name: string } | { ok: false; reason: string };
+export type RelayVerdict =
+  | { ok: true; name: string; authority: string | null }
+  | { ok: false; reason: string };
 
-/** Decide whether `req` may be relayed with `relayerPubkey` as fee-payer. */
+/** Decide whether `req` may be relayed with `relayerPubkey` as fee-payer.
+ *
+ *  On success, `authority` is the pubkey of the one permitted co-signer (F61)
+ *  or null when the relayer is the sole signer. The route uses it to check that
+ *  the client's supplied signature belongs where the policy says it may. */
 export function validateRelayRequest(req: RelayRequest, relayerPubkey: string): RelayVerdict {
   if (!req || !Array.isArray(req.keys) || typeof req.data !== "string") {
     return { ok: false, reason: "malformed request" };
@@ -117,12 +246,17 @@ export function validateRelayRequest(req: RelayRequest, relayerPubkey: string): 
   const disc = data.subarray(0, 8).toString("hex");
   const allowed = RELAY_ALLOWLIST[disc];
   if (!allowed) return { ok: false, reason: "instruction not allowlisted" };
-  if (data.length !== allowed.dataLen) {
+  const okLen = Array.isArray(allowed.dataLen)
+    ? data.length >= allowed.dataLen[0] && data.length <= allowed.dataLen[1]
+    : data.length === allowed.dataLen;
+  if (!okLen) {
     return { ok: false, reason: `${allowed.name}: unexpected data length` };
   }
   if (req.keys.length !== allowed.accountCount) {
     return { ok: false, reason: `${allowed.name}: unexpected account count` };
   }
+
+  let authority: string | null = null;
   for (let i = 0; i < req.keys.length; i++) {
     const k = req.keys[i];
     if (!k || typeof k.pubkey !== "string" || !BASE58.test(k.pubkey)) {
@@ -131,16 +265,34 @@ export function validateRelayRequest(req: RelayRequest, relayerPubkey: string): 
     if (typeof k.isSigner !== "boolean" || typeof k.isWritable !== "boolean") {
       return { ok: false, reason: `account ${i}: malformed meta` };
     }
-    if (i === allowed.payerIndex) {
+    if (allowed.payerIndex !== null && i === allowed.payerIndex) {
       if (!k.isSigner) return { ok: false, reason: `${allowed.name}: payer must sign` };
       if (k.pubkey !== relayerPubkey) {
         return { ok: false, reason: `${allowed.name}: payer is not the relayer` };
       }
-    } else if (k.isSigner) {
-      // The relayer never co-signs and never relays something needing another
-      // party's live signature — those flows are not anonymous anyway.
-      return { ok: false, reason: `${allowed.name}: unexpected extra signer` };
+    } else if (allowed.authorityIndex !== undefined && i === allowed.authorityIndex) {
+      // The one permitted co-signer (F61). The relayer must NOT be it: its
+      // signature may only ever mean "paid the fee", never "authorised this".
+      if (!k.isSigner) return { ok: false, reason: `${allowed.name}: authority must sign` };
+      if (k.pubkey === relayerPubkey) {
+        return { ok: false, reason: `${allowed.name}: the relayer may not be the authority` };
+      }
+      authority = k.pubkey;
+    } else {
+      if (k.isSigner) {
+        // Any signer outside the two pinned slots is refused — the boundary is
+        // "the relayer pays, and at most one named account authorises".
+        return { ok: false, reason: `${allowed.name}: unexpected extra signer` };
+      }
+      if (allowed.payerIndex === null && k.pubkey === relayerPubkey) {
+        // Fee-payer-only instructions must not carry the relayer as a plain
+        // account: it would let a caller aim a write at the relayer's own key.
+        return { ok: false, reason: `${allowed.name}: relayer must not appear in the accounts` };
+      }
     }
   }
-  return { ok: true, name: allowed.name };
+  if (allowed.authorityIndex !== undefined && authority === null) {
+    return { ok: false, reason: `${allowed.name}: authority signature missing` };
+  }
+  return { ok: true, name: allowed.name, authority };
 }

@@ -42,6 +42,8 @@ import {
   readOnlyProgram,
 } from "./member";
 import { ipfsUrl } from "./ipfs";
+import { memberAuthority, sendMemberTx } from "./shielded";
+import { relayCosigned, relayInstruction, relayerPubkey } from "./relayer";
 import {
   ELEMENT_AVATAR,
   ELEMENT_BIO,
@@ -100,18 +102,29 @@ export async function getVisibility(circle: PublicKey, memberHex: string): Promi
   }
 }
 
-/** The member sets their own policy. */
-export async function setVisibility(wallet: SigningWallet, circle: PublicKey, memberHex: string, v: Visibility): Promise<string> {
-  return programWith(wallet)
-    .methods.setVisibility(v.avatar, v.quipu, v.bio)
-    .accounts({
-      circle,
-      memberMembership: membershipPda(circle, toBytes(memberHex)),
-      policy: visibilityPda(circle, toBytes(memberHex)),
-      member: wallet.publicKey,
-      systemProgram: (await import("@solana/web3.js")).SystemProgram.programId,
-    })
-    .rpc();
+/** The member sets their own policy. Authorised by whichever key the membership
+ *  answers to — the derived key when it is shielded (F61). */
+export async function setVisibility(
+  wallet: SigningWallet,
+  circle: PublicKey,
+  memberHex: string,
+  v: Visibility
+): Promise<{ signature: string; relayed: boolean }> {
+  const auth = await memberAuthority(wallet, circle, memberHex);
+  const program = programWith(wallet);
+  return sendMemberTx(wallet, auth, (payer) =>
+    program.methods
+      .setVisibility(v.avatar, v.quipu, v.bio)
+      .accounts({
+        circle,
+        memberMembership: membershipPda(circle, toBytes(memberHex)),
+        policy: visibilityPda(circle, toBytes(memberHex)),
+        member: auth.authority,
+        payer,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction()
+  );
 }
 
 // --- chosen-ones list (client-side; never touches the chain) ---------------
@@ -190,30 +203,69 @@ export async function shieldMembership(
   memberHex: string,
   master: Uint8Array,
   index = 0
-): Promise<{ signature: string; shieldedOwner: PublicKey }> {
+): Promise<{ signature: string; shieldedOwner: PublicKey; relayed: boolean }> {
   const vk = await deriveViewingSecret(master);
   const tag = await ownerTagFor(vk, circle.toBytes(), index);
   const kp = Keypair.fromSecretKey((await shieldedOwnerKey(vk, circle.toBytes(), index)).secretKey);
 
-  const signature = await programWith(wallet)
-    .methods.shieldMembership([...tag], kp.publicKey)
-    .accounts({
-      membership: membershipPda(circle, toBytes(memberHex)),
-      ownerTag: ownerTagPda(tag),
-      member: wallet.publicKey,
-      // The wallet pays the rent; the derived key never holds a lamport (see
-      // the account docs on `shield_membership` for why funding it is worse
-      // than co-signing).
-      payer: wallet.publicKey,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
+  const program = programWith(wallet);
+  const build = (payer: PublicKey) =>
+    program.methods
+      .shieldMembership([...tag], kp.publicKey)
+      .accounts({
+        membership: membershipPda(circle, toBytes(memberHex)),
+        ownerTag: ownerTagPda(tag),
+        member: wallet.publicKey,
+        // The derived key never holds a lamport (see the account docs on
+        // `shield_membership` for why funding it is worse than co-signing).
+        payer,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+  // THE ONE THING RELAYING CANNOT FIX, stated where the code does it: only the
+  // current owner may shield, so the member's ordinary wallet SIGNS this
+  // transaction no matter who pays. An observer who indexes transactions (rather
+  // than scanning accounts, which is what this closes) can therefore always link
+  // that wallet to this membership and this tag. Relaying it buys one real
+  // thing and no privacy: a member whose wallet holds nothing can still shield.
+  let signature: string;
+  let relayed = false;
+  const relayer = await relayerPubkey();
+  if (relayer) {
+    try {
+      signature = await relayCosigned(await build(relayer), wallet, connection());
+      relayed = true;
+    } catch {
+      signature = await program.methods
+        .shieldMembership([...tag], kp.publicKey)
+        .accounts({
+          membership: membershipPda(circle, toBytes(memberHex)),
+          ownerTag: ownerTagPda(tag),
+          member: wallet.publicKey,
+          payer: wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+  } else {
+    signature = await program.methods
+      .shieldMembership([...tag], kp.publicKey)
+      .accounts({
+        membership: membershipPda(circle, toBytes(memberHex)),
+        ownerTag: ownerTagPda(tag),
+        member: wallet.publicKey,
+        payer: wallet.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+  }
 
   // Only cache once the chain has accepted it: a viewing secret cached for a
   // membership that never shielded would send discovery looking for an index
   // entry that does not exist.
   cacheViewingSecret(vk);
-  return { signature, shieldedOwner: kp.publicKey };
+  return { signature, shieldedOwner: kp.publicKey, relayed };
 }
 
 /** The keypair that signs for a shielded membership. Derived, never stored —
@@ -291,7 +343,7 @@ export async function publishProfile(
   memberHex: string,
   master: Uint8Array,
   opts: { bio?: string; avatarCid?: string; epoch?: number; signer?: Keypair } = {}
-): Promise<string> {
+): Promise<{ signature: string; relayed: boolean }> {
   const vk = await deriveViewingSecret(master);
   const commitment = toBytes(memberHex);
   const epoch = opts.epoch ?? 1;
@@ -301,20 +353,30 @@ export async function publishProfile(
     ? sealBio(opts.bio, await elementKey(vk, circle.toBytes(), commitment, ELEMENT_BIO, epoch))
     : opaqueBio();
 
-  const b = programWith(wallet)
-    .methods.upsertMemberProfile([...enc.publicKey], epoch, [...bioCt], [...packAvatarRef(opts.avatarCid ?? "")])
-    .accounts({
-      circle,
-      memberMembership: membershipPda(circle, commitment),
-      profile: memberProfilePda(circle, commitment),
-      // Authority and rent payer are DIFFERENT accounts on purpose: a shielded
-      // membership's `owner` is the derived key, which has no balance and must
-      // never be funded from a wallet the member is known by.
-      member: opts.signer ? opts.signer.publicKey : wallet.publicKey,
-      payer: wallet.publicKey,
-      systemProgram: SystemProgram.programId,
-    });
-  return opts.signer ? b.signers([opts.signer]).rpc() : b.rpc();
+  // The right signer is now RESOLVED rather than passed in: callers no longer
+  // have to know whether this membership is shielded, and cannot get it wrong.
+  // `opts.signer` still overrides, for tests and for the shield flow itself.
+  const auth = opts.signer
+    ? { authority: opts.signer.publicKey, signer: opts.signer, shielded: true, guardian: false }
+    : await memberAuthority(wallet, circle, memberHex);
+
+  const program = programWith(wallet);
+  return sendMemberTx(wallet, auth, (payer) =>
+    program.methods
+      .upsertMemberProfile([...enc.publicKey], epoch, [...bioCt], [...packAvatarRef(opts.avatarCid ?? "")])
+      .accounts({
+        circle,
+        memberMembership: membershipPda(circle, commitment),
+        profile: memberProfilePda(circle, commitment),
+        // Authority and rent payer are DIFFERENT accounts on purpose: a shielded
+        // membership's `owner` is the derived key, which has no balance and must
+        // never be funded from a wallet the member is known by.
+        member: auth.authority,
+        payer,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction()
+  );
 }
 
 /**
@@ -338,7 +400,7 @@ export async function grantElementKeys(
   viewerEncPub: Uint8Array,
   grant: { bio: boolean; avatar: boolean },
   epoch: number
-): Promise<string> {
+): Promise<{ signature: string; relayed: boolean }> {
   const vk = await deriveViewingSecret(master);
   const commitment = toBytes(memberHex);
   const enc = await profileEncKey(vk);
@@ -350,14 +412,32 @@ export async function grantElementKeys(
     grant.avatar ? await elementKey(vk, circle.toBytes(), commitment, ELEMENT_AVATAR, epoch) : null
   );
 
-  return programWith(wallet)
-    .methods.grantVisibilityKey([...dropId], [...sealed], epoch)
+  // No member signature exists on this instruction BY DESIGN (an authority field
+  // would be a memcmp handle on the granter, and the audience sizes derived from
+  // it would be the interest graph Epic 5 forbids). That leaves the fee-payer as
+  // the last thing naming the granter — so relay it when a relayer exists.
+  const program = programWith(wallet);
+  const relayer = await relayerPubkey();
+  if (relayer) {
+    try {
+      const ix = await program.methods
+        .grantVisibilityKey([...dropId], [...sealed], epoch)
+        .accounts({ keyDrop: keyDropPda(dropId), payer: relayer, systemProgram: SystemProgram.programId })
+        .instruction();
+      return { signature: await relayInstruction(ix), relayed: true };
+    } catch {
+      /* fall through to self-pay, and say so */
+    }
+  }
+  const signature = await program.methods
+    .grantVisibilityKey([...dropId], [...sealed], epoch)
     .accounts({
       keyDrop: keyDropPda(dropId),
       payer: wallet.publicKey,
       systemProgram: SystemProgram.programId,
     })
     .rpc();
+  return { signature, relayed: false };
 }
 
 /** What a viewer can actually open. Absent fields mean absent CONTENT — the

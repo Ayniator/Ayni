@@ -69,6 +69,7 @@ describe("ayni — the quipu (Epic 3)", () => {
         wingPeer: wingPeerPda(memberC),
         cord: cordPda(memberC, step),
         sponsor: signer.publicKey,
+        payer: signer.publicKey,
       })
       .signers([signer]).rpc();
 
@@ -88,7 +89,7 @@ describe("ayni — the quipu (Epic 3)", () => {
     await program.methods.establishWingPeer()
       .accounts({
         circle, menteeMembership: membershipPda(cMember), wingMembership: membershipPda(cSponsor),
-        wingPeer: wingPeerPda(cMember), signer: memberOwner.publicKey,
+        wingPeer: wingPeerPda(cMember), signer: memberOwner.publicKey, payer: memberOwner.publicKey,
       })
       .signers([memberOwner]).rpc();
   });

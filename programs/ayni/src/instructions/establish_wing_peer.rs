@@ -49,7 +49,7 @@ pub struct EstablishWingPeer<'info> {
 
     #[account(
         init_if_needed,
-        payer = signer,
+        payer = payer,
         space = WingPeer::SPACE,
         seeds = [b"wingpeer", circle.key().as_ref(), mentee_membership.commitment.as_ref()],
         bump
@@ -57,8 +57,19 @@ pub struct EstablishWingPeer<'info> {
     pub wing_peer: Account<'info, WingPeer>,
 
     /// A key the mentee controls (owner or guardian).
-    #[account(mut)]
     pub signer: Signer<'info>,
+
+    /// Rent payer — SEPARATE from the authority above, and that separation is
+    /// the whole of F61's usability story. A shielded membership's authority is
+    /// the key derived in `shield_membership`, which has never held a lamport
+    /// and must never need to: funding a freshly-derived "anonymous" pubkey from
+    /// a wallet the member is already known by is a single-hop funding transfer,
+    /// one of the most reliable clustering heuristics in chain analysis, and a
+    /// far STRONGER link than the co-signature this instruction already implies.
+    /// The derived key signs; somebody else's lamports pay — an ordinary wallet,
+    /// or the F55 relayer, which takes this slot with no program change.
+    #[account(mut)]
+    pub payer: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }

@@ -53,6 +53,7 @@ import {
   windowElapsed,
 } from "../../lib/recovery";
 import { deriveFromMaster, splitMaster } from "../../lib/sharding";
+import { adoptMaster } from "../../lib/masterSecret";
 import { localShardCustody } from "../../lib/shardCustody";
 import { decodeShardPayload, encodeShardPayload } from "../../lib/shardHandover";
 import { openShard, openSponsorShard, sealShard } from "../../lib/shardSeal";
@@ -729,6 +730,13 @@ function RecoveredPanel({
       const { zkSecret, walletSeed } = await deriveFromMaster(m);
       const ok = zkSecret.length === 32 && walletSeed.length === 32;
       wipe(zkSecret, walletSeed);
+      // F61 — make the restore REAL for shielded memberships. The reconstructed
+      // master derives the same viewing secret it always did, which is what
+      // finds those memberships and signs for them; adopting it here is what
+      // turns "recovery reconstructs the credential of record" into "the member
+      // can act again on this device". Still purely local: nothing is emitted,
+      // requested or transmitted (CLAUDE.md locked position).
+      if (ok) await adoptMaster(m).catch(() => undefined);
       if (!stopped) setDerivedOk(ok);
     })();
     return () => {

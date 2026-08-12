@@ -46,16 +46,28 @@ pub struct SetVisibility<'info> {
 
     #[account(
         init_if_needed,
-        payer = member,
+        payer = payer,
         space = VisibilityPolicy::SPACE,
         seeds = [b"visibility", circle.key().as_ref(), member_membership.commitment.as_ref()],
         bump
     )]
     pub policy: Account<'info, VisibilityPolicy>,
 
-    /// A key the member controls (owner or guardian); signs + pays rent.
-    #[account(mut)]
+    /// A key the member controls (owner or guardian). AUTHORISES ONLY — for a
+    /// shielded membership this is the derived key, which holds nothing.
     pub member: Signer<'info>,
+
+    /// Rent payer — SEPARATE from the authority above, and that separation is
+    /// the whole of F61's usability story. A shielded membership's authority is
+    /// the key derived in `shield_membership`, which has never held a lamport
+    /// and must never need to: funding a freshly-derived "anonymous" pubkey from
+    /// a wallet the member is already known by is a single-hop funding transfer,
+    /// one of the most reliable clustering heuristics in chain analysis, and a
+    /// far STRONGER link than the co-signature this instruction already implies.
+    /// The derived key signs; somebody else's lamports pay — an ordinary wallet,
+    /// or the F55 relayer, which takes this slot with no program change.
+    #[account(mut)]
+    pub payer: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }

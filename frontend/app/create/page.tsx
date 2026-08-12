@@ -14,7 +14,7 @@ import RoleIcon from "../../components/RoleIcon";
 import { useT } from "../../components/SettingsProvider";
 import {
   CircleInfo, explorerTx, foundationOf, listCircles,
-  issueMembership, membershipPda, newCommitment,
+  hex, issueMembership, membershipPda, newCommitment,
 } from "../../lib/member";
 import { SEAT_ROLES, SECRETARY, setOpenMembership } from "../../lib/admin";
 import {
@@ -196,7 +196,7 @@ export default function Create() {
           const commit = newCommitment();
           await issueMembership(wallet, circlePk, commit, publicKey!, false);
           const now = Math.floor(Date.now() / 1000);
-          await createPost(wallet, circlePk, membershipPda(circlePk, commit), postText, "", now - 60, now + 365 * 24 * 3600);
+          await createPost(wallet, circlePk, hex(commit), postText, "", now - 60, now + 365 * 24 * 3600);
         });
       } else {
         steps.push("ℹ " + t("create.step.postSkipped"));

@@ -18,6 +18,7 @@ import {
   readOnlyProgram,
   twoSponsorPda,
 } from "./member";
+import { memberAuthority, sendMemberTx } from "./shielded";
 
 const seed = (s: string) => new TextEncoder().encode(s);
 const toBytes = (hex: string) => Uint8Array.from((hex.match(/.{1,2}/g) ?? []).map((b) => parseInt(b, 16)));
@@ -63,18 +64,29 @@ export async function attestAdmission(
   circle: PublicKey,
   parrainCommitmentHex: string,
   newcomerCommitmentHex: string
-): Promise<string> {
+): Promise<{ signature: string; relayed: boolean }> {
   const newcomer = toBytes(newcomerCommitmentHex);
-  return programWith(wallet)
-    .methods.attestAdmission([...newcomer])
-    .accounts({
-      circle,
-      parrainMembership: membershipPda(circle, toBytes(parrainCommitmentHex)),
-      attestation: attestPda(circle, newcomer),
-      parrain: wallet.publicKey,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
+  // Authorised by whichever key the PARRAIN's membership answers to — the
+  // derived key when it is shielded (F61), so shielding does not cost a member
+  // the ability to sponsor a newcomer. This is still the NAMED path: the
+  // parrain's commitment is recorded on chain by design (confirm_admission
+  // needs it for the distinct-persons rule). What the shield changes is only
+  // that no wallet of theirs is in the transaction.
+  const auth = await memberAuthority(wallet, circle, parrainCommitmentHex);
+  const program = programWith(wallet);
+  return sendMemberTx(wallet, auth, (payer) =>
+    program.methods
+      .attestAdmission([...newcomer])
+      .accounts({
+        circle,
+        parrainMembership: membershipPda(circle, toBytes(parrainCommitmentHex)),
+        attestation: attestPda(circle, newcomer),
+        parrain: auth.authority,
+        payer,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction()
+  );
 }
 
 /** Has a parrain already attested for this newcomer commitment? */

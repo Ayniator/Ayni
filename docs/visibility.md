@@ -75,7 +75,7 @@ stored anywhere but a device-local cache, never shared, never in a shard.
 | --- | --- | --- |
 | List that wallet's memberships (`memcmp` on `owner`) | **yes** | no — the wallet is not in the account |
 | List all memberships, with circle + commitment + dates | yes | yes (unchanged; commitments are pseudonymous by design) |
-| Group memberships by owner (same `owner` value across Circles) | yes | no — each Circle gets an unrelated derived key |
+| Group memberships by owner (same `owner` value across Circles) | yes | no — each Circle gets an unrelated derived key… **but see `enc_pub`, §4** |
 | Tell that a membership has been shielded | n/a | **yes** — an `OwnerTag` exists pointing at it |
 | Count shielded memberships in the system | n/a | **yes** |
 | Learn which wallet a shielded membership belongs to, from account state | yes | no |
@@ -124,19 +124,30 @@ legacy `memcmp` on `owner` for the rest. A member who never shields notices
 nothing. A member who shields everything stops appearing in the legacy query
 entirely.
 
-**What the member must know before shielding.** After shielding, the membership
-answers to the derived key, not to their wallet. Any write path that assumes
-`owner == connected wallet` needs the derived signer added. As of this round
-`publishProfile()` and `grantElementKeys()` take one; **`createPost` and the
-other member-signed instructions in the frontend do not yet**, so a member who
-shields today loses the ability to post from the UI until those call sites are
-updated. That is a deliberate, stated limitation of this round, not an oversight
-— see §4.
+**What the member must know before shielding (F61-R2 — the round that made it
+usable).** After shielding, the membership answers to the derived key, not to
+their wallet. Every member-signed write path now resolves that automatically:
+`memberAuthority()` (`frontend/lib/shielded.ts`) reads the membership, compares
+`owner` against the connected wallet, the membership's guardian keys, and the
+keys this device can derive from its cached viewing secret, and hands back the
+right signer. Call sites do not know or care which case they are in.
+
+Covered: `createPost`, `setVisibility`, `establishWingPeer`, `endWingPeer`,
+`tieQuipuCord`, `attestAdmission`, `publishProfile`, `grantElementKeys`. A
+shielded member loses **no action** they had before. The previous round's stated
+limitation — "a member who shields today loses the ability to post from the UI" —
+is closed.
+
+Nothing here needs the master secret at write time. The viewing secret cached at
+shield time is enough, and it re-derives from the master after any recovery.
 
 **The derived key never needs a balance, and this is load-bearing.**
-`shield_membership` and `upsert_member_profile` both separate the **authority**
-account from the **rent payer** account: the derived key signs, and any funded
-wallet (or a relayer) pays. The first cut of this round got that wrong — it had
+`shield_membership`, `upsert_member_profile`, and — as of F61-R2 —
+`create_post`, `set_visibility`, `tie_quipu_cord`, `establish_wing_peer` and
+`attest_admission` all separate the **authority** account from the **rent
+payer** account: the derived key signs, and any funded wallet (or a relayer)
+pays. `end_wing_peer` creates nothing, so it needs no payer account at all; the
+relayer is simply the transaction fee-payer there. The first cut of this round got that wrong — it had
 `payer = member`, which meant the derived key had to hold SOL, and the only
 practical way to give it SOL is a single-hop transfer from a wallet the member is
 already known by. That transfer is the *funding-source heuristic*, one of the
@@ -243,21 +254,99 @@ heading, no gap, no lock and no placeholder.
 - **The chosen-ones list stays client-side.** It never touches the chain, which
   is the point; it is also therefore not backed up.
 
+## 3b. Who pays — the funding answer (F61-R2)
+
+The derived key has **zero lamports and must keep them**. This is not a detail;
+it is the axis the whole mechanism turns on. There are exactly three ways a
+shielded member's write can be paid for, and only one of them is acceptable:
+
+| Who pays | What an observer learns | Verdict |
+| --- | --- | --- |
+| The derived key itself, funded from the member's wallet | wallet → derived key, via a single-hop transfer. The **funding-source heuristic** is among the most reliable clustering techniques in real chain analysis. | **Refused.** A stronger link than the one shielding removes. This was the earlier round's CRITICAL (`reports/sentinel/NRR-2026-08-12-f60-f61-maci.md`, Regression 2). |
+| The member's own wallet, as a separate `payer` account | wallet and derived key co-appear in one transaction, permanently. | **Fallback.** The action works; the disclosure is real and the UI says so. |
+| The **F55 relayer** | nothing: the transaction contains the relayer (fee-payer) and the derived key (authority). No wallet of the member's appears at all. | **The answer.** |
+
+**The relayer is the answer, and it is now wired.** F55's route already accepted
+a third-party fee-payer, but its policy required the relayer to be the *only*
+signer — which excluded every instruction where a member authorises something.
+`lib/relayPolicy.ts` now allows **exactly one** further signer, at an index
+pinned per instruction (`authorityIndex`):
+
+```
+shield_membership      authority 2  payer 3   (5 accounts)
+upsert_member_profile  authority 3  payer 4   (6)
+set_visibility         authority 3  payer 4   (6)
+create_post            authority 3  payer 4   (6)
+tie_quipu_cord         authority 5  payer 6   (8)
+establish_wing_peer    authority 4  payer 5   (7)
+end_wing_peer          authority 3  payer —   (4, fee-payer only)
+attest_admission       authority 3  payer 4   (6)
+grant_visibility_key   —            payer 1   (3, no authority by design)
+```
+
+The relayer's own rule is untouched: **it may never be the authority**, and its
+signature can still only ever mean "paid the fee". The client signs the message
+in the browser with the derived key and sends only the signature; the route
+rebuilds the identical message and adds the fee-payer signature.
+`Transaction.serialize()` verifies both before anything leaves the process, so a
+forged co-signature costs nothing. Every discriminator and account count is
+verified two ways — computed as `sha256("global:<name>")[0..8]` and asserted
+against the generated IDL in `tests/relayer.ts`, which also checks that each
+pinned `authorityIndex` really is a signer in the IDL and is never the payer.
+
+The residual is the one F55 already accepted: the relayer pays rent for accounts
+it cannot inspect. It is *smaller* for these entries, because each is authorised
+on chain against a `Membership` — a request from a key the program does not
+recognise fails preflight and never lands, so it burns no rent.
+
+**Two things relaying does not fix, stated plainly:**
+
+1. **The shield transaction itself.** Only the current owner may shield, so the
+   member's ordinary wallet signs it whatever happens. Relaying it means a
+   member with an empty wallet can still shield; it hides nothing. An observer
+   who indexes transactions can always link that wallet to that membership and
+   that tag, at that moment. The only real fix is to never bind a public wallet
+   in the first place — shield-at-issuance, still §4.
+2. **No relayer, no privacy for later actions.** When `AHA_RELAYER_SECRET` is
+   unset the client falls back to the member's wallet as payer. The action
+   succeeds and the shield still closes the passive whole-roster scan — but the
+   wallet is back in every transaction. `shieldingIsFullyPrivate()` reports
+   this, and the shield UI shows the warning *before* the member commits, not
+   after.
+
 ## 4. Not done in this round
 
-- **Shielding is opt-in and no UI exposes it yet.** The library and the
-  instruction are in place; making it the default at issuance (pass the derived
-  key as `owner` in `issue_membership`, so a membership is never bound to a
-  public wallet in the first place) is the right end state and is not done.
-- **Frontend write paths do not carry the shielded signer** (`createPost`,
-  `tie_quipu_cord`, `set_visibility`, wing peers, attestations). Until they do,
-  shielding costs a member those actions from the UI.
+- **Shielding is opt-in.** There is now a UI for it (`/me`, `ShieldCard`), but
+  making it the default at issuance (pass the derived key as `owner` in
+  `issue_membership`, so a membership is never bound to a public wallet in the
+  first place) is the right end state and is not done. It is also the only fix
+  for the shield transaction's own wallet signature — see §3b.
+- **A shielded post is still groupable.** `Post.author` holds the derived key,
+  which is also `Membership.owner`, so an observer can memcmp from a post back
+  to the membership and group a member's posts. That was equally true before —
+  with the member's *wallet* in both fields. What changed is that the value now
+  names nobody. Unlinking a post from its membership is a different feature.
+- **`MemberProfile.enc_pub` is GLOBAL, and it regroups what `owner` stopped
+  grouping.** `profileEncKey(vk) = SHA-256("aha-vis-enc-v1" ‖ viewing_secret)`
+  takes no Circle, so a member who publishes a profile in two Circles publishes
+  the *same* 32 bytes in both — at a fixed offset, memcmp-able, exactly the
+  handle `shield_membership` removed from `owner`. This is a **pre-existing F60
+  Phase-2 defect**, not a regression, but it materially qualifies the table in
+  §1: for any member who has published a profile in more than one Circle, their
+  memberships ARE groupable, and shielding does not stop it.
+
+  It is not fixed here deliberately — the fix is to domain-separate the key on
+  the Circle (`profileEncKey(vk, circle)`), which changes a derivation contract
+  the drop addressing depends on and would strand every profile and key drop
+  already published. It belongs in its own round, with a migration, not bolted
+  onto this one. Until then a member who wants the §1 property should publish a
+  profile in at most one Circle.
 - **`recovery_keys` are still enumerable** by the same memcmp attack `owner`
   had. Same fix applies; not done.
-- **Fee payment is not relayed**, so the transaction graph still links a wallet
-  to the memberships it acts for. The separate `payer` account added this round
-  is the seam a relayer slots into with no program change — but no relayer is
-  wired to it yet.
+- **The relayer sees IP and timing.** Batching/mixing to blunt that correlation
+  channel is the documented next step (docs/messaging-migration.md §3) and is
+  not done. A shielded member's actions are unlinkable *on chain*; the relay
+  operator is a different trust boundary and always was.
 - **`tag` and `drop_id` are unbound instruction arguments.** `OwnerTag` and
   `VisibilityKeyDrop` are `init`-only (never overwritten), but nothing binds the
   seed to the caller's own secret, so an observer who sees a pending
@@ -279,6 +368,11 @@ heading, no gap, no lock and no placeholder.
 | Derivations, sealing, opening (no chain imports) | `frontend/lib/visibilityCrypto.ts` |
 | Shield / publish / grant / open, policy client | `frontend/lib/visibility.ts` |
 | Two-path membership discovery | `frontend/lib/member.ts` (`findMyMemberships`) |
+| Signer + payer resolution for every member-signed write | `frontend/lib/shielded.ts` |
+| Master secret at rest (keystore-sealed) | `frontend/lib/masterSecret.ts` |
+| Relay allowlist, incl. the co-signed entries | `frontend/lib/relayPolicy.ts` |
+| Relay route (co-signed form) | `frontend/app/api/relay/route.ts` |
+| Shield UI | `frontend/app/me/page.tsx` (`ShieldCard`) |
 | Read path | `frontend/lib/trustpage.ts`, `frontend/app/member/[commitment]/page.tsx` |
 | Unconnected-visitor gate | `frontend/app/board/page.tsx` |
 | Tests | `tests/epic5.ts` |

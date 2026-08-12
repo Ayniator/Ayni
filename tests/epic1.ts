@@ -112,6 +112,7 @@ describe("ayni — two-sponsor admission (Epic 1)", () => {
         parrainMembership: membershipPda(parrainCommitment),
         attestation: attestPda(newcomer),
         parrain: signer.publicKey,
+        payer: signer.publicKey,
       })
       .signers([signer])
       .rpc();

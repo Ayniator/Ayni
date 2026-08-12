@@ -42,7 +42,9 @@ import { activateFaucet, activateFaucetAnonymously, getFaucet, hasFaucetGrant, l
 import { flushLedgerQueue, recordGrantInLedger } from "../../lib/faucetLedger";
 import { attestAdmission, getTwoSponsorPolicy, hasAttestation, issueProvisionalMembership } from "../../lib/admission";
 import { attestAdmissionAnonymously, castMemberVote, haveVotingKey, newMemberIdentity } from "../../lib/zk-vote";
-import { ALL_MEMBERS, CHOSEN, DEFAULT_VISIBILITY, MY_CIRCLE, TIER_LABEL, Tier, Visibility, getVisibility, setVisibility } from "../../lib/visibility";
+import { ALL_MEMBERS, CHOSEN, DEFAULT_VISIBILITY, MY_CIRCLE, TIER_LABEL, Tier, Visibility, getVisibility, setVisibility, shieldMembership } from "../../lib/visibility";
+import { isMembershipShielded, shieldingIsFullyPrivate } from "../../lib/shielded";
+import { getOrCreateMaster } from "../../lib/masterSecret";
 import { StoneMark } from "../../components/StoneMark";
 import { setStoneMark } from "../../lib/stonemark";
 import { useT } from "../../components/SettingsProvider";
@@ -134,6 +136,7 @@ export default function Me() {
             <VotesCard wallet={wallet ?? null} memberships={memberships} />
             <MentorshipCard wallet={wallet ?? null} memberships={memberships} />
             <VisibilityCard wallet={wallet ?? null} memberships={memberships} />
+            <ShieldCard wallet={wallet ?? null} memberships={memberships} />
             <ProfileCard />
             <RecoveryCard />
             <JoinCard
@@ -1009,6 +1012,172 @@ function AnonymousNote({ t }: { t: (k: string) => string }) {
       </a>
       {parts[1]}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// F61 — shield a membership.
+//
+// English copy is inline here on purpose (this round ships the feature; the
+// locales are translated separately). The copy is the feature as much as the
+// transaction is: shielding is irreversible, it costs the member one permanent
+// transaction-history link, and whether their later actions are private at all
+// depends on whether this deployment runs a relayer. A member who is not told
+// those three things cannot consent to it.
+// ---------------------------------------------------------------------------
+
+function ShieldCard({ wallet, memberships }: { wallet: any; memberships: MyMembership[] }) {
+  const [state, setState] = useState<Record<string, "unknown" | "shielded" | "open">>({});
+  const [relayed, setRelayed] = useState<boolean | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  useEffect(() => {
+    shieldingIsFullyPrivate().then(setRelayed).catch(() => setRelayed(false));
+  }, []);
+
+  // Which of my memberships already answer to a derived key? Answerable only
+  // from this device's own viewing secret — it is a derivation, never a query,
+  // and it tells nobody else anything.
+  useEffect(() => {
+    if (!wallet) return;
+    for (const m of memberships) {
+      isMembershipShielded(wallet, new PublicKey(m.circle), m.commitment)
+        .then((s) => setState((p) => ({ ...p, [m.pubkey]: s ? "shielded" : "open" })))
+        .catch(() => setState((p) => ({ ...p, [m.pubkey]: "unknown" })));
+    }
+  }, [wallet, memberships]);
+
+  async function shield(m: MyMembership) {
+    if (!wallet) return;
+    setBusy(m.pubkey);
+    setNote(null);
+    let master: Uint8Array | null = null;
+    try {
+      const got = await getOrCreateMaster();
+      master = got.master;
+      await shieldMembership(wallet, new PublicKey(m.circle), m.commitment, master);
+      setState((p) => ({ ...p, [m.pubkey]: "shielded" }));
+      setOpen(null);
+      setNote({
+        kind: "ok",
+        text:
+          "Shielded. Nobody can look up this membership by your wallet address any more." +
+          " Your later actions here will use a key derived from your master secret; this app handles that for you." +
+          (got.created
+            ? " This device also created your master secret — set up recovery now, or losing this device loses the ability to act for this membership."
+            : ""),
+      });
+    } catch (e: any) {
+      setNote({ kind: "err", text: String(e?.message || e) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (memberships.length === 0) return null;
+  const anyOpen = memberships.some((m) => state[m.pubkey] !== "shielded");
+
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>🛡 Shield a membership</h3>
+      <p className="muted sm" style={{ marginTop: 0 }}>
+        Right now, anyone who knows your wallet address can list every Circle you belong to. They
+        need no key, no permission and no relationship to you — the membership record carries your
+        wallet address in a field the whole world can search. Shielding removes it and gives you a
+        private way to find your own membership instead.
+      </p>
+
+      {relayed === false && anyOpen && (
+        <p className="sm" style={{ marginTop: 0, color: "var(--warn, #b8860b)" }}>
+          <strong>No relayer is running on this deployment.</strong> Shielding will still close the
+          search above — the thing anyone can run against anyone. But every action you take
+          afterwards (a post, a cord, a visibility change) will be paid for by your wallet, which
+          puts your wallet and your shielded membership in the same transaction. Someone who reads
+          transaction history, rather than searching account records, could follow that.
+        </p>
+      )}
+
+      {memberships.map((m) => {
+        const s = state[m.pubkey] ?? "unknown";
+        return (
+          <div key={m.pubkey} style={{ padding: "8px 0", borderTop: "1px solid var(--border)" }}>
+            <div className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+              <span className="name sm">{m.circleName}</span>
+              {s === "shielded" ? (
+                <span className="pill">shielded</span>
+              ) : (
+                <button
+                  className="btn btn-sm"
+                  disabled={busy !== null || s === "unknown"}
+                  onClick={() => setOpen(open === m.pubkey ? null : m.pubkey)}
+                >
+                  {open === m.pubkey ? "Cancel" : "Shield this membership"}
+                </button>
+              )}
+            </div>
+
+            {open === m.pubkey && (
+              <div className="sm" style={{ marginTop: 8 }}>
+                <p style={{ marginTop: 0 }}>
+                  <strong>What this does.</strong> Your membership stops answering to your wallet
+                  and starts answering to a key derived from your own master secret. You keep every
+                  action you have today — posting, choosing a wing, tying a cord, setting
+                  visibility, sponsoring a newcomer — and this app uses the derived key for them
+                  automatically. You do not have to hold or remember it.
+                </p>
+                <p>
+                  <strong>What it costs, exactly.</strong>
+                </p>
+                <ul style={{ marginTop: 0, paddingLeft: 18, lineHeight: 1.6 }}>
+                  <li>
+                    <strong>It cannot be undone.</strong> There is no un-shield.
+                  </li>
+                  <li>
+                    <strong>This one transaction is signed by your wallet</strong> — it has to be,
+                    because only the current owner may shield. So anyone reading transaction
+                    history can always link your wallet to this membership at this moment. What
+                    shielding removes is the passive search that needs no history and no effort.
+                  </li>
+                  <li>
+                    <strong>It depends on your master secret.</strong> The derived key comes from
+                    it, and only recovery brings it back. If you have not set up recovery, do that
+                    too — otherwise losing this device loses the ability to act for this membership.
+                  </li>
+                  <li>
+                    <strong>Someone can still see that a membership was shielded</strong>, and how
+                    many have been. They cannot see whose.
+                  </li>
+                  {relayed === false && (
+                    <li>
+                      <strong>Your wallet will pay for your later actions</strong> on this
+                      deployment, and will therefore appear alongside this membership again each
+                      time. See the note above.
+                    </li>
+                  )}
+                  {relayed === true && (
+                    <li>
+                      A relayer is running here, so your later actions are paid for by it and your
+                      wallet will not appear in them at all.
+                    </li>
+                  )}
+                </ul>
+                <button className="btn btn-sm" disabled={busy !== null} onClick={() => shield(m)}>
+                  {busy === m.pubkey ? "Shielding…" : "I understand — shield it"}
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {note && (
+        <p className={note.kind === "err" ? "error" : "ok-note"} style={{ marginBottom: 0 }}>
+          {note.text}
+        </p>
+      )}
+    </div>
   );
 }
 
