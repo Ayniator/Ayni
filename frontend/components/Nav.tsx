@@ -25,7 +25,7 @@ export default function Nav() {
       </span>
       <nav>
         <Link href="/">{t("nav.find")}</Link>
-        <Link href="/onboarding">Start here</Link>
+        <Link href="/onboarding">{t("nav.start")}</Link>
         <Link href="/me">{t("nav.me")}</Link>
         <InboxNavLink />
         <Link href="/reflections">{t("nav.reflections")}</Link>

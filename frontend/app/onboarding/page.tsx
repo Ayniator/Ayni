@@ -271,6 +271,27 @@ function StepFace() {
           {t("onboarding.face.recoveryA")} <strong>{t("onboarding.face.recoveryStrong")}</strong>{t("onboarding.face.recoveryB")}
         </p>
       </div>
+
+      {/* Epic 11 / F78 — the mandatory recovery disclosure, always visible and not
+          dismissable: a provisional member must learn this BEFORE finishing, not
+          after losing a device. */}
+      <div
+        className="card"
+        style={{ borderColor: "var(--warn, #c98a2b)", background: "color-mix(in srgb, var(--warn, #c98a2b) 8%, transparent)", padding: 14, marginTop: 16 }}
+      >
+        <div className="name" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span aria-hidden>⚠️</span> {t("onboarding.f78.title")}
+        </div>
+        <p className="sm" style={{ margin: "8px 0 0" }}>
+          {t("onboarding.f78.bodyPre")}{" "}
+          <strong>{t("onboarding.f78.strongShards")}</strong> {t("onboarding.f78.bodyMid1")}{" "}
+          <strong>{t("onboarding.f78.strongTwo")}</strong> {t("onboarding.f78.bodyMid2")}{" "}
+          <strong>{t("onboarding.f78.strongNotAvailable")}</strong> {t("onboarding.f78.bodyMid3")}{" "}
+          <strong>{t("onboarding.f78.strongLose")}</strong>{t("onboarding.f78.bodyMid4")}{" "}
+          <Link href="/recovery/setup">{t("onboarding.f78.ceremonyLink")}</Link>{" "}
+          {t("onboarding.f78.bodySuf")}
+        </p>
+      </div>
     </section>
   );
 }

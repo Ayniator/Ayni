@@ -969,3 +969,190 @@ features:
     # WARNING this round (Sentinel added its own gate above the same round it
     # was found); becomes a FAIL next round if it still has no BACKLOG.md
     # row/F-number and no docs/shipped.md entry.
+
+  # ------------------------------------------------------------------------
+  # F85 / F66 (2026-08-12, round e11-recovery): Epic 11 recovery UX (the human
+  # layer over F72-F79's already-tested cores) + blinded guardian keys. This
+  # round is a LOCKED-POSITION review round per CLAUDE.md — every assertion
+  # below is a hard gate; a failure is CRITICAL, not a WARNING. See
+  # reports/sentinel/NRR-2026-08-12-e11-recovery.md for full file:line
+  # evidence.
+  # ------------------------------------------------------------------------
+
+  - id: F85
+    name: "Epic 11 recovery UX — shard ceremony, in-person handover, recovery
+      wizard"
+    shipped_round: e11-recovery (2026-08-12)
+    covered_by:
+      - tests/sentinel/e11-recovery-check.sh   (new this round)
+      - tests/sharding.ts                      (pre-existing F72-F79 core)
+      - reports/sentinel/NRR-2026-08-11-F.md   (pre-existing Layer F round)
+      - reports/sentinel/NRR-2026-08-12-e11-recovery.md
+    cases:
+      - "purely local: no fetch/XHR/WebSocket/sendBeacon/WebRTC/EventSource/
+         img-src-exfil and no @solana/web3.js/anchor/wallet-adapter import
+         anywhere in app/recovery/**, components/Shard*.tsx, lib/shardSeal.ts,
+         lib/recoveryUi.ts, or the pre-existing lib/recovery.ts, lib/sharding.ts,
+         lib/shardCustody.ts, lib/shardHandover.ts — grep-gated AND import-graph
+         spot-checked (every relative import inside the surface resolves only
+         to another surface file, no undeclared expansion)"
+      - "member-present requires a GENUINE member shard, cryptographically —
+         not just a caller-declared role check: app/recovery/page.tsx unlocks
+         the member's own shard by calling openShard(\"member\", code, sealed);
+         a sponsor blob sealed under a sponsor role key cannot open under the
+         member key (nacl.secretbox authenticates — a wrong key yields null,
+         never garbage-as-success). This closes the exact gap Round F flagged
+         as architectural-only (NRR-2026-08-11-F.md: 'a caller-declared-role
+         check, not cryptographic')."
+      - "7-day challenge window not client-shortenable: loadPendingRecovery()
+         ignores any stored windowMs and always re-pins it to the constant
+         CHALLENGE_WINDOW_MS; the completion button gates on a freshly computed
+         windowElapsed(pending, Date.now()) at click time; no dev/skip/bypass
+         affordance found anywhere in the surface"
+      - "no shard on any server, no enumeration: ShardCustody (pre-existing)
+         still exposes only put/get/burn, statically re-confirmed this round;
+         the new UI adds no list/count/debug view; the sponsor-only recovery
+         intent lives only in this device's localStorage, keyed by a one-time
+         code, never published"
+      - "shard handling: vetted libraries only — shamir-secret-sharing (split/
+         combine) and tweetnacl (secretbox) are both DIRECT frontend/package.json
+         dependencies, no hand-rolled field arithmetic (lib/sharding.ts has zero
+         loop constructs at all — pure delegation) and no hand-rolled cipher"
+      - "burn-and-reissue is mandatory in the wizard, not optional: the
+         RecoveredPanel state machine only reaches its \"done\" button at stage
+         \"finished\", which is unreachable without completing both sponsor
+         handovers of the freshly re-sharded set; sponsor-only completion
+         unconditionally burns both consumed sponsor-shard custody entries
+         BEFORE the reissue prompt even renders (so those two specific shards
+         can never be replayed regardless of what the user does next)"
+      - "F78 provisional-member disclosure present in BOTH onboarding (Step 3
+         of 3, the FINAL step, unconditional — not gated behind attestation
+         count, so it is seen before the member finishes regardless of path)
+         AND the ceremony (/recovery/setup's StepProvisional refuses to fake a
+         1-sponsor split, consults the shared sponsorRecoveryAvailable() guard,
+         not a re-derived rule)"
+      - "F66 (blinded guardian keys) is NOT imported anywhere in the local-
+         recovery surface — grep-confirmed zero references to recoveryKeys in
+         app/recovery/**, components/Shard*.tsx, lib/shardSeal.ts,
+         lib/recoveryUi.ts, lib/recovery.ts; the two mechanisms stay
+         architecturally separate as designed"
+      - "secret hygiene: zero console.* calls in the recovery surface; zero
+         URL/query-param/router-push usage; the reconstructed master secret is
+         held only in a React ref (never state), wiped via fill(0) on unmount/
+         backHome/error paths; 21 fill(0)/wipe() call sites across the round's
+         4 new files"
+      - "seal-derivation consistency: /recovery and /recovery/setup both import
+         from the single shared lib/shardSeal.ts (no duplicated/drifted key
+         derivation); the domain tag \"aha-shard-seal-v1:<role>:<code>\" is
+         the one production key-derivation string"
+    findings_this_round:
+      - severity: WARNING (dependency hygiene, not a locked-position or privacy
+          violation)
+        what: "frontend/components/ShardSend.tsx does `import QRCode from
+          \"qrcode\"`, but frontend/package.json declares NO direct dependency
+          on `qrcode` (neither dependencies nor devDependencies — confirmed by
+          direct grep and by a Python json-load check). It resolves today only
+          because `qrcode` is a TRANSITIVE dependency of
+          `@solana-mobile/wallet-standard-mobile` (see package-lock.json:1532,
+          5423) — i.e. it is present in node_modules and pinned in the
+          lockfile today by accident of an unrelated package's dependency
+          tree, not by a declared intent to use it. `npx tsc --noEmit` is
+          silent about this (it only typechecks against whatever resolves,
+          it does not check registered dependencies) — a matching
+          frontend/types/qrcode.d.ts ambient module declaration exists, which
+          is exactly what a genuinely-undeclared-but-resolving import looks
+          like from tsc's point of view."
+        why_it_matters: "If @solana-mobile/wallet-standard-mobile ever drops
+          or version-bumps past its own dependency on qrcode, or a future
+          `npm install` (not `npm ci`) re-resolves the tree differently, the
+          QR-rendering half of the ENTIRE in-person shard handover flow (the
+          only mechanism this system has for moving a shard between two
+          devices without a network) silently stops resolving — a build
+          break with no compiler warning pointing at the real cause, exactly
+          when a member needs shard handover working."
+        reproduction: "cd frontend && grep -n 'import QRCode from \"qrcode\"'
+          components/ShardSend.tsx; python3 -c \"import json; d=json.load(
+          open('package.json')); print('qrcode' in d.get('dependencies',{}),
+          'qrcode' in d.get('devDependencies',{}))\"  # -> False False"
+        does_not_affect: "current build/typecheck/runtime — the package is
+          present and pinned right now; NFC and manual-entry handover paths
+          do not use qrcode at all and are unaffected either way"
+        disposition: "not a locked-position or privacy-invariant violation
+          (no CRITICAL), not yet a functional break (no FAIL on its own) —
+          reported as a dependency-hygiene finding the round should close by
+          adding `\"qrcode\": \"^1.5.4\"` to frontend/package.json's direct
+          dependencies. Sentinel gate added below so it does not regress
+          silently."
+    coverage_gaps:
+      - "no Playwright/e2e suite exists in this repo (long-standing, all
+         rounds) — none of Layer A's asks for this feature (QR round-trips
+         visually between two real browser contexts, NFC on real hardware,
+         camera BarcodeDetector against a real video feed, the full ceremony
+         → handover → recovery → reissue wizard flow end to end) run anywhere.
+         Everything in this round's coverage is static/grep + the pre-existing
+         property tests (tests/sharding.ts) + this round's new mechanical gate
+         — never a rendered browser."
+      - "no adversarial dump-simulation test (Layer D style) automatically
+         inspects a real localStorage dump post-ceremony/post-recovery to
+         prove no structure links a shard to a member — verified by Sentinel
+         code-reading this round (as in Round F), not by an automated
+         dump-and-inspect test. Unchanged gap, carried forward two rounds."
+      - "18-locale translation propagation for this round's 203 new i18n keys
+         (recovery.*, shard.send.*, shard.receive.*, onboarding.f78.*,
+         me.recovery.*) had not landed as of this review: all 203 keys exist
+         ONLY in the English block of frontend/lib/i18n.generated.ts (0/203
+         present in the other 18 locale blocks), confirmed by exact count.
+         Disclosed by the main agent as in-progress in parallel at task
+         hand-off. Not a functional break today (i18n-key-check.sh's
+         DICT[lang] ?? en fallback chain means every non-English viewer of
+         these new screens currently sees correct English text, not a raw
+         key or a crash) but real product-completeness debt: WARNING this
+         round: becomes a FAIL next round if still 0/203 (missing-coverage
+         rule, applied to translation completeness rather than test
+         coverage)."
+      - "qrcode dependency-declaration gap — see findings_this_round above;
+         tracked here so it does not silently drop off next round's diff."
+
+  - id: F66
+    name: "Blinded, one-time guardian keys for the F9/F10/F11 on-chain
+      migration path (NOT Epic 11 local recovery)"
+    shipped_round: e11-recovery (2026-08-12)
+    covered_by:
+      - tests/recovery-keys.test.mjs   (11/11 PASS, re-executed this round)
+      - tests/sentinel/e11-recovery-check.sh
+    cases:
+      - "determinism: (sponsor, member, epoch) -> same blinded keypair every time"
+      - "distinct across members, epochs (single-use rotation), and sponsors"
+      - "derived seed never equals the sponsor secret or the member commitment"
+      - "key material shapes correct (32-byte seed/pubkey, 64-byte secretKey)"
+      - "blindedKeysForMember refuses two identical sponsor secrets (would
+         silently collapse 2 guardians into 1)"
+      - "proveRecoveryControl's signature verifies against the blinded pubkey
+         with plain Ed25519 — a sponsor can prove control without revealing
+         which sponsor they are"
+      - "input validation rejects a short secret / wrong-length commitment /
+         negative epoch"
+      - "domain tag is the frozen v1 value \"AHA-F66-recovery-v1\""
+      - "SCOPE re-verified: derivation-only — no storage export, no
+         localStorage/indexedDB/sessionStorage call, no enumeration/list/
+         getAll/dump export anywhere in lib/recoveryKeys.ts"
+      - "NOT called from any local-recovery path this round: zero references
+         to recoveryKeys anywhere in app/recovery/**, components/Shard*.tsx,
+         lib/shardSeal.ts, lib/recoveryUi.ts, or lib/recovery.ts — the two
+         recovery mechanisms (Epic 11 local Shamir recovery vs. F9/F10/F11
+         on-chain guardian rebind) remain architecturally separate, as the
+         module's own header comment requires"
+      - "lib/member.ts still passes PublicKey.default at both sites (the
+         dev-fixture signer and the real issueMembership call) — F66 is not
+         silently wired into what lands on chain at issue time this round;
+         the wiring remains a declared follow-up in BACKLOG.md's F66 row, not
+         a quiet edit"
+    coverage_gaps:
+      - "no test exercises proveRecoveryControl signing an ACTUAL
+         member_migrate transaction against a local validator — the on-chain
+         half of F9/F10/F11 that would eventually consume this module is
+         untested end-to-end (pre-existing gap in F9/F10/F11 coverage, not
+         introduced this round)"
+      - "the wiring-into-issueMembership follow-up itself (replacing
+         PublicKey.default with real blinded keys) has, by definition, no
+         coverage yet — it does not exist in the codebase"

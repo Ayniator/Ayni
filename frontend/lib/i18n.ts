@@ -63,6 +63,7 @@ const en: Record<string, string> = {
   "home.slogan":
     "AHA is a 12 step Core Shamanism recovery and spiritual development program for human beings, built on trust, lineage, and proven ancestral wisdom.",
   "footer.line": "AHA — Ancestral Humanity Anonymous · governed by group conscience, not by an owner.",
+  "nav.start": "Start here",
   "ctl.language": "Language",
   "ctl.theme.toLight": "Light",
   "ctl.theme.toDark": "Dark",

@@ -100,7 +100,7 @@ export default function Home() {
     setError(null);
     const secure = typeof window !== "undefined" && window.isSecureContext;
     if (!navigator.geolocation || !secure) {
-      setError("Your browser's location API needs a secure context (https or localhost). You can still browse the world map — nothing about you is sent anywhere.");
+      setError(t("home.errInsecure"));
       return;
     }
     setLocating(true);
@@ -111,7 +111,7 @@ export default function Home() {
         setLocating(false);
       },
       () => {
-        setError("Couldn't get your location. Allow location access and try again — or just browse the map.");
+        setError(t("home.errGeoFailed"));
         setLocating(false);
       },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
@@ -129,7 +129,7 @@ export default function Home() {
       <p className="home-slogan"><SloganWithLink text={t("home.slogan")} /></p>
       <section className="hero">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/circle.png" alt="A fellowship Circle gathered in rhythm" className="hero-img" />
+        <img src="/circle.png" alt={t("home.heroAlt")} className="hero-img" />
         <div className="hero-overlay">
           <h2 className="hero-h2">{t("home.title")}</h2>
           <p className="hero-sub">{t("home.sub")}</p>
@@ -137,20 +137,19 @@ export default function Home() {
       </section>
 
       <p className="lede">
-        Every Circle that has published a profile, straight from the chain.{" "}
+        {t("home.dirLede")}{" "}
         <button className="btn" onClick={locate} disabled={locating}>
-          {locating ? "Locating…" : located ? "Update my location" : "Use my location"}
+          {locating ? t("home.locating") : located ? t("home.updateLocation") : t("home.useLocation")}
         </button>
       </p>
       <p className="muted sm" style={{ marginTop: -6 }}>
-        Your position is read by your browser only and used locally to sort Circles by
-        distance — it is never sent to us or to any third party.
+        {t("home.geoNote")}
       </p>
 
       {error && <p className="error">{error}</p>}
-      {loading && <p className="muted">Loading Circles from the chain…</p>}
+      {loading && <p className="muted">{t("home.loadingCircles")}</p>}
       {!loading && circles.length === 0 && !error && (
-        <p className="muted">No Circles have published a directory profile yet.</p>
+        <p className="muted">{t("home.noProfiles")}</p>
       )}
 
       <div className="grid two">
@@ -171,15 +170,15 @@ export default function Home() {
               onKeyDown={(e) => { if (e.key === "Enter") setSelected(c); }}
             >
               <div className="row">
-                <Identicon seed={`AHA${c.circle}`} title={c.name || "Circle"} size={46} />
+                <Identicon seed={`AHA${c.circle}`} title={c.name || t("home.circleFallback")} size={46} />
                 <div className="meta" style={{ flex: 1 }}>
-                  <div className="name">{c.name || "Circle"}</div>
+                  <div className="name">{c.name || t("home.circleFallback")}</div>
                   <div className="sub">
                     {c.city}
                     {c.address ? ` · ${c.address}` : ""}
                   </div>
                 </div>
-                {located && <span className="pill">{c.distanceKm.toFixed(0)} km</span>}
+                {located && <span className="pill">{c.distanceKm.toFixed(0)} {t("home.km")}</span>}
               </div>
             </div>
           ))}
@@ -204,6 +203,7 @@ function CircleDetail({
   posts: Post[] | null;
   onClose: () => void;
 }) {
+  const t = useT();
   const [events, setEvents] = useState<CalEvent[] | null>(null);
   useEffect(() => {
     setEvents(null);
@@ -216,34 +216,34 @@ function CircleDetail({
 
   const live = (posts ?? []).filter((p) => p.live);
   const docs: { cid: string; label: string }[] = [
-    { cid: circle.twelveStepsCid, label: "12 Steps" },
-    { cid: circle.preambleCid, label: "Preamble" },
-    { cid: circle.dailyReflectionsCid, label: "Daily Reflections" },
+    { cid: circle.twelveStepsCid, label: t("home.docs12Steps") },
+    { cid: circle.preambleCid, label: t("home.docsPreamble") },
+    { cid: circle.dailyReflectionsCid, label: t("home.docsReflections") },
   ].filter((d) => d.cid);
 
   return (
     <div className="card circle-detail">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div className="row" style={{ gap: 12 }}>
-          <Identicon seed={`AHA${circle.circle}`} title={circle.name || "Circle"} size={48} />
+          <Identicon seed={`AHA${circle.circle}`} title={circle.name || t("home.circleFallback")} size={48} />
           <div>
-            <div className="name" style={{ fontSize: 18 }}>{circle.name || "Circle"}</div>
-            <div className="sub">{circle.city}{located ? ` · ${circle.distanceKm.toFixed(0)} km away` : ""}</div>
+            <div className="name" style={{ fontSize: 18 }}>{circle.name || t("home.circleFallback")}</div>
+            <div className="sub">{circle.city}{located ? ` · ${circle.distanceKm.toFixed(0)} ${t("home.kmAway")}` : ""}</div>
           </div>
         </div>
-        <button className="btn btn-sm btn-ghost" onClick={onClose}>Close</button>
+        <button className="btn btn-sm btn-ghost" onClick={onClose}>{t("home.close")}</button>
       </div>
 
       <div className="detail-grid">
         <div>
-          <h4 style={{ margin: "0 0 4px" }}>Location</h4>
+          <h4 style={{ margin: "0 0 4px" }}>{t("home.locationHeading")}</h4>
           <p className="muted sm" style={{ margin: 0 }}>
             {circle.address || "—"}<br />
             <span className="mono">{circle.lat.toFixed(5)}, {circle.lon.toFixed(5)}</span>
           </p>
           {docs.length > 0 && (
             <>
-              <h4 style={{ margin: "12px 0 4px" }}>Documents</h4>
+              <h4 style={{ margin: "12px 0 4px" }}>{t("home.documentsHeading")}</h4>
               <p className="sm" style={{ margin: 0 }}>
                 {docs.map((d, i) => (
                   <span key={d.label}>{i > 0 ? " · " : ""}<a href={ipfsUrl(d.cid)} target="_blank" rel="noreferrer">{d.label}</a></span>
@@ -253,10 +253,10 @@ function CircleDetail({
           )}
         </div>
         <div>
-          <h4 style={{ margin: "0 0 4px" }}>Upcoming meetings</h4>
-          {events === null && <p className="muted sm" style={{ margin: 0 }}>Loading the calendar…</p>}
+          <h4 style={{ margin: "0 0 4px" }}>{t("home.meetingsHeading")}</h4>
+          {events === null && <p className="muted sm" style={{ margin: 0 }}>{t("home.loadingCalendar")}</p>}
           {events !== null && events.length === 0 && (
-            <p className="muted sm" style={{ margin: 0 }}>No scheduled meetings published yet.</p>
+            <p className="muted sm" style={{ margin: 0 }}>{t("home.noMeetings")}</p>
           )}
           {(events ?? []).slice(0, 5).map((ev, i) => (
             <div key={i} className="cal-row">
@@ -266,10 +266,10 @@ function CircleDetail({
             </div>
           ))}
 
-          <h4 style={{ margin: "12px 0 4px" }}>Latest from the board</h4>
-          {posts === null && <p className="muted sm" style={{ margin: 0 }}>Loading the board…</p>}
+          <h4 style={{ margin: "12px 0 4px" }}>{t("home.boardHeading")}</h4>
+          {posts === null && <p className="muted sm" style={{ margin: 0 }}>{t("home.loadingBoard")}</p>}
           {posts !== null && live.length === 0 && (
-            <p className="muted sm" style={{ margin: 0 }}>No current notices.</p>
+            <p className="muted sm" style={{ margin: 0 }}>{t("home.noNotices")}</p>
           )}
           {live.slice(0, 4).map((p) => (
             <div key={p.pubkey} className="board-note">

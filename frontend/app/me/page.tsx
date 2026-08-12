@@ -135,6 +135,7 @@ export default function Me() {
             <MentorshipCard wallet={wallet ?? null} memberships={memberships} />
             <VisibilityCard wallet={wallet ?? null} memberships={memberships} />
             <ProfileCard />
+            <RecoveryCard />
             <JoinCard
               circles={circles}
               wallet={wallet ?? null}
@@ -959,5 +960,23 @@ function AnonymousNote({ t }: { t: (k: string) => string }) {
       </a>
       {parts[1]}
     </>
+  );
+}
+
+// Epic 11 — entry point to the shard ceremony and the recovery wizard. Both
+// flows are purely local (nothing on chain); this card only routes to them.
+function RecoveryCard() {
+  const t = useT();
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>🪶 {t("me.recovery.title")}</h3>
+      <p className="muted sm" style={{ marginTop: 0 }}>
+        {t("me.recovery.desc")}
+      </p>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <a className="btn btn-sm" href="/recovery/setup">{t("me.recovery.setupBtn")}</a>
+        <a className="btn btn-sm btn-ghost" href="/recovery">{t("me.recovery.recoverBtn")}</a>
+      </div>
+    </div>
   );
 }

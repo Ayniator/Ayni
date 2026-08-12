@@ -13,6 +13,7 @@
 // reloading sees a fresh order. There is no "recommended" wallet.
 
 import { useEffect, useState } from "react";
+import { useT } from "./SettingsProvider";
 // docs/wallets.json is the single source of truth, re-reviewed each equinox; a
 // copy is served at /wallets.json (frontend/public/) and fetched at runtime, so
 // the recommendation can follow reality without a code change.
@@ -31,9 +32,24 @@ function shuffle<T>(input: T[]): T[] {
 }
 
 export default function WalletChooser() {
+  const t = useT();
   // Fetch the config at runtime, then shuffle once after it lands (no hydration
   // mismatch — the list starts empty and fills on the client only).
   const [order, setOrder] = useState<Wallet[]>([]);
+
+  // Per-wallet notes are data (docs/wallets.json), so their translations live
+  // under literal keys — the switch keeps every t() call literal for the
+  // sentinel i18n gate; an unknown id falls back to the JSON's English note.
+  function walletNote(id: string, fallback: string): string {
+    switch (id) {
+      case "phantom": return t("wallet.note.phantom");
+      case "solflare": return t("wallet.note.solflare");
+      case "glow": return t("wallet.note.glow");
+      case "trust": return t("wallet.note.trust");
+      case "jupiter": return t("wallet.note.jupiter");
+      default: return fallback;
+    }
+  }
   useEffect(() => {
     fetch("/wallets.json").then((r) => r.json()).then((cfg) => setOrder(shuffle((cfg.wallets ?? []) as Wallet[]))).catch(() => {});
   }, []);
@@ -45,28 +61,24 @@ export default function WalletChooser() {
           <div className="card" key={w.id} style={{ padding: 14 }}>
             <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
               <div className="name" style={{ fontSize: 16 }}>{w.name}</div>
-              <span className="pill" title="You hold your own keys — nobody custodies your funds.">self-custody</span>
+              <span className="pill" title={t("wallet.selfCustodyTitle")}>{t("wallet.selfCustody")}</span>
             </div>
-            {w.note && <div className="muted sm" style={{ margin: "4px 0 8px" }}>{w.note}</div>}
+            {w.note && <div className="muted sm" style={{ margin: "4px 0 8px" }}>{walletNote(w.id, w.note)}</div>}
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               {w.links.ios && (
-                <a className="btn btn-sm" href={w.links.ios} target="_blank" rel="noreferrer">iPhone / iPad ↗</a>
+                <a className="btn btn-sm" href={w.links.ios} target="_blank" rel="noreferrer">{t("wallet.ios")}</a>
               )}
               {w.links.android && (
-                <a className="btn btn-sm" href={w.links.android} target="_blank" rel="noreferrer">Android ↗</a>
+                <a className="btn btn-sm" href={w.links.android} target="_blank" rel="noreferrer">{t("wallet.android")}</a>
               )}
               {w.links.web && (
-                <a className="btn btn-sm" href={w.links.web} target="_blank" rel="noreferrer">Web / browser ↗</a>
+                <a className="btn btn-sm" href={w.links.web} target="_blank" rel="noreferrer">{t("wallet.web")}</a>
               )}
             </div>
           </div>
         ))}
       </div>
-      <p className="muted sm" style={{ marginTop: 10 }}>
-        These are independent, self-custodial wallets. AHA does not endorse any one of them —
-        the order above is shuffled every time this page loads. Pick whichever suits your phone
-        or browser.
-      </p>
+      <p className="muted sm" style={{ marginTop: 10 }}>{t("wallet.footer")}</p>
     </div>
   );
 }

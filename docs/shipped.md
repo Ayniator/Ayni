@@ -18,6 +18,53 @@
 
 ---
 
+## F85 / F66 — Epic 11 recovery UX + blinded guardian keys (2026-08-12b)
+
+**F85 — the recovery UX** over F72–F78's tested cores. Everything below is
+**purely local**: no recovery file imports web3/anchor/wallet or makes any
+network call (grep-gated by Sentinel), and nothing about local recovery ever
+emits on chain — per the locked positions.
+
+- **Shard ceremony** (`/recovery/setup`): 2-of-3 split of the master secret;
+  member shard sealed into local custody under a **one-time code shown once**
+  (16-char, no-lookalike alphabet, write-it-down gate); two sequential
+  **in-person** sponsor handovers with confirm-received checkpoints; a member
+  with one sponsor gets the honest F78 dead-end (no fake ceremony).
+- **Handover** (`ShardSend` / `ShardReceive`): QR rendered locally (`qrcode`),
+  Web NFC (mime `application/vnd.aha.shard`) where available, native
+  `BarcodeDetector` camera scan where available, and a typed-code fallback
+  everywhere — no JS QR-decode dependency, no network path, shards never touch
+  storage in the I/O layer.
+- **Recovery wizard** (`/recovery`): member-present (own shard + one sponsor →
+  immediate, bit-identical restore; a sponsor blob cannot open under the
+  `member` seal key, so two sponsor shards cannot masquerade), sponsor-only
+  (7-day window, display-only countdown, gate is `windowElapsed` re-checked at
+  click, stored window clamps UP if tampered, "your existing device can cancel"
+  note), cancel-from-existing-device (burns collected blobs + clears the local
+  intent), and a **mandatory burn-and-reissue** epilogue after any recovery that
+  consumed a sponsor shard.
+- **Shared sealing** (`lib/shardSeal.ts`): key = SHA-256("aha-shard-seal-v1:
+  <role>:" + code), `nacl.secretbox`, blob = nonce(24)‖box; `openSponsorShard`
+  tries both sponsor role keys (payloads carry no role marker by design).
+- **Hygiene**: 21 `fill(0)` wipe sites; master only ever in a ref; secrets never
+  in React state, logs, or storage. F78 disclosure also added to `/onboarding`'s
+  finishing step; `/me` gained a Recovery entry card.
+
+**F66 — blinded one-time guardian keys** (`lib/recoveryKeys.ts`): the on-chain
+`recovery_keys[2]` must never hold raw sponsor pubkeys (public member↔sponsor
+link). Derivation: HKDF-SHA-512 (WebCrypto), salt/tag `AHA-F66-recovery-v1`,
+info = memberCommitment ‖ u64le(epoch) → `Keypair.fromSeed`; unlinkable without
+the sponsor secret, epoch rotation = single-use; sponsor-side
+`proveRecoveryControl` re-derives to sign an actual guardian rebind. **This is
+the F9/F10/F11 on-chain migration mechanism — distinct from local recovery.**
+11/11 node tests pass. Deliberately NOT yet wired into `issueMembership`
+(`lib/member.ts:251` still passes `PublicKey.default`) — that change affects
+what lands on chain at issue time and ships as its own follow-up.
+
+Frontend-only. `tsc --noEmit` clean.
+
+---
+
 ## F82 / F83 / F84 — Reflections default mode, home slogan, /me ZK note (2026-08-12)
 
 **F82 — /reflections default mode + browse-by-day calendar.** Previously the page

@@ -1,6 +1,6 @@
 {
   "name": "aha-frontend",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "AHA / Ayni web app — Find a Circle Near You, Daily Reflections, Documents (IPFS).",
   "scripts": {
@@ -20,6 +20,7 @@
     "leaflet": "^1.9.4",
     "next": "^16.2.9",
     "nodemailer": "^8.0.11",
+    "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-leaflet": "^5.0.0",
