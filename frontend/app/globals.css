@@ -37,7 +37,7 @@
   --bg-grad-a: #1c1d3a; --bg-grad-b: #14233a;
   /* Very dark grey bar with white menu titles (explicit, not derived
      from --muted, so nav labels stay legible against it). */
-  --nav-bg: #333333;
+  --nav-bg: #111111;
   --nav-link: #ffffff;
   --nav-link-hover: #ffffff;
 }

@@ -35,7 +35,7 @@ const keyOf = (y: number, m: number, d: number) =>
  * closes), and a split only happens where whitespace already followed — so
  * decimals, "e.g." and initials are left alone.
  */
-export function quoteLines(quote: string): string[] {
+function quoteLines(quote: string): string[] {
   return quote
     .split(/(?<=[.;:,])\s+/)
     .map((l) => l.trim())

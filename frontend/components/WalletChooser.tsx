@@ -20,6 +20,36 @@ import { useT } from "./SettingsProvider";
 type Links = { ios?: string | null; android?: string | null; web?: string | null };
 type Wallet = { id: string; name: string; custody: string; note?: string; links: Links };
 
+/** Which of the three install routes this device can actually use. */
+type Platform = "ios" | "android" | "web";
+
+/**
+ * Detect the device so the install link that WORKS here comes first.
+ *
+ * This reorders the three links INSIDE every wallet card identically, so it
+ * cannot advantage one wallet over another — T6 (no endorsements) is untouched,
+ * and the wallet order itself stays the uniform shuffle below. Nothing detected
+ * here is stored, sent anywhere, or mixed into that shuffle: it is read from the
+ * user agent at mount and used only to sort three buttons.
+ */
+function detectPlatform(): Platform {
+  if (typeof navigator === "undefined") return "web";
+  const ua = navigator.userAgent || "";
+  if (/android/i.test(ua)) return "android";
+  if (/iphone|ipad|ipod/i.test(ua)) return "ios";
+  // iPadOS 13+ reports a desktop Mac user agent; the touch points give it away.
+  if (/macintosh|mac os x/i.test(ua) && (navigator.maxTouchPoints ?? 0) > 1) return "ios";
+  return "web";
+}
+
+/** Where each platform's own link goes first, and the rest keep a stable order
+ *  so the card does not reshuffle its buttons on re-render. */
+const LINK_ORDER: Record<Platform, Platform[]> = {
+  ios: ["ios", "android", "web"],
+  android: ["android", "ios", "web"],
+  web: ["web", "ios", "android"],
+};
+
 /** Uniform Fisher–Yates. Source of randomness is Math.random() alone — never a
  *  user identifier. Returns a new array; does not mutate the input. */
 function shuffle<T>(input: T[]): T[] {
@@ -36,6 +66,9 @@ export default function WalletChooser() {
   // Fetch the config at runtime, then shuffle once after it lands (no hydration
   // mismatch — the list starts empty and fills on the client only).
   const [order, setOrder] = useState<Wallet[]>([]);
+  // Starts at "web" and is corrected on mount — the list itself only renders
+  // after a client-side fetch, so there is no server/client markup to mismatch.
+  const [platform, setPlatform] = useState<Platform>("web");
 
   // Per-wallet notes are data (docs/wallets.json), so their translations live
   // under literal keys — the switch keeps every t() call literal for the
@@ -50,7 +83,18 @@ export default function WalletChooser() {
       default: return fallback;
     }
   }
+  // Literal t() keys only (the sentinel i18n gate reads these statically), so
+  // this is a switch rather than a computed `wallet.${kind}`.
+  function linkLabel(kind: Platform): string {
+    switch (kind) {
+      case "ios": return t("wallet.ios");
+      case "android": return t("wallet.android");
+      default: return t("wallet.web");
+    }
+  }
+
   useEffect(() => {
+    setPlatform(detectPlatform());
     fetch("/wallets.json").then((r) => r.json()).then((cfg) => setOrder(shuffle((cfg.wallets ?? []) as Wallet[]))).catch(() => {});
   }, []);
 
@@ -65,15 +109,15 @@ export default function WalletChooser() {
             </div>
             {w.note && <div className="muted sm" style={{ margin: "4px 0 8px" }}>{walletNote(w.id, w.note)}</div>}
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-              {w.links.ios && (
-                <a className="btn btn-sm" href={w.links.ios} target="_blank" rel="noreferrer">{t("wallet.ios")}</a>
-              )}
-              {w.links.android && (
-                <a className="btn btn-sm" href={w.links.android} target="_blank" rel="noreferrer">{t("wallet.android")}</a>
-              )}
-              {w.links.web && (
-                <a className="btn btn-sm" href={w.links.web} target="_blank" rel="noreferrer">{t("wallet.web")}</a>
-              )}
+              {/* The route this device can actually install from comes first. */}
+              {LINK_ORDER[platform].map((kind) => {
+                const href = w.links[kind];
+                return href ? (
+                  <a key={kind} className="btn btn-sm" href={href} target="_blank" rel="noreferrer">
+                    {linkLabel(kind)}
+                  </a>
+                ) : null;
+              })}
             </div>
           </div>
         ))}
