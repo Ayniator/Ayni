@@ -1,6 +1,6 @@
 {
   "name": "aha-frontend",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "private": true,
   "description": "AHA / Ayni web app — Find a Circle Near You, Daily Reflections, Documents (IPFS).",
   "scripts": {

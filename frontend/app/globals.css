@@ -14,6 +14,9 @@
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
   --radius: 14px;
   --bg-grad-a: #efeaff; --bg-grad-b: #e3fff4;
+  --nav-bg: rgba(255, 255, 255, 0.82);
+  --nav-link: var(--muted);
+  --nav-link-hover: var(--text);
 }
 
 /* Blue-dark theme — switchable via the nav toggle (data-theme on <html>). */
@@ -32,6 +35,11 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --bg-grad-a: #1c1d3a; --bg-grad-b: #14233a;
+  /* Very dark grey bar with white menu titles (explicit, not derived
+     from --muted, so nav labels stay legible against it). */
+  --nav-bg: rgba(22, 22, 26, 0.92);
+  --nav-link: #ffffff;
+  --nav-link-hover: #ffffff;
 }
 
 * { box-sizing: border-box; }
@@ -59,12 +67,12 @@ a:hover { text-decoration: underline; }
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--nav-bg);
   backdrop-filter: saturate(160%) blur(10px);
   z-index: 1000;
 }
 .nav { flex-wrap: wrap; row-gap: 8px; }
-.nav .brand { color: var(--text); font-weight: 700; font-size: 18px; display: flex; align-items: center; gap: 9px; white-space: nowrap; flex-shrink: 0; }
+.nav .brand { color: var(--nav-link-hover); font-weight: 700; font-size: 18px; display: flex; align-items: center; gap: 9px; white-space: nowrap; flex-shrink: 0; }
 .nav .brand-logo {
   width: 32px; height: 32px; border-radius: 50%; object-fit: contain;
   flex-shrink: 0;
@@ -73,9 +81,9 @@ a:hover { text-decoration: underline; }
    smaller than AHA and explained on hover. */
 .nav .brand-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; min-width: 0; }
 .nav .brand-aha { font-size: 18px; line-height: 1; }
-.nav .brand-powered { font-size: 9px; font-weight: 500; letter-spacing: .02em; color: var(--muted); text-transform: lowercase; line-height: 1; }
-.ayni-wrap { position: relative; display: inline-flex; align-items: center; font-size: 13px; line-height: 1; font-weight: 700; color: var(--text); cursor: help; outline: none; }
-.ayni-name { border-bottom: 1px dotted var(--muted); }
+.nav .brand-powered { font-size: 9px; font-weight: 500; letter-spacing: .02em; color: var(--nav-link); opacity: .72; text-transform: lowercase; line-height: 1; }
+.ayni-wrap { position: relative; display: inline-flex; align-items: center; font-size: 13px; line-height: 1; font-weight: 700; color: var(--nav-link-hover); cursor: help; outline: none; }
+.ayni-name { border-bottom: 1px dotted var(--nav-link); }
 .ayni-card {
   position: absolute; top: 100%; left: 0; z-index: 60; margin-top: 8px;
   width: 268px; max-width: 78vw; padding: 11px 13px;
@@ -92,8 +100,8 @@ a:hover { text-decoration: underline; }
 .ayni-links { display: flex; gap: 14px; margin-top: 9px; font-weight: 600; }
 .ayni-links a { color: var(--accent, #6d4cff); }
 .nav nav { display: flex; gap: 4px; flex: 1 1 auto; flex-wrap: wrap; min-width: 0; }
-.nav nav a { color: var(--muted); font-weight: 550; font-size: 14px; padding: 7px 10px; border-radius: 9px; white-space: nowrap; }
-.nav nav a:hover { color: var(--text); background: var(--bg-2); text-decoration: none; }
+.nav nav a { color: var(--nav-link); font-weight: 550; font-size: 14px; padding: 7px 10px; border-radius: 9px; white-space: nowrap; }
+.nav nav a:hover { color: var(--nav-link-hover); background: var(--bg-2); text-decoration: none; }
 
 .nav-right { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 
@@ -390,11 +398,11 @@ pre.doc { white-space: pre-wrap; word-break: break-word; background: var(--bg-2)
 /* ---- "The 12" nav dropdown ------------------------------------------------ */
 .nav-menu { position: relative; display: inline-flex; }
 .nav-menu-btn {
-  color: var(--muted); font-weight: 550; font-size: 14px; padding: 7px 10px;
+  color: var(--nav-link); font-weight: 550; font-size: 14px; padding: 7px 10px;
   border-radius: 9px; white-space: nowrap; background: none; border: none;
   cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 4px;
 }
-.nav-menu-btn:hover, .nav-menu-btn[aria-expanded="true"] { color: var(--text); background: var(--bg-2); }
+.nav-menu-btn:hover, .nav-menu-btn[aria-expanded="true"] { color: var(--nav-link-hover); background: var(--bg-2); }
 .nav-caret { font-size: 10px; opacity: 0.75; }
 .nav-drop {
   position: absolute; top: calc(100% + 4px); left: 0; z-index: 40;
