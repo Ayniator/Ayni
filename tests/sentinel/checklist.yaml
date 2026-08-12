@@ -850,6 +850,79 @@ features:
          identical bare page (Layer A / spec's side-channel assertion)"
       - "roster (Membership.owner memcmp) + /board public-read still open (F61 remaining)"
 
+  - id: F61-R2
+    name: "F61 round 2 -- shielded ownership becomes a usable feature
+      (signer threading, relayer-paid writes, shield UI)"
+    shipped_round: "f61-r2 (2026-08-12)"
+    covered_by:
+      - "tests/epic5.ts -- 'a shielded member still sets their own
+        visibility', '...still posts, and the post names no wallet',
+        '...is still a usable sponsor (wing, cord, admission attestation)',
+        'the derived key never held a lamport while doing any of it',
+        'refuses a shielded member write signed by the wallet they shielded
+        away from'"
+      - "tests/relayer.ts -- the co-signer boundary: accepts one pinned
+        authority, refuses the relayer AS authority, refuses an unsigned
+        authority slot, refuses a third signer, allows fee-payer-only
+        relays, bounds create_post data, and cross-checks against the IDL
+        that every authorityIndex is a signer and never the payer"
+      - "docs/visibility.md sections 2, 3b and 4"
+    what_to_re_verify:
+      - "PRIMARY INVARIANT: the derived shielded key still has a ZERO
+        balance after authorising every write in the suite. If this fails,
+        someone has made it pay for something, and the only practical way to
+        fund it is a transfer from the member's known wallet -- the
+        funding-source heuristic, which is the CRITICAL this round closed
+        (see F60-F61-phase2 findings, Regression 2)."
+      - "Every member-signed instruction that creates an account still has a
+        SEPARATE payer account from its authority account: create_post,
+        tie_quipu_cord, set_visibility, establish_wing_peer,
+        attest_admission, upsert_member_profile, shield_membership. A
+        refactor that collapses them re-opens the CRITICAL."
+      - "The relayer is NEVER at an entry's authorityIndex, and no allowlist
+        entry has authorityIndex equal to payerIndex. A policy/IDL skew
+        makes the relayer refuse and the client silently fall back to
+        self-paying -- which is the disclosure the entry exists to prevent,
+        and it fails QUIETLY."
+      - "Discriminators and account counts for all RELAY_ALLOWLIST entries
+        still match the freshly built IDL."
+      - "No enumeration surface was added: lib/masterSecret.ts uses ONE
+        fixed keystore blob name and the keystore still has no list, keys or
+        count operation; SHIELD_INDEX_SCAN stays small and is a fixed
+        derivation walk, never a scan."
+      - "The shield UI still states, BEFORE the member commits: that it
+        cannot be undone, that this transaction is signed by their wallet
+        and is therefore permanently linkable, that it depends on the master
+        secret, that shielded-ness is publicly countable, and -- when no
+        relayer is configured -- that their wallet will pay for and appear
+        alongside every later action."
+      - "/recovery/setup still shards the SAME master lib/masterSecret.ts
+        seals (getOrCreateMaster), and /recovery still adopts the
+        reconstructed one. If these drift, a member's sponsors hold shards
+        that restore an identity which cannot sign for their own shielded
+        memberships, and nobody finds out until recovery day."
+      - "Recovery still emits NOTHING on chain (CLAUDE.md locked position):
+        adoptMaster seals locally and caches the viewing secret only."
+    known_open_not_regressions:
+      - "shielding is opt-in; shield-at-issuance is not done"
+      - "the shield transaction is signed by the wallet being unbound --
+        permanently linkable in transaction history, disclosed in the UI"
+      - "with no relayer configured, later writes are wallet-paid and say so"
+      - "shielded-ness and its count remain publicly readable"
+      - "Post.author equals Membership.owner for a shielded member, so their
+        posts are groupable with each other and with the membership -- by a
+        value that names nobody"
+      - "recovery_keys remain memcmp-enumerable"
+      - "OPEN DEFECT CARRIED FORWARD (pre-existing, F60 Phase-2, NOT a
+        regression of this round): MemberProfile.enc_pub is derived as
+        SHA-256('aha-vis-enc-v1' || viewing_secret) with NO Circle in the
+        input, so a member who publishes a profile in two Circles writes the
+        SAME 32 bytes at a fixed offset in both -- a memcmp handle that
+        regroups exactly the memberships shield_membership stopped grouping.
+        Fixing it means domain-separating on the Circle, which strands every
+        published profile and key drop; it needs its own round with a
+        migration. Documented in docs/visibility.md section 4."
+
   - id: F60-F61-phase2
     name: "Epic 5 Phase 2 (F60/F61) — shielded ownership (OwnerTag) +
       encrypted per-tier read path (MemberProfile/VisibilityKeyDrop)"
