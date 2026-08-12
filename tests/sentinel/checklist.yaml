@@ -8,10 +8,86 @@
 # test:adversarial, Playwright); none of that exists in this repo, so the layers
 # are mapped onto what is real here. Do not delete a gap to make a round pass.
 
-round: f60-f61-maci
+round: f60-f61-verify
 established: 2026-08-12
-baseline_report: reports/sentinel/NRR-2026-08-12-f60-f61-maci.md
-previous_baseline_report: reports/sentinel/NRR-2026-08-12-f35-f63v2.md
+baseline_report: reports/sentinel/NRR-2026-08-12-f60-f61-verify.md
+previous_baseline_report: reports/sentinel/NRR-2026-08-12-f60-f61-maci.md
+
+# Round f60-f61-verify (2026-08-12, primary audit target: commit 64c936d as
+# pushed + deployed to devnet at round start; HEAD moved to dbd1719 DURING this
+# round -- see below) verdict: FAIL. This round independently re-derived, from
+# scratch (no cached trust), both CRITICALs the f60-f61-maci round found, then
+# tracked their remediation landing in real time:
+#
+# Regression 1 (F39 MACI, unverified tally wired into install_elected_seat /
+# refill_faucet, gated by only ONE Council seat via open_maci_round's
+# require_any_seat): reconfirmed live on devnet as deployed at round start
+# (slot 483208631/483215806-era) by an independent on-chain test run
+# (tests/maci.ts, 9 passing / 1 failing on the UNMODIFIED F39 files as they
+# stood in 64c936d/d3c880b -- the 1 failure, "front-running guard", could not
+# be cleanly re-attributed before tests/maci.ts was itself rewritten by
+# concurrent work; flagged for a dedicated re-check, not escalated to a new
+# CRITICAL given the requirement's logic reads sound on inspection and a later
+# 24/24 run with the rewritten suite against a rebuilt program passed
+# including that exact case). FIXED IN SOURCE and DEPLOYED TO DEVNET during
+# this round (commit 4acd3f9, then superseded at HEAD): both instructions now
+# `return Err(AyniError::MaciTallyUnverified.into())` before touching state;
+# pinned by a new source-grep unit test
+# (proptests::maci_consequential_instructions_stay_disabled, part of the
+# 22/22 `cargo test -p ayni --lib` this round reconfirmed twice clean after
+# one transient failure that did not reproduce).
+#
+# Regression 2 (F61, `upsert_member_profile`/`shield_membership` used
+# `payer = member`, so a shielded membership's derived signing key -- which
+# never holds a lamport -- could not pay its own rent; reproduced
+# independently a THIRD time this round via a fresh build deployed to a
+# throwaway local validator, `tests/epic5.ts` 11 passing / 4 failing,
+# byte-identical error to the two runs the f60-f61-maci round already
+# recorded: "Transfer: insufficient lamports 0, need 3473040"). Also newly
+# noted this round: `docs/visibility.md` §2, as it stood in 64c936d, OVERCLAIMS
+# -- it states `publishProfile()`/`grantElementKeys()` "take" the derived
+# signer with no caveat, which reads as "this works," when it demonstrably did
+# not for any membership that actually shielded. FIXED IN SOURCE (commit
+# dbd1719, pushed) and independently re-verified end-to-end by this round:
+# `member` (authority) and a new `payer` account are now separate in both
+# instructions; a fresh build+deploy to an isolated local validator brought
+# `tests/epic5.ts` to 16/16, including a new regression case asserting the
+# authorising key's balance stays exactly 0 after every write in the suite.
+# DEPLOYED TO DEVNET (verified independently by this round, not merely
+# taken on a peer's word: `solana program dump` against
+# https://api.devnet.solana.com + SHA-256 over the real program length
+# matches this round's own `anchor build` of HEAD `dbd1719` byte-for-byte --
+# 309c838e018bbcc3e5d2aa5da6424b3cd90898d453a9c0320dd4835a2622d066, last
+# deployed slot 483217663). `docs/visibility.md` §2/§4 now correctly disclose
+# the fix and cite the Sentinel finding by report name.
+#
+# PROCESS CONTROL FAILURE, SECOND OCCURRENCE (CRITICAL, contributes to this
+# round's FAIL independently of the two Regressions above): while this round
+# was actively in progress -- before any PASS/FAIL verdict had been written --
+# SIX more commits landed on `solana` and were pushed to `origin/solana`
+# (7f58d1a, 5678e32, 9468599, 4acd3f9, 4a86a89, dbd1719), and at least ONE of
+# them (4acd3f9) triggered ANOTHER live devnet program upgrade, all with no
+# completed Sentinel round gating the push or the deploy. This is the exact
+# failure mode already recorded below as `PC-2026-08-12-64c936d`, recurring
+# verbatim on the same day, during the very round convened to review the first
+# occurrence. The fixes themselves were good-faith, correctly targeted at
+# Sentinel's own findings, well-documented, and (per this round's independent
+# re-verification) actually correct -- this is not a complaint about the fix
+# content. It is that "wait for Sentinel's verdict before pushing / deploying"
+# remains a social convention, not a mechanical gate, exactly as
+# `PC-2026-08-12-64c936d`'s own recommended guard (a pre-push check grepping a
+# matching, PASS-verdict NRR for the commit SHA) predicted would keep
+# happening until implemented. See reports/sentinel/NRR-2026-08-12-f60-f61-verify.md.
+#
+# NEW, UNCOVERED as of dbd1719 (WARNING this round; missing coverage becomes a
+# FAIL next round if still untracked): F92 (`/create` eligibility gate,
+# `frontend/lib/createGate.ts` + `frontend/app/create/page.tsx` -- sponsor
+# validation fails CLOSED on RPC error, funding check fails OPEN, both
+# independently read and confirmed to match their own doc comments this round)
+# and F93 (`/get-app`, `frontend/lib/platform.ts` -- confirmed this round to
+# make no store-availability overclaim: explicitly states no Play/App Store
+# listing and an unsigned iOS archive). Neither has a dedicated Sentinel test
+# entry below yet.
 
 # Round f60-f61-maci (2026-08-12) verdict: FAIL. RETROACTIVE round: commit
 # 64c936d (F60 Phase-2 / F61 shielded ownership + encrypted read path, plus an
