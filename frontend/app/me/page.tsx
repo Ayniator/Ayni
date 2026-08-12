@@ -123,7 +123,7 @@ export default function Me() {
             <li><strong>{t("me.gs.step2Strong")}</strong>{t("me.gs.step2Rest")}</li>
             <li>{t("me.gs.step3Pre")} <a href="/inbox">{t("me.gs.step3Link")}</a> {t("me.gs.step3Post")}</li>
           </ol>
-          <p className="muted sm" style={{ margin: 0 }}>{t("me.gs.anonymousNote")}</p>
+          <p className="muted sm" style={{ margin: 0 }}><AnonymousNote t={t} /></p>
         </div>
       )}
 
@@ -934,5 +934,30 @@ function SeventhTraditionCard({
         )}
       </div>
     </div>
+  );
+}
+
+// The anonymity note carries an in-sentence link on the phrase "zero-knowledge
+// proofs technology" (italic, → Wikipedia, new tab). The sentence is one
+// translated string with a "{zk}" placeholder kept verbatim in every locale; the
+// link text is its own translated key, so word order and wording localise while
+// the split stays reliable. If a translation drops the placeholder, the sentence
+// still renders in full (just without the link).
+function AnonymousNote({ t }: { t: (k: string) => string }) {
+  const text = t("me.gs.anonymousNote");
+  const parts = text.split("{zk}");
+  if (parts.length !== 2) return <>{text}</>;
+  return (
+    <>
+      {parts[0]}
+      <a
+        href="https://en.wikipedia.org/wiki/Zero-knowledge_proof"
+        target="_blank"
+        rel="noreferrer"
+      >
+        <i>{t("me.gs.zkLink")}</i>
+      </a>
+      {parts[1]}
+    </>
   );
 }

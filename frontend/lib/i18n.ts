@@ -60,6 +60,8 @@ const en: Record<string, string> = {
   "brand.tagline": "Anonymous, owner-less fellowship on Solana.",
   "home.title": "Find a Circle Near You",
   "home.sub": "Ancestral Humanity Anonymous — anonymous, owner-less fellowship on Solana.",
+  "home.slogan":
+    "AHA is a 12 step Core Shamanism recovery and spiritual development program for human beings, built on trust, lineage, and proven ancestral wisdom.",
   "footer.line": "AHA — Ancestral Humanity Anonymous · governed by group conscience, not by an owner.",
   "ctl.language": "Language",
   "ctl.theme.toLight": "Light",
@@ -85,6 +87,25 @@ const en: Record<string, string> = {
     "Private 1:1 messages, end-to-end encrypted to your wallet. Only you and your correspondent can read them — the sender is named only inside the encryption, so no one else can tell who wrote to you.",
   "msg.inbox.metadata":
     "These messages never touch the public blockchain — no on-chain record of who received what, or when. The relay that carries them cannot read them and never learns who sent them; it does still see which mailbox received mail and when, so that metadata lives on deletable, private infrastructure rather than a permanent public ledger. Hiding that two people corresponded at all (mixing) is the documented next step, not yet shipped. Checking signs once to derive your key; mail is decrypted on this device only.",
+  // /reflections default mode — the built-in Daily Reflection (aa.org-inspired
+  // layout) shown when no Circle has published an entry for the chosen day, plus
+  // the browse-by-day calendar. The reflection *content* is sourced material and
+  // stays in its original language; only this chrome is localised.
+  "reflections.lede":
+    "A thought to carry through the day. When your Circle has published its own, it appears here; otherwise this is the fellowship's built-in reflection for the day.",
+  "reflections.builtinBadge": "AHA Daily Reflection",
+  "reflections.circleBadge": "Published by this Circle",
+  "reflections.reflectionHeading": "Reflection",
+  "reflections.sourceLabel": "Source",
+  "reflections.stepLabel": "Step",
+  "reflections.nearest":
+    "No reflection is set for this exact day yet — here is the nearest one.",
+  "reflections.cal.heading": "Browse by day",
+  "reflections.cal.prev": "Previous month",
+  "reflections.cal.next": "Next month",
+  "reflections.cal.today": "Today",
+  "reflections.cal.hasEntry": "Has a reflection",
+  "reflections.circlePickerLabel": "Circle",
 };
 
 const fr: Dict = {

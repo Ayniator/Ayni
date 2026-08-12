@@ -854,3 +854,118 @@ features:
       # generated dictionary (add the "admin." prefix to all 244 keys, in all
       # 19 locale blocks) instead.
       - cmd: bash tests/sentinel/i18n-key-check.sh
+
+  # NOTE (2026-08-12, F82/F83 round): the FAILING status noted above for F81
+  # was resolved the same day — see reports/sentinel/NRR-2026-08-12-f81-i18n-recheck.md
+  # (PASS). `bash tests/sentinel/i18n-key-check.sh` is green again as of this
+  # round too (771/771). Left the original failure note above intact per
+  # Sentinel spec §2/§4 (never quietly rewrite history) rather than deleting it.
+
+  # --- 2026-08-12 F82/F83 (round: reflections default mode + home slogan) ---
+  - id: F82
+    name: /reflections default mode — built-in Daily Reflection + browse-by-day calendar
+    covered_by: [tests/sentinel/f82-f83-check.sh]  # no e2e/Playwright suite
+                                                    # exists (Layer A gap,
+                                                    # carried forward); this is
+                                                    # the mechanical regression
+                                                    # gate that exists today.
+    checks:
+      - cmd: test -f frontend/lib/daily-reflections-default.ts
+      - cmd: test -f frontend/lib/reflections.ts
+      - cmd: grep -q "defaultReflectionFor" frontend/app/reflections/page.tsx
+      - cmd: grep -q "REFLECTION_KEY_SET" frontend/app/reflections/page.tsx
+      - cmd: grep -q "function Calendar" frontend/app/reflections/page.tsx
+      # Regression gate: dataset key-set integrity (DEFAULT_REFLECTIONS keys ==
+      # REFLECTION_KEYS, no drift between the calendar dots and what actually
+      # resolves), no malformed MM-DD keys, title/quote/author non-empty for
+      # all 161 entries (these three render unconditionally in the hero — an
+      # empty one is a visible blank-hero bug, unlike source/denomination/step
+      # which are render-guarded), and the circular nearest-day resolution
+      # (year-boundary wrap, leap-day 02-29, garbage input) matches the
+      # algorithm in lib/reflections.ts and never throws. Also asserts the
+      # pre-existing Circle-published flow still wins over the built-in (a
+      # Circle's local entry, then its remote/IPFS entry, both take precedence
+      # — this is the F82 no-regression requirement on the E4/foundation
+      # reflections feature that shipped before this round).
+      - cmd: bash tests/sentinel/f82-f83-check.sh
+    coverage_gaps:
+      - "No Playwright suite renders /reflections in a browser — the calendar
+         grid, dot placement, and localised weekday/month names are checked by
+         source-grep + a Node re-implementation of the resolution algorithm,
+         not by an actual DOM render. Highest-value next investment, same gap
+         noted for F81/F4/F5/etc."
+      - "Content-completeness note (non-gating): 1 of 161 entries (01-22) has
+         an empty `source`, and 3 (01-22, 02-27, 10-02) have an empty
+         `denomination`. Both fields are render-guarded
+         (`{display.x && <.../>}`) so this is not a functional bug — flagged
+         so it doesn't silently grow uncontrolled."
+
+  - id: F83
+    name: Home slogan + invisible Core-Shamanism link
+    covered_by: [tests/sentinel/f82-f83-check.sh]  # no e2e/Playwright suite
+                                                    # exists (Layer A gap).
+    checks:
+      - cmd: grep -q "SloganWithLink" frontend/app/page.tsx
+      - cmd: grep -q "home-slogan" frontend/app/page.tsx
+      - cmd: grep -q "stealth-link" frontend/app/globals.css
+      # Regression gate: the external URL is a hardcoded literal (no
+      # `href={...}` template/variable interpolation — an injection surface
+      # would be a CRITICAL finding under Traditions/privacy review), the link
+      # opens with target=_blank + rel=noreferrer, and "AHA" + the verbatim
+      # phrase "Core Shamanism" survive translation in all 19 locales (1
+      # curated en in lib/i18n.ts + 18 generated in lib/i18n.generated.ts) —
+      # required both for branding and because SloganWithLink splits on the
+      # literal English phrase regardless of the surrounding locale's wording.
+      - cmd: bash tests/sentinel/f82-f83-check.sh
+    coverage_gaps:
+      - "No Playwright suite asserts the link is VISUALLY indistinguishable
+         from surrounding text (no underline/colour/weight/cursor change) —
+         checked by reading the .stealth-link CSS rule (color/text-decoration/
+         font-weight/font-style/cursor: inherit) this round, not by a
+         rendered-pixel/computed-style assertion in a real browser."
+
+  # --- F84: surfaced mid-round (see the F82/F83 NRR timeline), given its
+  # backlog identity the same day — BACKLOG.md row F84, docs/shipped.md
+  # F82/F83/F84 section. Covers the /me AnonymousNote zk-link and the
+  # BrandAyni tooltip link order (GitHub before Wikipedia).
+  - id: F84
+    name: "/me page: AnonymousNote component (in-sentence zk-proof Wikipedia link)"
+    covered_by: []  # only this checklist's own grep/node checks below exist;
+                     # no e2e/Playwright suite (Layer A gap, carried forward).
+    checks:
+      - cmd: grep -q "function AnonymousNote" frontend/app/me/page.tsx
+      - cmd: grep -q "https://en.wikipedia.org/wiki/Zero-knowledge_proof" frontend/app/me/page.tsx
+      - cmd: grep -q 'rel="noreferrer"' frontend/app/me/page.tsx
+      # Regression gate: all 19 locales' "me.gs.anonymousNote" must contain
+      # exactly one "{zk}" placeholder (component does text.split("{zk}"),
+      # renders the link only if that yields exactly 2 parts — a locale with
+      # zero or two+ occurrences silently loses the link, not a crash, but a
+      # content bug) and all 19 must carry a non-empty "me.gs.zkLink".
+      - cmd: |
+          node -e '
+          const fs = require("fs");
+          const src = fs.readFileSync("frontend/lib/i18n.generated.ts", "utf8");
+          const notes = [...src.matchAll(/"me\.gs\.anonymousNote":\s*"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
+          const links = [...src.matchAll(/"me\.gs\.zkLink":\s*"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
+          if (notes.length !== 19) { console.error("expected 19 anonymousNote entries, found " + notes.length); process.exit(1); }
+          if (links.length !== 19) { console.error("expected 19 zkLink entries, found " + links.length); process.exit(1); }
+          const badSplit = notes.filter((n) => n.split("{zk}").length !== 2);
+          if (badSplit.length) { console.error(badSplit.length + " anonymousNote value(s) do not contain exactly one {zk} placeholder"); process.exit(1); }
+          const emptyLink = links.filter((l) => !l.trim());
+          if (emptyLink.length) { console.error(emptyLink.length + " empty zkLink value(s)"); process.exit(1); }
+          console.log("PASS — AnonymousNote zk-link wired correctly in all 19 locales.");
+          '
+    # TIMELINE (2026-08-12, F82/F83 round): first observed with the {zk}
+    # placeholder ABSENT from all 19 anonymousNote strings and zkLink present
+    # in only the English PAGE_STRINGS block — at that point in the round the
+    # component's own length!==2 guard made it a safe no-op (plain text,
+    # identical to pre-existing behaviour), not a regression. The gap was
+    # closed by the main agent DURING this Sentinel round (working-tree drift
+    # observed live — see the NRR's "mid-round drift" note); re-verified here
+    # against the round's final state: functional in all 19 locales.
+    # STILL OUTSTANDING: no BACKLOG.md row, no docs/shipped.md entry — this is
+    # now genuinely shipped, user-facing behaviour with no product-backlog
+    # identity (no F-number). Missing-coverage rule (Sentinel spec §4):
+    # WARNING this round (Sentinel added its own gate above the same round it
+    # was found); becomes a FAIL next round if it still has no BACKLOG.md
+    # row/F-number and no docs/shipped.md entry.

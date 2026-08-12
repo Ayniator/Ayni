@@ -18,6 +18,59 @@
 
 ---
 
+## F82 / F83 / F84 — Reflections default mode, home slogan, /me ZK note (2026-08-12)
+
+**F82 — /reflections default mode + browse-by-day calendar.** Previously the page
+only rendered a reflection when a Circle had published one for *today*; otherwise
+it showed a "no entry" status. Now, when no Circle entry exists for the chosen
+day, the page falls back to a **built-in Daily Reflection** shipped with the app.
+
+- Source data: `daily_reflexions/daily_reflexions.xlsx` (161 dated entries,
+  denominations across Christian / Buddhist / Taoist / Greek / Hermetic /
+  Rosicrucian / Shamanic / Analytical-Psychology) → extracted **once** to a typed
+  TS module `frontend/lib/daily-reflections-default.ts` (keyed `MM-DD`), so there
+  is no runtime xlsx parsing.
+- `frontend/lib/reflections.ts` resolves a day to its exact entry or the **nearest
+  available day** by circular calendar distance (today 08-12 → 08-13; 12-31 →
+  01-01 wraps; 02-29 → 03-01).
+- Layout is aa.org-inspired: **title in XL bold**, the localised current date
+  under it, the **quote in bold** with an accent rule, attribution, then the
+  reflection body, then source / 12-step tag. Badge distinguishes a built-in
+  reflection from a Circle-published one.
+- A **calendar** (Monday-first, localised month + weekday names via
+  `toLocaleDateString(lang)`, a dot on days that have an entry, today + selected
+  highlighted) lets any day be browsed; a selected Circle's own entry for that
+  day still takes precedence over the built-in.
+- **Reflection content stays in its source language** — the quotes are sourced
+  material (scripture, philosophy, literature); only the surrounding chrome is
+  localised (18 locales) plus the date. This is a deliberate honesty/quality call,
+  not an omission.
+
+**F83 — home slogan + invisible Core-Shamanism link.** Under the "Ancestral
+Humanity Anonymous" title: *"AHA is a 12 step Core Shamanism recovery and
+spiritual development program for human beings, built on trust, lineage, and
+proven ancestral wisdom."* The phrase **"Core Shamanism"** is an **unobtrusive
+link** — visually identical to the surrounding text (no underline, colour, weight,
+or cursor change) — opening `https://www.shamanism.org/core-shamanism/` in a new
+tab. Localised across 18 locales; "AHA" and the verbatim phrase "Core Shamanism"
+are preserved in every translation so the split-and-link stays reliable.
+
+**F84 — /me anonymity note + ZK explainer link; Ayni tooltip order.** The /me
+getting-started note now reads *"Everything here is truly anonymous by default —
+a membership is a ZK commitment (using zero-knowledge proofs technology), not
+your name."*, with the italic phrase **"zero-knowledge proofs technology"**
+linking to the Wikipedia zero-knowledge-proof article in a new tab. Implemented
+via a `{zk}` placeholder kept verbatim in all 18 non-English translations
+(verified exactly once per locale); a translation that lost the placeholder
+would degrade to plain text, never break. The Ayni brand tooltip in the top nav
+now lists **GitHub ↗ before Wikipedia ↗**.
+
+Frontend-only; no program / circuit / on-chain surface touched. `tsc --noEmit`
+clean. (`next build` still needs Node ≥20; sandbox has 18 — environment
+limitation.)
+
+---
+
 ## 0b. Round update — 2026-08-11b (72 instructions) — the anonymity layer
 
 Verified natively: `anchor build` clean, **72** instruction files; bare

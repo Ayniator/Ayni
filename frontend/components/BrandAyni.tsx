@@ -14,8 +14,8 @@ export default function BrandAyni() {
           reciprocal exchange among members of Andean communities.
         </span>
         <span className="ayni-links">
-          <a href="https://en.wikipedia.org/wiki/Ayni" target="_blank" rel="noopener noreferrer">Wikipedia ↗</a>
           <a href="https://github.com/Ayniator/Ayni" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+          <a href="https://en.wikipedia.org/wiki/Ayni" target="_blank" rel="noopener noreferrer">Wikipedia ↗</a>
         </span>
       </span>
     </span>

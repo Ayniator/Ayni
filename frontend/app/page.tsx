@@ -17,6 +17,30 @@ const CircleMap = dynamic(() => import("../components/CircleMap"), {
 
 const DEFAULT_CENTER = { lat: 20, lon: 0 }; // world view until we have a location
 
+// The slogan's "Core Shamanism" is an unobtrusive link — visually identical to
+// the surrounding text (no underline, colour, or weight change), opening
+// shamanism.org in a new tab. The phrase is kept verbatim in every locale, so
+// splitting on it works regardless of the surrounding translation.
+function SloganWithLink({ text }: { text: string }) {
+  const TERM = "Core Shamanism";
+  const i = text.indexOf(TERM);
+  if (i === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, i)}
+      <a
+        href="https://www.shamanism.org/core-shamanism/"
+        target="_blank"
+        rel="noreferrer"
+        className="stealth-link"
+      >
+        {TERM}
+      </a>
+      {text.slice(i + TERM.length)}
+    </>
+  );
+}
+
 export default function Home() {
   const t = useT();
   const [circles, setCircles] = useState<Circle[]>([]);
@@ -102,6 +126,7 @@ export default function Home() {
   return (
     <>
       <h1 className="home-title">Ancestral Humanity Anonymous</h1>
+      <p className="home-slogan"><SloganWithLink text={t("home.slogan")} /></p>
       <section className="hero">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/circle.png" alt="A fellowship Circle gathered in rhythm" className="hero-img" />
