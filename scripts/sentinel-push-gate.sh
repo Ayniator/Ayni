@@ -121,6 +121,32 @@ if [ ! -f "$LATEST" ]; then
   exit 1
 fi
 
+# A push carrying NOTHING but Sentinel's own bookkeeping is always allowed, and
+# deliberately so: otherwise a FAIL verdict blocks the very push that records
+# the FAIL, and the audit trail can never be committed. Such a push changes no
+# application code, so there is nothing for a verdict to be about. Anything with
+# a single non-bookkeeping file still faces the full gate below.
+bookkeeping_only=1
+saw_any=0
+while read -r _lr lsha _rr rsha; do
+  [ -z "${lsha:-}" ] && continue
+  case "$lsha" in *[!0]*) : ;; *) continue ;; esac
+  saw_any=1
+  if printf '%s' "${rsha:-}" | grep -qE '^0+$'; then rr="$lsha"; else rr="$rsha..$lsha"; fi
+  if git diff --name-only "$rr" 2>/dev/null \
+       | grep -vE '^[[:space:]]*$' \
+       | grep -qvE '^(reports/sentinel/|tests/sentinel/checklist\.yaml$)'; then
+    bookkeeping_only=0
+  fi
+done < /dev/stdin
+if [ "$saw_any" -eq 1 ] && [ "$bookkeeping_only" -eq 1 ]; then
+  say ""
+  say "  Sentinel push gate: bookkeeping-only push (reports/checklist), allowed."
+  say "  No application code changes, so no verdict applies."
+  say ""
+  exit 0
+fi
+
 # The verdict line looks like: "Verdict: **FAIL**" / "**PASS**" /
 # "**PASS WITH WARNINGS**".
 verdict="$(grep -m1 -iE '^[[:space:]]*Verdict:' "$LATEST" | tr -d '*' | sed -E 's/.*[Vv]erdict:[[:space:]]*//' | tr -d '\r')"
