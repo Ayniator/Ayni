@@ -63,12 +63,30 @@ saw "$(run "$D" "$C")" "did not pass" \
   && ok "a PASS-prefixed fake verdict is rejected" \
   || bad "prefix-glob verdict matching is back"
 
+# A genuine PASS must be READ as a pass. Sentinel writes the verdict line both
+# as "Verdict: **PASS**" and as "**Verdict: PASS WITH WARNINGS**" — emphasis
+# wrapping the whole line, label included. The second form once defeated the
+# gate's anchor: the round had passed, the gate saw "<none found>", and it
+# blocked a clean push. Failing closed on an unreadable verdict is correct; the
+# bug was that a perfectly readable verdict was unreadable to the pattern. A
+# gate that cries wolf on good rounds trains people to reach for the override,
+# which is how a real FAIL eventually gets waved through.
+printf -- "- %s\n" "$D" >> reports/sentinel/REVIEWED.md
+printf '**Verdict: PASS WITH WARNINGS**\n' > reports/sentinel/latest.md
+echo "clean work" >> app.ts
+git add -A && git commit -q -m "emphasis-wrapped verdict + code"; V=$(git rev-parse HEAD)
+printf -- "- %s\n" "$V" >> reports/sentinel/REVIEWED.md
+git add -A && git commit -q -m "sentinel: review V"; V2=$(git rev-parse HEAD)
+saw "$(run "$V2" "$D")" "every pushed commit is reviewed" \
+  && ok "an emphasis-wrapped PASS verdict is read as a pass" \
+  || bad "a genuine PASS is unreadable — the gate blocks clean rounds"
+
 # The bookkeeping exemption must not become a smuggling route: a push mixing
 # code into an otherwise reports-only change must still face the full gate.
 printf 'Verdict: **FAIL**\n' > reports/sentinel/latest.md
 echo "smuggled" >> app.ts
 git add -A && git commit -q -m "reports + smuggled code"; E=$(git rev-parse HEAD)
-saw "$(run "$E" "$D")" "BLOCKED" \
+saw "$(run "$E" "$V2")" "BLOCKED" \
   && ok "code mixed into a bookkeeping push still faces the gate" \
   || bad "the bookkeeping exemption can smuggle code past the verdict"
 

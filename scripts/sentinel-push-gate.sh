@@ -175,8 +175,16 @@ if [ "$saw_any" -eq 1 ] && [ "$bookkeeping_only" -eq 1 ]; then
 fi
 
 # The verdict line looks like: "Verdict: **FAIL**" / "**PASS**" /
-# "**PASS WITH WARNINGS**".
-verdict="$(grep -m1 -iE '^[[:space:]]*Verdict:' "$LATEST" | tr -d '*' | sed -E 's/.*[Vv]erdict:[[:space:]]*//' | tr -d '\r')"
+# "**PASS WITH WARNINGS**" — and also "**Verdict: PASS WITH WARNINGS**", where
+# the emphasis wraps the whole line including the label. That last form is what
+# Sentinel actually wrote on 2026-08-12, and the old anchor (`^[[:space:]]*
+# Verdict:`) could not see past the leading `**`: the round had genuinely
+# PASSED, the gate read "<none found>", and it blocked. Failing closed was the
+# right instinct on an unreadable verdict, but the verdict was not unreadable —
+# the pattern was too narrow. Allow leading markdown emphasis and heading marks
+# before the label; the controlled-vocabulary check below is what keeps this
+# honest, and it still rejects anything it cannot match exactly.
+verdict="$(grep -m1 -iE '^[[:space:]]*[*_#[:space:]]*Verdict:' "$LATEST" | tr -d '*_' | sed -E 's/.*[Vv]erdict:[[:space:]]*//' | tr -d '\r')"
 # Exact match only. A prefix glob (PASS*) let "PASS (just kidding, actually
 # FAIL)" through — a verdict is a controlled vocabulary, not a free-text field
 # to be matched loosely. Anything mentioning FAIL is vetoed outright, so a
