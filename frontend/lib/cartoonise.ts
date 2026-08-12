@@ -13,7 +13,7 @@
 // NO new dependency, NO downloaded ML model (a model download would break the
 // no-network rule and dwarf the app). The effect is achieved with classical
 // image processing: saturation lift → edge-preserving (bilateral-ish) smoothing
-// → Sobel ink lines → posterisation → palette reduction.
+// → Sobel ink lines → mild pre-quantisation → median-cut palette reduction.
 //
 // HONESTY (see docs/avatars.md): this destroys fine texture and blunts landmark
 // precision, which is what off-the-shelf face matchers key on. It is NOT a
@@ -65,9 +65,9 @@ export interface CartooniseSettings {
   smoothPasses: number;
   /** Colour tolerance of the smoothing; larger = flatter, less edge-preserving. */
   colourSigma: number;
-  /** Posterisation levels per channel (2..8). */
+  /** Mild pre-quantisation levels per channel (2..32). */
   levels: number;
-  /** Final palette size after frequency reduction (0 disables). */
+  /** Final palette size after median-cut reduction (0 disables). */
   paletteSize: number;
   /** Sobel magnitude above which a pixel becomes an ink line (0..255). */
   edgeThreshold: number;
@@ -453,17 +453,30 @@ export function medianCutPalette(img: RGBAImage, k: number): number[] {
     const sorted = box.items
       .slice()
       .sort((a, b) => (((a[0] >> shift) & 255) - ((b[0] >> shift) & 255)) || (a[0] - b[0]));
-    // Split at the population median, so both halves carry real weight.
-    const total = sorted.reduce((s, e) => s + e[1], 0);
-    let acc = 0;
-    let cut = 1;
-    for (let i = 0; i < sorted.length - 1; i++) {
-      acc += sorted[i][1];
-      if (acc * 2 >= total) {
-        cut = i + 1;
-        break;
+    // Split at the MIDPOINT of the axis range, not at the population median.
+    // A median split would put the cut inside whichever cluster dominates the
+    // pixel count — on a portrait that is skin and background, and a small dark
+    // cluster (pupils, nostrils, a dark garment) would never get a box of its
+    // own. Midpoint splitting isolates outliers, which is what keeps a face
+    // readable. Falls back to the median when the midpoint leaves a half empty.
+    const at = (e: [number, number]) => (e[0] >> shift) & 255;
+    const lo = at(sorted[0]);
+    const hi = at(sorted[sorted.length - 1]);
+    const mid = (lo + hi) / 2;
+    let cut = 0;
+    while (cut < sorted.length && at(sorted[cut]) <= mid) cut++;
+    if (cut === 0 || cut === sorted.length) {
+      const total = sorted.reduce((s, e) => s + e[1], 0);
+      let acc = 0;
+      cut = 1;
+      for (let i = 0; i < sorted.length - 1; i++) {
+        acc += sorted[i][1];
+        if (acc * 2 >= total) {
+          cut = i + 1;
+          break;
+        }
+        cut = i + 2;
       }
-      cut = i + 2;
     }
     boxes = boxes.slice(0, pick).concat([mk(sorted.slice(0, cut)), mk(sorted.slice(cut))], boxes.slice(pick + 1));
   }

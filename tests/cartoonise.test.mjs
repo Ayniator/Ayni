@@ -151,6 +151,10 @@ function face(w, h) {
   return img;
 }
 
+function cloneOf(img) {
+  return { width: img.width, height: img.height, data: Uint8ClampedArray.from(img.data) };
+}
+
 function countEdges(mask) {
   let n = 0;
   for (let i = 0; i < mask.length; i++) if (mask[i]) n++;
@@ -228,6 +232,46 @@ check("reducePalette is a no-op when the image already has <= k colours", () => 
   C.reducePalette(img, 12);
   const after = C.paletteOf(img);
   eq(after.length, before.length, "palette size changed");
+});
+
+check("medianCutPalette returns at most k colours and is order-independent", () => {
+  const img = gradient2(48, 48);
+  const a = C.medianCutPalette(img, 10);
+  const b = C.medianCutPalette(cloneOf(img), 10);
+  assert(a.length <= 10, `expected <= 10, got ${a.length}`);
+  eq(a.join(","), b.join(","), "palette not deterministic");
+  // sorted ascending, no duplicates
+  for (let i = 1; i < a.length; i++) assert(a[i] > a[i - 1], "palette not sorted/deduped");
+});
+
+check("medianCutPalette keeps a rare dark outlier (the eyes survive)", () => {
+  // 95% mid-grey ground, 5% near-black: a frequency-ranked palette would drop
+  // the black entirely; median cut must keep a box for it.
+  const w = 40, h = 40;
+  const img = C.makeImage(w, h);
+  for (let p = 0; p < w * h; p++) {
+    const dark = p % 20 === 0;
+    const v = dark ? 12 : 150 + (p % 7);
+    img.data[p * 4] = v; img.data[p * 4 + 1] = v; img.data[p * 4 + 2] = v; img.data[p * 4 + 3] = 255;
+  }
+  const pal = C.medianCutPalette(img, 4);
+  const darkest = Math.min(...pal.map((k) => (k >> 16) & 255));
+  assert(darkest < 60, `dark cluster lost: darkest palette entry is ${darkest}`);
+});
+
+check("mapToPalette snaps every pixel onto the palette, and nowhere else", () => {
+  const img = gradient2(32, 32);
+  const pal = C.medianCutPalette(img, 6);
+  C.mapToPalette(img, pal);
+  const allowed = new Set(pal);
+  for (const key of C.paletteOf(img)) assert(allowed.has(key), `stray colour ${key}`);
+});
+
+check("mapToPalette with an empty palette is a no-op", () => {
+  const img = face(16, 16);
+  const copy = Uint8ClampedArray.from(img.data);
+  C.mapToPalette(img, []);
+  for (let i = 0; i < img.data.length; i++) assert(img.data[i] === copy[i], `mutated at ${i}`);
 });
 
 check("full pipeline collapses a 4000-tone gradient to the style's palette", () => {
@@ -532,7 +576,7 @@ check("every style is a complete, versioned recipe", () => {
       assert(s[k] !== undefined, `${name}.${k} missing`);
     }
     eq(s.version, "f69.1", `${name}.version`);
-    assert(s.levels >= 2 && s.levels <= 8, `${name}.levels out of range`);
+    assert(s.levels >= 2 && s.levels <= 32, `${name}.levels out of range`);
     assert(s.paletteSize > 0 && s.paletteSize <= 32, `${name}.paletteSize out of range`);
   }
   eq(C.DEFAULT_CARTOON_STYLE, "ink", "default style");
@@ -540,8 +584,9 @@ check("every style is a complete, versioned recipe", () => {
 
 check("settingsForStyle returns a copy, so a caller cannot mutate the preset", () => {
   const s = C.settingsForStyle("ink");
+  const before = C.CARTOON_STYLES.ink.levels;
   s.levels = 99;
-  eq(C.CARTOON_STYLES.ink.levels, 4, "preset mutated");
+  eq(C.CARTOON_STYLES.ink.levels, before, "preset mutated");
 });
 
 check("settingsForStyle falls back to the default for an unknown style", () => {

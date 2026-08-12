@@ -658,8 +658,8 @@ function ProfileCard() {
             <input type="file" accept="image/*" disabled={busy} onChange={(e) => onFile(e.target.files?.[0])} />
           </label>
           <p className="muted sm" style={{ marginBottom: 0 }}>
-            A photograph shows a face. If you would rather be known by a sign, draw a stone-mark
-            instead — it says who you are without saying what you look like.
+            Your photo is turned into a drawing on this device — the original is never saved,
+            sent or logged. If you would rather be known by a sign, draw a stone-mark instead.
           </p>
         </div>
       )}

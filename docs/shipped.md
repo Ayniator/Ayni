@@ -113,6 +113,57 @@ commitment, uniform amount, own wallet, own jar; the faucet's real bound is the
 membership door). Relayer IP/timing, self-pay fallback, and proof-replay timing
 are enumerated in `docs/faucet.md` § "What an observer can and cannot infer".
 
+## F62 / F69 — a mark instead of a face (2026-08-12g)
+
+An anonymity-first fellowship was asking members to upload a photograph of their
+face. These two features fix that from both ends.
+
+**F62 — the stone-mark canvas.** Draw a personal sigil inside the equilateral
+triangle instead of uploading a photo. The canvas existed but was incomplete and
+carried three real defects, all found and fixed this round: an **unbalanced
+canvas state stack** (`save()` on stroke start, `restore()` on end — a gesture
+ending in pointercancel or a lost capture leaked a frame permanently, and
+`clear()` never restored at all); ink chosen from `prefers-color-scheme` when
+this app's theme lives on `data-theme`, so it never followed the app and **baked
+pale ink into any export made in dark mode** — invisible on another member's
+light-themed trust page; and an export that resampled the *screen* canvas, so
+output depended on device pixel ratio. All three dissolve by rendering from
+normalised geometry. The triangle is a **bound on recorded geometry**, not just a
+clip mask: a stroke is cut at the edge and restarts on re-entry.
+
+Privacy: stroke *dynamics* — timing, velocity, pressure, tilt — are never
+recorded, and even the bare geometry is discarded at save, so a mark cannot be
+replayed as a handwriting biometric. `setStoneMark` refuses SVG outright, since
+the avatar slot renders into an `<img src>` on other members' pages.
+
+**F69 — on-device cartoonisation, and the finding behind it.** The photo path
+persisted a real, unmodified photograph merely resized to 128 px. A 128 px face
+crop is ample for off-the-shelf face recognition, so **downscaling was never a
+privacy transform** — the stored avatar was simply a small photo of a face. It
+also materialised the full-resolution image twice in memory (`FileReader` →
+base64 → `img.src` → decoder cache) and released neither.
+
+Now the photo is decoded straight from the Blob via `createImageBitmap` — no
+FileReader, no base64, no data URL — drawn once into a detached canvas that is
+then cleared and sized to 0×0 with the bitmap closed, and every intermediate
+buffer (each still resembling the face) is **zero-filled** before the promise
+resolves, on the success path and again in `finally`. The transform is classical
+and dependency-free: cover-crop → saturation lift → edge-preserving smoothing
+with rational weights `1/(1+d²/σ²)` (no `Math.exp`, so only `+ - * /` and
+therefore bit-identical across engines) → Sobel ink mask → median-cut palette,
+splitting at the **midpoint of the axis range** rather than the population median
+because splitting at the median lost the eyes. Deterministic; 1.3–2.3 KB output.
+
+**Stated honestly in `docs/avatars.md`:** this destroys fine texture and landmark
+precision and defeats naive matching, but is **not** a proof against a determined
+adversary holding the original photograph; and the guarantee covers this
+application only — not the member's own disk, the OS picker, or device backups.
+
+62 tests across the two (17 + 45), including a 4000-point fuzz proving every
+clamped point lands inside the triangle, dark-outlier survival (the eyes), buffer
+zeroing, and source-level invariants that fail the suite if `fetch`, storage,
+`FileReader` or `toDataURL` reappear in either module.
+
 ## F63 v2 — mailbox metadata mixing (2026-08-12f)
 
 The inbox copy used to promise mixing as "the documented next step". It ships
