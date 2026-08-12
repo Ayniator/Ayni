@@ -49,6 +49,34 @@ REVIEWED="$REPORTS/REVIEWED.md"
 
 say() { printf '%s\n' "$*" >&2; }
 
+# git streams the ref list on stdin ONCE. Three separate `while read` loops used
+# to consume it, so whichever ran last saw an empty stream and silently did
+# nothing — that is exactly how the per-commit REVIEWED.md check became dead
+# code while still printing "every pushed commit is reviewed". Read it once here
+# and let every check iterate over the same captured text.
+REFLINES="$(cat)"
+
+# Files changed by a push. For an existing branch that is remote..local; for a
+# NEW branch there is no remote side, so `git diff <sha>` would compare the
+# WORKING TREE to that commit and return nothing on a clean tree — which wrongly
+# reported "bookkeeping only". Use the commit's own contents in that case.
+changed_files() {  # $1 = local sha, $2 = remote sha
+  if printf '%s' "${2:-}" | grep -qE '^0*$'; then
+    git log --pretty=format: --name-only "$1" 2>/dev/null | grep -vE '^[[:space:]]*$' | sort -u
+  else
+    git diff --name-only "$2..$1" 2>/dev/null
+  fi
+}
+
+# Commits introduced by a push, same new-branch caveat.
+pushed_commits() {  # $1 = local sha, $2 = remote sha
+  if printf '%s' "${2:-}" | grep -qE '^0*$'; then
+    git rev-list "$1" 2>/dev/null
+  else
+    git rev-list "$2..$1" 2>/dev/null
+  fi
+}
+
 OVERRIDES="$REPORTS/OVERRIDES.md"
 
 if [ -n "${SENTINEL_OVERRIDE:-}" ]; then
@@ -87,7 +115,7 @@ if [ -n "${SENTINEL_OVERRIDE:-}" ]; then
         say "  OVERRIDES.md was touched but names no commit in this push."
       fi
     fi
-  done < /dev/stdin
+  done <<< "$REFLINES"
 
   if [ "$range_touches_log" -ne 1 ]; then
     say ""
@@ -133,12 +161,11 @@ while read -r _lr lsha _rr rsha; do
   case "$lsha" in *[!0]*) : ;; *) continue ;; esac
   saw_any=1
   if printf '%s' "${rsha:-}" | grep -qE '^0+$'; then rr="$lsha"; else rr="$rsha..$lsha"; fi
-  if git diff --name-only "$rr" 2>/dev/null \
-       | grep -vE '^[[:space:]]*$' \
+  if changed_files "$lsha" "${rsha:-}" \
        | grep -qvE '^(reports/sentinel/|tests/sentinel/checklist\.yaml$)'; then
     bookkeeping_only=0
   fi
-done < /dev/stdin
+done <<< "$REFLINES"
 if [ "$saw_any" -eq 1 ] && [ "$bookkeeping_only" -eq 1 ]; then
   say ""
   say "  Sentinel push gate: bookkeeping-only push (reports/checklist), allowed."
@@ -213,7 +240,7 @@ while read -r _localref localsha _remoteref remotesha; do
       unreviewed=$((unreviewed + 1))
     fi
   done
-done
+done <<< "$REFLINES"
 
 if [ "$unreviewed" -gt 0 ]; then
   say ""
