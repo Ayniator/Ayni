@@ -563,7 +563,9 @@ function VisibilityCard({ wallet, memberships }: { wallet: any; memberships: MyM
 function ProfileCard() {
   const [profile, setProfile] = useState(() => getUserProfile());
   const [busy, setBusy] = useState(false);
-  const [drawing, setDrawing] = useState(false);
+  // F62 — the avatar is a CHOICE of two first-class paths: draw a mark (a sign
+  // that reveals nothing biometric) or upload a photo. Neither is the default.
+  const [mode, setMode] = useState<"none" | "draw" | "photo">("none");
   const tzs = useMemo(() => listTimezones(), []);
   const t = useT();
 
@@ -572,7 +574,7 @@ function ProfileCard() {
     const next = { ...profile, avatar: url };
     setProfile(next);
     setUserProfile(next);
-    setDrawing(false);
+    setMode("none");
   }
 
   async function onFile(file: File | undefined) {
@@ -583,6 +585,8 @@ function ProfileCard() {
       const next = { ...profile, avatar };
       setProfile(next);
       setUserProfile(next);
+      setStoneMark(undefined); // a photo replaces any drawn mark
+      setMode("none");
     } catch {
       /* ignore non-images */
     } finally {
@@ -598,6 +602,8 @@ function ProfileCard() {
     const next = { ...profile, avatar: undefined };
     setProfile(next);
     setUserProfile(next);
+    setStoneMark(undefined);
+    setMode("none");
   }
 
   return (
@@ -606,33 +612,64 @@ function ProfileCard() {
       <div className="row" style={{ gap: 12 }}>
         {profile.avatar ? (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={profile.avatar} alt="" width={48} height={48} style={{ borderRadius: "50%", objectFit: "cover" }} />
+          <img src={profile.avatar} alt="" width={48} height={48} className="stone-avatar" />
         ) : (
-          <div className="muted sm" style={{ width: 48, height: 48, borderRadius: "50%", border: "1px dashed var(--border-strong)", display: "flex", alignItems: "center", justifyContent: "center" }}>—</div>
+          <div className="muted sm stone-avatar-empty">—</div>
         )}
         <div className="meta" style={{ flex: 1 }}>
-          <label className="sm">{t("me.profile.avatar")}{" "}
-            <input type="file" accept="image/*" disabled={busy} onChange={(e) => onFile(e.target.files?.[0])} />
-          </label>
-          {profile.avatar && <button className="btn btn-sm btn-ghost" style={{ marginTop: 4 }} onClick={clearAvatar}>{t("me.profile.remove")}</button>}
+          <div className="sm" style={{ marginBottom: 6 }}>{t("me.profile.avatar")}</div>
+          {/* Epic 6 / F62 — two first-class paths to an avatar. The stone-mark
+              is a personal sign drawn inside the AHA triangle: an identity that
+              reveals nothing biometric, which is what a fellowship built on
+              anonymity actually needs. The photo path is the older one and puts
+              a real face on the profile. Neither is preselected. */}
+          <div className="stone-choice">
+            <button
+              className="btn btn-sm btn-ghost"
+              aria-pressed={mode === "draw"}
+              onClick={() => setMode(mode === "draw" ? "none" : "draw")}
+            >
+              {t("me.profile.drawStoneMark")}
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              aria-pressed={mode === "photo"}
+              disabled={busy}
+              onClick={() => setMode(mode === "photo" ? "none" : "photo")}
+            >
+              Upload a photo
+            </button>
+            {profile.avatar && (
+              <button className="btn btn-sm btn-ghost" onClick={clearAvatar}>{t("me.profile.remove")}</button>
+            )}
+          </div>
         </div>
       </div>
+
+      {mode === "draw" && (
+        <div className="stone-panel">
+          <StoneMark onSave={saveMark} onCancel={() => setMode("none")} />
+        </div>
+      )}
+      {mode === "photo" && (
+        <div className="stone-panel">
+          <label className="sm">
+            Choose an image{" "}
+            <input type="file" accept="image/*" disabled={busy} onChange={(e) => onFile(e.target.files?.[0])} />
+          </label>
+          <p className="muted sm" style={{ marginBottom: 0 }}>
+            A photograph shows a face. If you would rather be known by a sign, draw a stone-mark
+            instead — it says who you are without saying what you look like.
+          </p>
+        </div>
+      )}
+
       <div className="form-row col" style={{ marginTop: 10 }}>
         <label>{t("me.profile.timezone")}</label>
         <select value={profile.timezone ?? ""} onChange={(e) => setTz(e.target.value)}>
           <option value="">{t("me.profile.deviceDefault")}</option>
           {tzs.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
         </select>
-      </div>
-      {/* Epic 6: draw the stone-mark from the Cavern Ceremony as your avatar — a
-          symbolic sign, not a face, so even "all members" stays anonymity-safe.
-          Its audience is your Epic 5 avatar visibility tier. */}
-      <div style={{ marginTop: 10 }}>
-        {drawing ? (
-          <StoneMark onSave={saveMark} onCancel={() => setDrawing(false)} />
-        ) : (
-          <button className="btn btn-sm btn-ghost" onClick={() => setDrawing(true)}>{t("me.profile.drawStoneMark")}</button>
-        )}
       </div>
       <p className="muted sm" style={{ marginBottom: 0 }}>{t("me.profile.storedNote")}</p>
     </div>

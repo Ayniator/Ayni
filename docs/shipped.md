@@ -18,6 +18,47 @@
 
 ---
 
+## F61 / F60 Phase-2 — shielded ownership + the encrypted read path (2026-08-12)
+
+The roster leak Sentinel flagged repeatedly: `Membership.owner` held a raw wallet
+at offset 89, so one `getProgramAccounts` memcmp listed every Circle a wallet
+belonged to — the membership graph Epic 2/5 forbid publishing, readable by
+anyone with an RPC endpoint. It was there because `owner` did two jobs at once:
+authorising the member's writes, and indexing the member's own memberships for
+`findMyMemberships`.
+
+**Shipped:** the two jobs are split. Indexing moves to `OwnerTag`, a PDA whose
+*address* is `SHA-256("aha-owner-tag-v1" ‖ viewing_secret ‖ circle ‖ index)` —
+no field to filter on, and the address is uncomputable without the member's
+secret. Authorisation stays on `owner`, rebound in the same instruction to a key
+derived from the master secret. Served bio/avatar become ciphertext under
+per-element keys, distributed by drops addressed by an X25519 shared secret so no
+audience graph materialises.
+
+| Piece | Where | Verified |
+|---|---|---|
+| `shield_membership(tag, shielded_owner)` — mints the private index and rebinds `owner` atomically | `instructions/shield_membership.rs` | code, built (`cargo check --workspace` clean; accounts Boxed for SBF stack) |
+| `OwnerTag` (membership + bump only — no authority, no wallet) | `state.rs` | code, built, unit test `state::visibility_phase2_tests` |
+| `upsert_member_profile(enc_pub, epoch, bio_ct, avatar_ref)` — fixed-length ciphertext | `instructions/upsert_member_profile.rs` | code, built |
+| `grant_visibility_key(drop_id, sealed, epoch)` — names neither party, no member signature by design | `instructions/grant_visibility_key.rs` | code, built |
+| `MemberProfile` (200-byte `bio_ct`, always written), `VisibilityKeyDrop` (104-byte `sealed`) | `state.rs` | code, built, unit tests |
+| Derivation contract (viewing secret, tag, shielded key, element keys, drop id) | `frontend/lib/visibilityCrypto.ts` | code, `tsc --noEmit` clean, pinned by `tests/epic5.ts` |
+| `shieldMembership` / `publishProfile` / `grantElementKeys` / `openMemberProfile` | `frontend/lib/visibility.ts` | code, `tsc --noEmit` clean |
+| Two-path discovery (derived addresses + legacy memcmp fallback) | `frontend/lib/member.ts` `findMyMemberships` | code, `tsc --noEmit` clean |
+| Read path: bio/avatar rendered only when they decrypt, no lock, no placeholder | `lib/trustpage.ts`, `app/member/[commitment]/page.tsx` | code |
+| `/board` renders nothing to an unconnected visitor and issues no post query | `app/board/page.tsx` | code |
+| Enumeration regression tests (before/after memcmp, index holds no wallet, drop names nobody, hidden ≡ absent, epoch revocation) | `tests/epic5.ts` | code |
+| Design, before/after enumerability table, migration, stated limits | `docs/visibility.md` | code |
+
+**Stated honestly, not closed:** transaction history still links a wallet to a
+membership it signs for (fees are not relayed — the shield tx itself is signed by
+the wallet being unbound); shielded-ness and its count are public; **unshielded
+memberships remain exactly as enumerable as before** (shielding is opt-in, no UI
+yet, and frontend write paths other than profile/grant do not yet carry the
+derived signer); `recovery_keys` are still memcmp-enumerable by the same attack;
+granting is O(audience), so wide tiers still depend on the owner granting rather
+than on a proof. See `docs/visibility.md` §1 and §4.
+
 ## F35 (Traditions fix) — anonymous faucet activation (2026-08-12f)
 
 The faucet's activation transaction publicly linked **parrain ↔ neophyte**: the

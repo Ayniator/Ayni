@@ -27,10 +27,10 @@ export default function Nav() {
       <nav>
         <Link href="/">{t("nav.find")}</Link>
         <Link href="/onboarding">{t("nav.start")}</Link>
+        <Link href="/reflections">{t("nav.reflections")}</Link>
         <TwelveMenu />
         <Link href="/me">{t("nav.me")}</Link>
         <InboxNavLink />
-        <Link href="/reflections">{t("nav.reflections")}</Link>
         <Link href="/documents">{t("nav.documents")}</Link>
         <Link href="/board">{t("nav.board")}</Link>
         <Link href="/create">{t("nav.create")}</Link>

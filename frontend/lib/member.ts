@@ -4,7 +4,10 @@
 //
 // Program facts this file encodes:
 // - A Membership is keyed by a ZK commitment; `owner` (offset 89) optionally
-//   binds a wallet, which is how we find "my" memberships with one memcmp.
+//   binds a wallet. That USED to be how we found "my" memberships — with one
+//   memcmp filter, which meant anyone else could run the same filter against
+//   any wallet and list the roster (F61). Discovery now goes through the
+//   member's own private index instead; see `findMyMemberships` below.
 // - `issue_membership` must be signed by the Circle's Secretary seat
 //   (council.seats[1]) — members cannot self-admit. So "joining" here means:
 //   generate a commitment, and either issue directly (when the connected
@@ -16,6 +19,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Connection, PublicKey } from "@solana/web3.js";
 import idl from "./ayni.json";
 import { RPC_URL, rpcConnection } from "./solana";
+import { cachedViewingSecret, ownerTagFor } from "./visibilityCrypto";
 
 export const PROGRAM_ID = new PublicKey((idl as any).address);
 export const SECRETARY_SEAT = 1; // [Treasurer, Secretary, RhythmKeeper, 4 Elders]
@@ -188,21 +192,98 @@ export interface MyMembership {
   active: boolean;
 }
 
+/** The private membership index: PDA ["mownr", tag]. See lib/visibilityCrypto.ts
+ *  for where `tag` comes from and why it is an address rather than a field. */
+export const ownerTagPda = (tag: Uint8Array) =>
+  PublicKey.findProgramAddressSync([seed("mownr"), tag], PROGRAM_ID)[0];
+
+/** How many derivation indices to look at per Circle. A member normally holds
+ *  one membership per Circle at index 0; the extra slots cover a rejoin or a
+ *  rotated tag without turning discovery into a scan. */
+const SHIELD_INDEX_SCAN = 3;
+
+/** Decode an `OwnerTag` account: 8-byte discriminator + membership + bump. */
+const decodeOwnerTag = (data: Uint8Array): PublicKey | null =>
+  data.length >= 40 ? new PublicKey(data.slice(8, 40)) : null;
+
+/** Resolve the memberships this device's viewing secret can address, by looking
+ *  up derived PDAs directly — no filter, no scan, nothing sent to the RPC that
+ *  identifies the member. Returns [] when the device holds no viewing secret
+ *  (nothing has been shielded on it). */
+async function findShieldedMemberships(circles: CircleInfo[]): Promise<PublicKey[]> {
+  const vk = cachedViewingSecret();
+  if (!vk) return [];
+  const addrs: PublicKey[] = [];
+  for (const c of circles) {
+    const key = new PublicKey(c.pubkey).toBytes();
+    for (let i = 0; i < SHIELD_INDEX_SCAN; i++) {
+      addrs.push(ownerTagPda(await ownerTagFor(vk, key, i)));
+    }
+  }
+  const conn = connection();
+  const found: PublicKey[] = [];
+  for (let i = 0; i < addrs.length; i += 100) {
+    const infos = await conn.getMultipleAccountsInfo(addrs.slice(i, i + 100));
+    for (const info of infos) {
+      const m = info && decodeOwnerTag(Uint8Array.from(info.data));
+      if (m) found.push(m);
+    }
+  }
+  return found;
+}
+
+/**
+ * "My memberships" — resolved two ways, because the chain holds two generations
+ * of membership.
+ *
+ * 1. SHIELDED (the way it should always have worked): the device derives the
+ *    address of its own `OwnerTag` index entries and reads them directly. The
+ *    wallet is not part of the query, so this leaks nothing to the RPC and, far
+ *    more importantly, gives no one else a filter to run. Nobody without the
+ *    member's viewing secret can compute these addresses.
+ *
+ * 2. LEGACY (memberships issued before shielding, still bound to a public
+ *    wallet): one memcmp on `owner`. This is the enumerable path — the same
+ *    query anybody could run against any wallet — and it stays only so that
+ *    existing members keep working until they shield. See docs/visibility.md
+ *    for the migration; the leak is closed per membership, as each one shields.
+ */
 export async function findMyMemberships(
   owner: PublicKey,
   circles: CircleInfo[]
 ): Promise<MyMembership[]> {
   const program = readOnlyProgram();
-  const rows = await (program.account as any).membership.all([
-    { memcmp: { offset: OWNER_OFFSET, bytes: owner.toBase58() } },
+  const known = circles.length ? circles : await listCircles().catch(() => [] as CircleInfo[]);
+
+  const shieldedPubkeys = await findShieldedMemberships(known).catch(() => [] as PublicKey[]);
+  const [shielded, legacy] = await Promise.all([
+    shieldedPubkeys.length
+      ? (program.account as any).membership.fetchMultiple(shieldedPubkeys)
+      : Promise.resolve([] as any[]),
+    (program.account as any).membership.all([
+      { memcmp: { offset: OWNER_OFFSET, bytes: owner.toBase58() } },
+    ]),
   ]);
-  const byPubkey = new Map(circles.map((c) => [c.pubkey, c]));
+
+  const rows: { publicKey: PublicKey; account: any }[] = [
+    ...shielded
+      .map((account: any, i: number) => ({ publicKey: shieldedPubkeys[i], account }))
+      .filter((r: any) => r.account),
+    ...legacy,
+  ];
+
+  const byPubkey = new Map(known.map((c) => [c.pubkey, c]));
   const now = Date.now() / 1000;
-  return rows.map((r: any) => {
+  const seen = new Set<string>();
+  const out: MyMembership[] = [];
+  for (const r of rows) {
+    const pubkey = r.publicKey.toBase58();
+    if (seen.has(pubkey)) continue;
+    seen.add(pubkey);
     const circle = r.account.circle.toBase58();
     const expiresAt = Number(r.account.expiresAt);
-    return {
-      pubkey: r.publicKey.toBase58(),
+    out.push({
+      pubkey,
       circle,
       circleName: byPubkey.get(circle)?.name ?? circle.slice(0, 8) + "…",
       commitment: hex(Uint8Array.from(r.account.commitment)),
@@ -210,8 +291,9 @@ export async function findMyMemberships(
       expiresAt,
       level: r.account.level,
       active: expiresAt > now,
-    };
-  });
+    });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

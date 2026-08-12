@@ -2,7 +2,7 @@
   "address": "AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG",
   "metadata": {
     "name": "ayni",
-    "version": "0.7.7",
+    "version": "0.8.0",
     "spec": "0.1.0",
     "description": "Ayni — Solana implementation of AHA (Ancestral Humanity Anonymous)"
   },
@@ -1285,6 +1285,142 @@
       "args": []
     },
     {
+      "name": "close_maci_round",
+      "docs": [
+        "F39 freeze a MACI round at its deadline (permissionless)."
+      ],
+      "discriminator": [
+        203,
+        27,
+        47,
+        101,
+        9,
+        12,
+        115,
+        199
+      ],
+      "accounts": [
+        {
+          "name": "round",
+          "writable": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "docs": [
+            "Anyone may close the round once the deadline has passed."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "commit_maci_tally",
+      "docs": [
+        "F39 the coordinator commits the tally over the fully folded queue."
+      ],
+      "discriminator": [
+        18,
+        23,
+        29,
+        197,
+        193,
+        144,
+        192,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "round",
+          "writable": true,
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "coordinator",
+          "docs": [
+            "Must be the wallet that opened the round (`MaciState.coordinator_authority`)."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "yes",
+          "type": "u64"
+        },
+        {
+          "name": "no",
+          "type": "u64"
+        },
+        {
+          "name": "plaintext_digest",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "confirm_admission",
       "docs": [
         "Attestation B: a trusted servant (distinct person from the parrain)",
@@ -2330,6 +2466,108 @@
       "args": []
     },
     {
+      "name": "finalize_maci_round",
+      "docs": [
+        "F39 write the MACI outcome onto the member proposal after the dispute",
+        "window (same quorum/pass math as `finalize_member_proposal`)."
+      ],
+      "discriminator": [
+        152,
+        233,
+        84,
+        102,
+        194,
+        129,
+        53,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "round",
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "relations": [
+            "round",
+            "state"
+          ]
+        },
+        {
+          "name": "config",
+          "docs": [
+            "The Circle's policy, bound to the proposal's Circle by seeds and created",
+            "on first use with safe defaults — exactly as `finalize_member_proposal`",
+            "does it, so a MACI round cannot be finalized against a swapped-in or",
+            "omitted config."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.circle",
+                "account": "MemberProposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "finalizer",
+          "docs": [
+            "Anyone may finalize once the dispute window has elapsed."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "finalize_member_proposal",
       "docs": [
         "Close voting and record the group conscience (quorum + majority)."
@@ -2571,6 +2809,83 @@
               64
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "grant_visibility_key",
+      "docs": [
+        "Drop a sealed element key at an address only the member and one viewer can",
+        "compute (F60 Phase-2). The account names neither of them."
+      ],
+      "discriminator": [
+        64,
+        87,
+        112,
+        234,
+        240,
+        218,
+        138,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "key_drop",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  100,
+                  114,
+                  111,
+                  112
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "drop_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Rent only. Not recorded anywhere in the account — see the note above."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "drop_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "sealed",
+          "type": {
+            "array": [
+              "u8",
+              104
+            ]
+          }
+        },
+        {
+          "name": "epoch",
+          "type": "u16"
         }
       ]
     },
@@ -3688,6 +4003,313 @@
       ]
     },
     {
+      "name": "maci_signup",
+      "docs": [
+        "F39 step 2 of MACI sign-up: prove membership (ZK) and register one MACI",
+        "voting key for this round."
+      ],
+      "discriminator": [
+        20,
+        95,
+        166,
+        17,
+        120,
+        95,
+        250,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "round"
+        },
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "relations": [
+            "round"
+          ]
+        },
+        {
+          "name": "commit",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              },
+              {
+                "kind": "account",
+                "path": "commit.commitment",
+                "account": "MaciSignupCommit"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signup_nullifier",
+          "docs": [
+            "One MACI key per membership per round: `init` is the refusal."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  110,
+                  117,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              },
+              {
+                "kind": "arg",
+                "path": "nullifier"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signup",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  115,
+                  105,
+                  103,
+                  110,
+                  117,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              },
+              {
+                "kind": "arg",
+                "path": "maci_pubkey"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "A relayer pays so the sign-up is not stamped with the member's wallet."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "maci_pubkey",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nullifier",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "maci_signup_commit",
+      "docs": [
+        "F39 step 1 of MACI sign-up: publish the commit–reveal binding hash."
+      ],
+      "discriminator": [
+        187,
+        30,
+        30,
+        222,
+        241,
+        83,
+        232,
+        78
+      ],
+      "accounts": [
+        {
+          "name": "round"
+        },
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "commit",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              },
+              {
+                "kind": "arg",
+                "path": "commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "A relayer pays, so the sign-up is not stamped with the member's wallet."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "member_migrate",
       "docs": [
         "Self-recovery: a member holding a key migrates their own membership owner",
@@ -3874,7 +4496,8 @@
           ]
         },
         {
-          "name": "proposal"
+          "name": "proposal",
+          "writable": true
         },
         {
           "name": "round",
@@ -3898,6 +4521,32 @@
           }
         },
         {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
           "name": "seat",
           "writable": true,
           "signer": true
@@ -3916,6 +4565,74 @@
               32
             ]
           }
+        },
+        {
+          "name": "challenge_secs",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "process_maci_messages",
+      "docs": [
+        "F39 fold the next `count` sealed commands into the round's message chain",
+        "(permissionless crank; messages go in `remaining_accounts`, ascending)."
+      ],
+      "discriminator": [
+        155,
+        97,
+        85,
+        209,
+        61,
+        41,
+        112,
+        203
+      ],
+      "accounts": [
+        {
+          "name": "round",
+          "relations": [
+            "state"
+          ]
+        },
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  99,
+                  105,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "docs": [
+            "Permissionless crank."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "count",
+          "type": "u32"
         }
       ]
     },
@@ -5975,6 +6692,86 @@
       ]
     },
     {
+      "name": "shield_membership",
+      "docs": [
+        "Shield a membership's ownership (F61): bind a private `OwnerTag` the",
+        "member finds themselves by, and rebind `owner` off the public wallet in",
+        "the same transaction, so `Membership.owner` stops being a memcmp index",
+        "into the roster."
+      ],
+      "discriminator": [
+        74,
+        178,
+        180,
+        126,
+        11,
+        186,
+        96,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "membership",
+          "writable": true
+        },
+        {
+          "name": "owner_tag",
+          "docs": [
+            "The private index the member will find this membership by. `init`, never",
+            "`init_if_needed`: a tag is written once, and rotation mints a new one at",
+            "the next derivation index rather than rewriting this."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  119,
+                  110,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "tag"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member",
+          "docs": [
+            "The membership's current `owner` (or, for an anonymous membership, any",
+            "key it controls). Signs + pays rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "tag",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "shielded_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "tie_quipu_cord",
       "docs": [
         "The sponsor ties a quipu cord for a completed step (Epic 3): one cord per",
@@ -6295,6 +7092,138 @@
         {
           "name": "daily_reflections_cid",
           "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "upsert_member_profile",
+      "docs": [
+        "Write the member's ENCRYPTED profile object (F60 Phase-2): a fixed-length",
+        "sealed bio and a pointer to the sealed avatar. The program stores bytes it",
+        "cannot read; `epoch` re-keys and silently expires every outstanding drop."
+      ],
+      "discriminator": [
+        20,
+        196,
+        255,
+        177,
+        244,
+        104,
+        15,
+        54
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "member_membership"
+          ]
+        },
+        {
+          "name": "member_membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "member_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "member_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member",
+          "docs": [
+            "A key the member controls (owner or guardian); signs + pays rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "enc_pub",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "epoch",
+          "type": "u16"
+        },
+        {
+          "name": "bio_ct",
+          "type": {
+            "array": [
+              "u8",
+              200
+            ]
+          }
+        },
+        {
+          "name": "avatar_ref",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
         }
       ]
     },
@@ -7106,6 +8035,58 @@
       ]
     },
     {
+      "name": "MaciSignup",
+      "discriminator": [
+        134,
+        169,
+        115,
+        116,
+        183,
+        106,
+        17,
+        150
+      ]
+    },
+    {
+      "name": "MaciSignupCommit",
+      "discriminator": [
+        13,
+        42,
+        188,
+        176,
+        107,
+        36,
+        152,
+        68
+      ]
+    },
+    {
+      "name": "MaciState",
+      "discriminator": [
+        93,
+        133,
+        185,
+        155,
+        51,
+        106,
+        217,
+        82
+      ]
+    },
+    {
+      "name": "MemberProfile",
+      "discriminator": [
+        30,
+        196,
+        27,
+        233,
+        146,
+        140,
+        108,
+        254
+      ]
+    },
+    {
       "name": "MemberProposal",
       "discriminator": [
         4,
@@ -7194,6 +8175,19 @@
         131,
         23,
         138
+      ]
+    },
+    {
+      "name": "OwnerTag",
+      "discriminator": [
+        117,
+        102,
+        178,
+        117,
+        223,
+        209,
+        235,
+        104
       ]
     },
     {
@@ -7337,6 +8331,19 @@
         51,
         213,
         159
+      ]
+    },
+    {
+      "name": "VisibilityKeyDrop",
+      "discriminator": [
+        255,
+        3,
+        235,
+        145,
+        108,
+        42,
+        174,
+        186
       ]
     },
     {
@@ -7619,6 +8626,81 @@
       "code": 6047,
       "name": "NotInGoodStanding",
       "msg": "Membership is not live (expired or still provisional)"
+    },
+    {
+      "code": 6048,
+      "name": "MaciWrongStage",
+      "msg": "MACI round is not in the required stage for this action"
+    },
+    {
+      "code": 6049,
+      "name": "MaciMessageMismatch",
+      "msg": "MACI message account does not match the expected round/index/shape"
+    },
+    {
+      "code": 6050,
+      "name": "MaciBatchTooLarge",
+      "msg": "MACI batch is empty or exceeds the per-transaction maximum"
+    },
+    {
+      "code": 6051,
+      "name": "MaciQueueIncomplete",
+      "msg": "MACI queue has not been fully processed yet"
+    },
+    {
+      "code": 6052,
+      "name": "MaciTallyExceedsSignups",
+      "msg": "MACI tally claims more ballots than there are registered sign-ups"
+    },
+    {
+      "code": 6053,
+      "name": "MaciCommitTooRecent",
+      "msg": "MACI sign-up commitment must be at least one slot old"
+    },
+    {
+      "code": 6054,
+      "name": "MaciSignupMismatch",
+      "msg": "MACI sign-up reveal does not match its commitment"
+    },
+    {
+      "code": 6055,
+      "name": "MaciChallengeWindow",
+      "msg": "MACI challenge (dispute) window has not elapsed"
+    },
+    {
+      "code": 6056,
+      "name": "MaciProposalAlreadyVoted",
+      "msg": "MACI rounds must be opened before any ballot is cast on the proposal"
+    },
+    {
+      "code": 6057,
+      "name": "InvalidOwnerTag",
+      "msg": "Owner tag must not be zero"
+    },
+    {
+      "code": 6058,
+      "name": "OwnerNotShielded",
+      "msg": "Shielding must rebind owner away from the signing wallet"
+    },
+    {
+      "code": 6059,
+      "name": "MembershipWouldBeUnusable",
+      "msg": "That would leave the membership with no key that can act for it"
+    },
+    {
+      "code": 6060,
+      "name": "InvalidProfileKey",
+      "msg": "Profile encryption key must not be zero"
+    },
+    {
+      "code": 6061,
+      "name": "EpochWentBackwards",
+      "msg": "Profile key epoch may only move forward"
+    },
+    {
+      "code": 6062,
+      "name": "InvalidKeyDrop",
+      "msg": "Key-drop id must not be zero"
     }
   ],
   "types": [
@@ -8612,6 +9694,11 @@
           },
           {
             "name": "processed",
+            "docs": [
+              "Queue frozen: `publish_maci_message` refuses once this is set. Flipped by",
+              "`close_maci_round` at the proposal deadline (F39) — the freeze is what",
+              "makes `MaciState.frozen_message_count` an honest snapshot."
+            ],
             "type": "bool"
           },
           {
@@ -8620,6 +9707,329 @@
               "array": [
                 "u8",
                 32
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaciSignup",
+      "docs": [
+        "One registered MACI voter: an ed25519 key that may sign commands for this",
+        "round, admitted by an anonymous `member_vote` proof (Merkle inclusion in the",
+        "proposal's snapshotted member set + a per-round nullifier, so one member gets",
+        "exactly one key). The key is public — that is fine and is how MACI works; a",
+        "*key change* to a key nobody else knows is what defeats coercion, and key",
+        "changes only ever travel inside sealed commands. PDA: [\"macisignup\", round, pubkey]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "pubkey",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "index",
+            "type": "u64"
+          },
+          {
+            "name": "weight",
+            "docs": [
+              "Voice credits. One member, one voice — reserved for future weighting."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaciSignupCommit",
+      "docs": [
+        "Front-running guard for MACI sign-up. A sign-up publishes a ZK proof and a",
+        "MACI signing key, and the proof does NOT bind the key (the `member_vote`",
+        "circuit has no input for it, and adding one means a new trusted setup — F44,",
+        "out of scope). Without this account, anyone who saw the sign-up transaction",
+        "could re-submit the same proof with THEIR key and steal the member's vote.",
+        "",
+        "So sign-up is commit–reveal: first publish",
+        "`H(\"AHA-maci-signup\" || round || nullifier || maci_pubkey)`, then reveal in a",
+        "LATER slot. An attacker cannot pre-commit — the nullifier is a Poseidon",
+        "output they only learn from the reveal itself, by which time their commitment",
+        "can no longer be older. The commitment leaks nothing: it is a hash of values",
+        "that are unlinkable to the member. PDA: [\"macicommit\", round, commitment]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "commitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaciState",
+      "docs": [
+        "Lifecycle + tally state for one MACI round. Kept in its own PDA so",
+        "`MaciRound` (already deployed) is never resized. PDA: [\"macistate\", round].",
+        "",
+        "`chain_digest` is the load-bearing field: it is folded **on chain**, message",
+        "by message, in strict index order, from the actual `MaciMessage` accounts. It",
+        "therefore pins the exact multiset AND order of sealed commands the tally was",
+        "computed over — a coordinator cannot censor a message, insert one, or reorder",
+        "the queue without changing a value the program itself computed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "proposal",
+            "type": "pubkey"
+          },
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "coordinator_authority",
+            "docs": [
+              "The wallet that opened the round: the only signer allowed to commit a",
+              "tally. Named on purpose — the coordinator is accountable, not anonymous."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "msg_deadline",
+            "docs": [
+              "Sign-ups and sealed commands are refused from this instant (= the member",
+              "proposal's deadline, snapshotted at open)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "challenge_secs",
+            "docs": [
+              "Dispute window between `commit_maci_tally` and `finalize_maci_round`."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "signup_count",
+            "type": "u64"
+          },
+          {
+            "name": "frozen_message_count",
+            "docs": [
+              "`MaciRound.message_count` at the moment the queue was frozen."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "processed_count",
+            "type": "u64"
+          },
+          {
+            "name": "chain_digest",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "signup_digest",
+            "docs": [
+              "Running hash over registered sign-up keys, in registration order."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "tally_yes",
+            "type": "u64"
+          },
+          {
+            "name": "tally_no",
+            "type": "u64"
+          },
+          {
+            "name": "plaintext_digest",
+            "docs": [
+              "Coordinator's commitment to the decrypted queue it applied (see",
+              "docs/maci.md — this is what makes a wrong tally provable after the fact)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "tally_hash",
+            "docs": [
+              "Binding hash over every public tally input; mirrored into",
+              "`MaciRound.tally_hash`."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "committed_at",
+            "type": "i64"
+          },
+          {
+            "name": "stage",
+            "type": "u8"
+          },
+          {
+            "name": "passed",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MemberProfile",
+      "docs": [
+        "The member's encrypted profile object — the served bio and the pointer to the",
+        "served avatar, as CIPHERTEXT the chain cannot read (F60 Phase-2).",
+        "",
+        "Before this, per-tier visibility was enforced app-side: the plaintext was",
+        "never served at all (there was no serving layer), and `mayView` in",
+        "`frontend/lib/visibility.ts` was a rendering decision a modified client could",
+        "simply ignore. Here the served bytes ARE the ciphertext; a viewer without the",
+        "element key gets 200 bytes of noise, which is what \"hidden\" has to mean.",
+        "",
+        "FIXED-LENGTH BY CONSTRUCTION. `bio_ct` is always the same size, always",
+        "written, and always random-looking. A member with no bio stores random bytes",
+        "(no key ever opens them) — so \"wrote nothing\" and \"wrote something you may",
+        "not read\" are the same 200 bytes on chain. Hidden ≡ absent, at the byte",
+        "level, not at the CSS level.",
+        "",
+        "PDA: [\"mprofile\", circle, commitment] — commitment-keyed exactly like",
+        "`VisibilityPolicy`, so it adds no linkage that the membership itself does not",
+        "already publish, and no wallet appears anywhere in it."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "circle",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "docs": [
+              "The owning membership's commitment."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "enc_pub",
+            "docs": [
+              "The member's X25519 public key, derived from their viewing secret. This",
+              "is how a viewer computes the shared secret that addresses their key drop.",
+              "It is a public key by definition and links to no wallet."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "epoch",
+            "docs": [
+              "Key epoch. Every element key and every key-drop address is derived over",
+              "this number, so bumping it re-keys the profile and silently expires every",
+              "outstanding drop — that is the revocation mechanism, and it emits no",
+              "\"revoked X\" record about anybody."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bio_ct",
+            "docs": [
+              "The bio, sealed under the bio element key. Always exactly `BIO_CT` bytes."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                200
+              ]
+            }
+          },
+          {
+            "name": "avatar_ref",
+            "docs": [
+              "Padded pointer (CID) to the avatar ciphertext, or all-zero for none. The",
+              "avatar blob itself is never stored in the clear anywhere."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
               ]
             }
           },
@@ -8963,6 +10373,50 @@
           {
             "name": "open",
             "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OwnerTag",
+      "docs": [
+        "The blinded owner tag: the de-enumeration primitive for `Membership.owner`.",
+        "",
+        "THE LEAK IT CLOSES. `Membership.owner` is a raw wallet at a fixed offset, so",
+        "anyone could `getProgramAccounts` with one memcmp filter and list every",
+        "membership a wallet holds — the roster / membership graph Epic 2 and Epic 5",
+        "forbid publishing. The member needed that field only for two things: signing",
+        "as themselves, and FINDING their own memberships. This account takes the",
+        "second job away from it, so `owner` can stop being the member's public",
+        "wallet altogether (see `shield_membership`).",
+        "",
+        "PDA: [\"mownr\", tag] — `tag` is 32 bytes the member derives from a secret only",
+        "they hold (their viewing secret, itself derived from the master secret, the",
+        "credential of record), domain-separated per Circle and per index. Because the",
+        "tag is the ADDRESS, there is no field to scan and nothing to filter on: an",
+        "observer can read every one of these accounts and learn only that some",
+        "membership is shielded. Deriving the address requires the secret; inverting",
+        "it requires breaking SHA-256. Two tags of the SAME member are unlinkable to",
+        "each other (distinct Circle inputs, distinct hashes).",
+        "",
+        "It stores no owner, no wallet, no commitment and no authority — deliberately.",
+        "An `authority` field would be exactly the memcmp handle this account exists",
+        "to remove. Rotation is by minting a fresh tag at the next index; a stale tag",
+        "reveals nothing it did not already reveal."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "membership",
+            "docs": [
+              "The membership this tag resolves to."
+            ],
+            "type": "pubkey"
           },
           {
             "name": "bump",
@@ -9508,6 +10962,54 @@
           {
             "name": "required",
             "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VisibilityKeyDrop",
+      "docs": [
+        "One sealed element key, dropped for exactly one viewer (F60 Phase-2).",
+        "",
+        "WHY THIS PUBLISHES NO AUDIENCE GRAPH. The account's ADDRESS is",
+        "[\"vdrop\", H(domain ‖ X25519(owner, viewer) ‖ owner_commitment ‖ epoch)] —",
+        "derived from a Diffie-Hellman shared secret, so only the two parties can",
+        "compute it. It names neither party. It has no authority field, no owner",
+        "field, no recipient field and no membership field: an observer reading every",
+        "drop that exists sees a pile of 104-byte blobs and cannot say who granted",
+        "what to whom, nor even how many people one member granted. That is why a",
+        "\"who may read whom\" table — the interest graph Epic 5 forbids — never",
+        "materialises on chain.",
+        "",
+        "It is deliberately WRITE-ONCE and has no revoke instruction: a closer or an",
+        "updater would need an authority, and an authority is a memcmp handle. Access",
+        "is withdrawn by bumping `MemberProfile.epoch`, which re-keys the content and",
+        "strands every drop of the previous epoch at once."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sealed",
+            "docs": [
+              "24-byte nonce + secretbox([bio_key ‖ avatar_key]) = 24 + 64 + 16.",
+              "A key the viewer may not have is all-zero inside the plaintext, so a",
+              "partial grant is indistinguishable in size from a full one."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                104
+              ]
+            }
+          },
+          {
+            "name": "epoch",
+            "type": "u16"
           },
           {
             "name": "bump",

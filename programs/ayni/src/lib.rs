@@ -253,6 +253,42 @@ pub mod ayni {
         instructions::set_visibility(ctx, avatar, quipu, bio)
     }
 
+    /// Shield a membership's ownership (F61): bind a private `OwnerTag` the
+    /// member finds themselves by, and rebind `owner` off the public wallet in
+    /// the same transaction, so `Membership.owner` stops being a memcmp index
+    /// into the roster.
+    pub fn shield_membership(
+        ctx: Context<ShieldMembership>,
+        tag: [u8; 32],
+        shielded_owner: Pubkey,
+    ) -> Result<()> {
+        instructions::shield_membership(ctx, tag, shielded_owner)
+    }
+
+    /// Write the member's ENCRYPTED profile object (F60 Phase-2): a fixed-length
+    /// sealed bio and a pointer to the sealed avatar. The program stores bytes it
+    /// cannot read; `epoch` re-keys and silently expires every outstanding drop.
+    pub fn upsert_member_profile(
+        ctx: Context<UpsertMemberProfile>,
+        enc_pub: [u8; 32],
+        epoch: u16,
+        bio_ct: [u8; crate::state::MemberProfile::BIO_CT],
+        avatar_ref: [u8; crate::state::MemberProfile::AVATAR_REF],
+    ) -> Result<()> {
+        instructions::upsert_member_profile(ctx, enc_pub, epoch, bio_ct, avatar_ref)
+    }
+
+    /// Drop a sealed element key at an address only the member and one viewer can
+    /// compute (F60 Phase-2). The account names neither of them.
+    pub fn grant_visibility_key(
+        ctx: Context<GrantVisibilityKey>,
+        drop_id: [u8; 32],
+        sealed: [u8; crate::state::VisibilityKeyDrop::SEALED],
+        epoch: u16,
+    ) -> Result<()> {
+        instructions::grant_visibility_key(ctx, drop_id, sealed, epoch)
+    }
+
     // --- Member posts / bulletins (F30) ---
 
     /// A member publishes a time-boxed post (text and/or IPFS image).
@@ -413,13 +449,53 @@ pub mod ayni {
 
     /// Open a MACI (coercion-resistant) round over a member proposal, registering
     /// the coordinator's encryption key. Any seat. See docs/maci.md.
-    pub fn open_maci_round(ctx: Context<OpenMaciRound>, coordinator: [u8; 32]) -> Result<()> {
-        instructions::open_maci_round(ctx, coordinator)
+    pub fn open_maci_round(ctx: Context<OpenMaciRound>, coordinator: [u8; 32], challenge_secs: i64) -> Result<()> {
+        instructions::open_maci_round(ctx, coordinator, challenge_secs)
     }
 
     /// Publish an encrypted MACI command (vote or key-change) to an open round.
     pub fn publish_maci_message(ctx: Context<PublishMaciMessage>, eph_pubkey: [u8; 32], ciphertext: Vec<u8>) -> Result<()> {
         instructions::publish_maci_message(ctx, eph_pubkey, ciphertext)
+    }
+
+    /// F39 step 1 of MACI sign-up: publish the commit–reveal binding hash.
+    pub fn maci_signup_commit(ctx: Context<MaciSignupCommitIx>, commitment: [u8; 32]) -> Result<()> {
+        instructions::maci_signup_commit(ctx, commitment)
+    }
+
+    /// F39 step 2 of MACI sign-up: prove membership (ZK) and register one MACI
+    /// voting key for this round.
+    pub fn maci_signup(
+        ctx: Context<MaciSignupIx>,
+        maci_pubkey: [u8; 32],
+        nullifier: [u8; 32],
+        proof_a: [u8; 64],
+        proof_b: [u8; 128],
+        proof_c: [u8; 64],
+    ) -> Result<()> {
+        instructions::maci_signup(ctx, maci_pubkey, nullifier, proof_a, proof_b, proof_c)
+    }
+
+    /// F39 freeze a MACI round at its deadline (permissionless).
+    pub fn close_maci_round(ctx: Context<CloseMaciRound>) -> Result<()> {
+        instructions::close_maci_round(ctx)
+    }
+
+    /// F39 fold the next `count` sealed commands into the round's message chain
+    /// (permissionless crank; messages go in `remaining_accounts`, ascending).
+    pub fn process_maci_messages(ctx: Context<ProcessMaciMessages>, count: u32) -> Result<()> {
+        instructions::process_maci_messages(ctx, count)
+    }
+
+    /// F39 the coordinator commits the tally over the fully folded queue.
+    pub fn commit_maci_tally(ctx: Context<CommitMaciTally>, yes: u64, no: u64, plaintext_digest: [u8; 32]) -> Result<()> {
+        instructions::commit_maci_tally(ctx, yes, no, plaintext_digest)
+    }
+
+    /// F39 write the MACI outcome onto the member proposal after the dispute
+    /// window (same quorum/pass math as `finalize_member_proposal`).
+    pub fn finalize_maci_round(ctx: Context<FinalizeMaciRound>) -> Result<()> {
+        instructions::finalize_maci_round(ctx)
     }
 
     /// Add/remove a treasury withdrawal recipient on a Circle's spend allowlist

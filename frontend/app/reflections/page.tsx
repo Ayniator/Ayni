@@ -25,6 +25,23 @@ interface Display {
 const keyOf = (y: number, m: number, d: number) =>
   `${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
+/**
+ * Break a quote into the clauses it was written in — one line each, after a
+ * full stop, semicolon, colon or comma. An aphorism set as a single wrapped
+ * paragraph reads as prose; set clause per clause it reads at the pace it was
+ * meant to be read, which for these texts is the point.
+ *
+ * The punctuation stays at the end of its line (it belongs to the clause it
+ * closes), and a split only happens where whitespace already followed — so
+ * decimals, "e.g." and initials are left alone.
+ */
+export function quoteLines(quote: string): string[] {
+  return quote
+    .split(/(?<=[.;:,])\s+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
 export default function Reflections() {
   const t = useT();
   const { lang } = useSettings();
@@ -185,7 +202,15 @@ export default function Reflections() {
           <h2 className="refl-title">{display.title}</h2>
           <div className="refl-date">{longDate}</div>
 
-          <blockquote className="refl-quote">“{display.quote}”</blockquote>
+          <blockquote className="refl-quote">
+            {quoteLines(display.quote).map((line, i, all) => (
+              <span key={i} style={{ display: "block" }}>
+                {i === 0 ? "“" : ""}
+                {line}
+                {i === all.length - 1 ? "”" : ""}
+              </span>
+            ))}
+          </blockquote>
           {display.attribution && <div className="refl-attrib">— {display.attribution}</div>}
 
           {display.reflection && (

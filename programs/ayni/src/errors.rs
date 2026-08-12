@@ -98,4 +98,34 @@ pub enum AyniError {
     AnchorMismatch,
     #[msg("Membership is not live (expired or still provisional)")]
     NotInGoodStanding,
+    #[msg("MACI round is not in the required stage for this action")]
+    MaciWrongStage,
+    #[msg("MACI message account does not match the expected round/index/shape")]
+    MaciMessageMismatch,
+    #[msg("MACI batch is empty or exceeds the per-transaction maximum")]
+    MaciBatchTooLarge,
+    #[msg("MACI queue has not been fully processed yet")]
+    MaciQueueIncomplete,
+    #[msg("MACI tally claims more ballots than there are registered sign-ups")]
+    MaciTallyExceedsSignups,
+    #[msg("MACI sign-up commitment must be at least one slot old")]
+    MaciCommitTooRecent,
+    #[msg("MACI sign-up reveal does not match its commitment")]
+    MaciSignupMismatch,
+    #[msg("MACI challenge (dispute) window has not elapsed")]
+    MaciChallengeWindow,
+    #[msg("MACI rounds must be opened before any ballot is cast on the proposal")]
+    MaciProposalAlreadyVoted,
+    #[msg("Owner tag must not be zero")]
+    InvalidOwnerTag,
+    #[msg("Shielding must rebind owner away from the signing wallet")]
+    OwnerNotShielded,
+    #[msg("That would leave the membership with no key that can act for it")]
+    MembershipWouldBeUnusable,
+    #[msg("Profile encryption key must not be zero")]
+    InvalidProfileKey,
+    #[msg("Profile key epoch may only move forward")]
+    EpochWentBackwards,
+    #[msg("Key-drop id must not be zero")]
+    InvalidKeyDrop,
 }

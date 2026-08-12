@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { listInbox, unreadCount } from "../lib/messaging";
 
-/** "Inbox" nav link with a red badge showing the unread (non-expired) count. */
+/** "My Inbox" nav link with a red badge showing the unread (non-expired) count. */
 export default function InboxNavLink() {
   const { publicKey } = useWallet();
   const [count, setCount] = useState(0);
@@ -28,7 +28,7 @@ export default function InboxNavLink() {
   if (!publicKey) return null;
   return (
     <Link href="/inbox" className="inbox-link">
-      Inbox
+      My Inbox
       {count > 0 && <span className="inbox-badge">{count > 99 ? "99+" : count}</span>}
     </Link>
   );

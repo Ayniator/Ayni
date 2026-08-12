@@ -466,3 +466,28 @@ pre.doc { white-space: pre-wrap; word-break: break-word; background: var(--bg-2)
 .twelve-door-title { font-weight: 700; font-size: 17px; }
 .twelve-door-sub { color: var(--muted); font-size: 13.5px; line-height: 1.45; }
 @media (max-width: 560px) { .twelve-hub-art { max-width: 240px; } }
+
+/* --- F62 · stone-mark canvas (Epic 6) -------------------------------------
+   The drawing surface for a member's personal sign — the anonymity-safe
+   alternative to a photo avatar. Append-only block; all rules are .stone-*. */
+.stone-wrap { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.stone-canvas {
+  touch-action: none; cursor: crosshair; display: block;
+  max-width: 100%; aspect-ratio: 1 / 1;
+  border-radius: 12px; border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-sm); background: var(--panel-2);
+}
+.stone-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.stone-widthbox { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+.stone-width { width: 110px; accent-color: var(--accent); }
+.stone-dot { display: inline-block; border-radius: 50%; background: var(--text); flex: none; }
+.stone-note { max-width: 340px; text-align: center; margin: 0; }
+/* the avatar chooser on /me: draw a mark, or upload a photo */
+.stone-choice { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.stone-avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex: none; }
+.stone-avatar-empty {
+  width: 48px; height: 48px; border-radius: 50%; flex: none;
+  border: 1px dashed var(--border-strong); color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+}
+.stone-panel { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }

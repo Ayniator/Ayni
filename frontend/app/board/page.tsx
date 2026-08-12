@@ -3,6 +3,15 @@
 // F30 — the Circle Board. Any member (a wallet that owns a live membership in
 // the Circle) may post text and/or an IPFS image, shown only within its
 // [start, end] window. Any of the 7 Council seats may delete any post.
+//
+// F61 — READING IS GATED TOO. This page used to render every post, every
+// author identicon and the whole Circle picker to anyone who loaded the URL:
+// posting was gated, reading was not, and an unconnected visitor is a member of
+// nothing. "Nothing is readable by an unconnected visitor" is the Epic 5 rule,
+// and a bulletin board of a recovery fellowship is exactly the surface it was
+// written for. So with no wallet connected the page renders its title and the
+// invitation to connect — and issues no post query at all, because a request
+// that is never made cannot be observed either.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
@@ -53,8 +62,9 @@ export default function Board() {
   const isSeat = !!(circle && me && mySeatIndices(circle.seats, me).length > 0);
 
   // Only surface Circles the connected wallet actually belongs to (an active
-  // membership). Non-connected or non-member visitors fall back to the full list
-  // so the public board stays browsable rather than showing an empty picker.
+  // membership). A connected wallet that belongs to none falls back to the full
+  // list — it is a member of the fellowship looking for where to read, not a
+  // stranger. An unconnected visitor never reaches this at all (see above).
   const myCircles = useMemo(
     () => circles.filter((c) => myMems.some((m) => m.circle === c.pubkey && m.active)),
     [circles, myMems]
@@ -62,8 +72,9 @@ export default function Board() {
   const optionCircles = myCircles.length ? myCircles : circles;
 
   useEffect(() => {
+    if (!connected) { setCircles([]); setPosts(null); return; }
     listCircles().then(setCircles);
-  }, []);
+  }, [connected]);
 
   useEffect(() => {
     if (publicKey && circles.length) findMyMemberships(publicKey, circles).then(setMyMems).catch(() => {});
@@ -78,9 +89,9 @@ export default function Board() {
   }, [optionCircles, selected]);
 
   const load = useCallback(() => {
-    if (!selected) return;
+    if (!connected || !selected) return;
     listPosts(selected).then(setPosts).catch((e) => setNote({ kind: "err", text: String(e?.message || e) }));
-  }, [selected]);
+  }, [connected, selected]);
   useEffect(load, [load]);
 
   async function post() {
@@ -125,6 +136,13 @@ export default function Board() {
       <h1>{t("board.title")}</h1>
       <p className="lede">{t("board.lede")}</p>
 
+      {/* Everything below this line is members-only. The unconnected visitor
+          gets the same page a member with no Circles gets: an invitation, and
+          no content — no post list, no author identicons, no Circle picker
+          revealing which Circles exist to be browsed. */}
+      {!connected && <div className="card"><p className="muted" style={{ margin: 0 }}>{t("board.connectToPost")}</p></div>}
+
+      {connected && (
       <div className="card">
         <div className="form-row col">
           <label>{t("board.circleLabel")}</label>
@@ -133,8 +151,7 @@ export default function Board() {
           </select>
         </div>
       </div>
-
-      {!connected && <div className="card"><p className="muted" style={{ margin: 0 }}>{t("board.connectToPost")}</p></div>}
+      )}
 
       {connected && circle && (
         myMembership ? (
@@ -164,11 +181,11 @@ export default function Board() {
 
       {note && <p className={note.kind === "err" ? "error" : "ok-note"}>{note.text}{note.sig && <> · <a href={explorerTx(note.sig)} target="_blank" rel="noreferrer">{t("board.tx")}</a></>}</p>}
 
-      {posts === null && <p className="muted">{t("board.loadingPosts")}</p>}
-      {posts && posts.length === 0 && <p className="muted">{t("board.noPosts")}</p>}
+      {connected && posts === null && <p className="muted">{t("board.loadingPosts")}</p>}
+      {connected && posts && posts.length === 0 && <p className="muted">{t("board.noPosts")}</p>}
 
       <div className="grid" style={{ marginTop: 6 }}>
-        {posts?.map((p) => (
+        {connected && posts?.map((p) => (
           <div className={`card post ${p.live ? "" : "post-dim"}`} key={p.pubkey}>
             <div className="row" style={{ alignItems: "flex-start" }}>
               <Identicon seed={p.author} size={34} />

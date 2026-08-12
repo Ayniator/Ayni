@@ -406,8 +406,34 @@ as shipped work. All ⬜ unless noted.
 ### E5 — per-element visibility
 | # | Epic | Item | Status | Notes |
 |---|------|------|--------|-------|
-| F60 | E5 | Per-element visibility policy + read-path enforcement | 🟡 (policy engine built this round: `VisibilityPolicy` PDA `["visibility", circle, member]`, `set_visibility(avatar,quipu,bio)` member-signed, tiers 0 chosen / 1 my-circle DEFAULT / 2 all-members, range-checked; `lib/visibility.ts` client + `mayView` read-path decision + client-side chosen-ones list; the trust page gates the quipu — hidden ≡ absent; `tests/epic5.ts`. **Remaining Phase-2**: the encrypted per-tier KEY distribution for the served bio/avatar, and moving `MyCircle` enforcement from app-level to a ZK circle-membership proof on the read path — the pilot enforcement is app-level, documented honestly in `lib/visibility.ts`.) | Schema: (avatar \| quipu \| bio) × (all members \| my circle \| chosen ones), **defaulting every element to "my circle"** on day one. Keys: the circle key distributed through the existing sealed X25519 `MessagingKey` registry; a fellowship key released against a membership proof; per-recipient sealed envelopes for chosen-ones. Critically, membership-proof verification must move **off-chain / client-side on the read path** — every proof check in the repo today is a write-path instruction that mints a public record, so reusing the F16 AccessPass pattern would publish the interest graph E5 forbids. **Effectively a Phase 2 item**: E4, E6 and E9 all depend on it. |
-| F61 | E5 | Bare-page rendering + public-surface retrofit | 🟡 (hidden ≡ absent shipped this round: the trust page shows no quipu card and NO lock/"hidden" indicator when a viewer is outside the audience — identical to a member with no cords; an unconnected visitor is a member of nothing and sees no gated element. `Membership.level` dropped from `/me` and the admin member list — Sentinel R7 retrofit. **Remaining**: `/board` still renders to unconnected visitors, and `Membership.owner` stays memcmp-enumerable — the roster finding is unchanged and needs the encrypted read path.) | Hidden ≡ absent: no lock icons, no "this is private" indicators, identical layout for a sparse newcomer and a private elder. Retrofit so nothing is readable by an unconnected visitor — today `/board` renders posts and author identicons with no wallet connected (posting is gated, reading is not), `Membership.owner` wallets are enumerable via memcmp, and shared material is served through a public IPFS gateway. |
+| F60 | E5 | Per-element visibility policy + read-path enforcement | 🟡 (policy engine built this round: `VisibilityPolicy` PDA `["visibility", circle, member]`, `set_visibility(avatar,quipu,bio)` member-signed, tiers 0 chosen / 1 my-circle DEFAULT / 2 all-members, range-checked; `lib/visibility.ts` client + `mayView` read-path decision + client-side chosen-ones list; the trust page gates the quipu — hidden ≡ absent; `tests/epic5.ts`. **Remaining Phase-2**: the encrypted per-tier KEY distribution for the served bio/avatar, and moving `MyCircle` enforcement from app-level to a ZK circle-membership proof on the read path — the pilot enforcement is app-level, documented honestly in `lib/visibility.ts`.
+**Phase-2 shipped 2026-08-12**: served bio/avatar are now CIPHERTEXT on chain —
+`MemberProfile` PDA `["mprofile", circle, commitment]` with a fixed-length
+200-byte `bio_ct` (a member with no bio stores random bytes, so silence and
+secrecy are the same account), per-element keys derived from the member's
+viewing secret, and `VisibilityKeyDrop` PDA `["vdrop", drop_id]` where
+`drop_id = SHA-256(domain ‖ X25519(owner,viewer) ‖ owner_commitment ‖ epoch)` —
+the drop names NEITHER party and has no authority field, so no audience graph
+exists to scrape; revocation is an epoch bump, which strands every drop at once
+and names nobody. Read path decides by DECRYPTING, not by `mayView`.
+`frontend/lib/visibilityCrypto.ts` + `lib/visibility.ts`; `docs/visibility.md`.
+**Still Phase 3**: granting is O(audience) — the scalable tier-key release
+against a ZK circle-membership proof is not built, so a wide tier is enforced by
+whom the owner grants to.) | Schema: (avatar \| quipu \| bio) × (all members \| my circle \| chosen ones), **defaulting every element to "my circle"** on day one. Keys: the circle key distributed through the existing sealed X25519 `MessagingKey` registry; a fellowship key released against a membership proof; per-recipient sealed envelopes for chosen-ones. Critically, membership-proof verification must move **off-chain / client-side on the read path** — every proof check in the repo today is a write-path instruction that mints a public record, so reusing the F16 AccessPass pattern would publish the interest graph E5 forbids. **Effectively a Phase 2 item**: E4, E6 and E9 all depend on it. |
+| F61 | E5 | Bare-page rendering + public-surface retrofit | 🟡 (hidden ≡ absent shipped this round: the trust page shows no quipu card and NO lock/"hidden" indicator when a viewer is outside the audience — identical to a member with no cords; an unconnected visitor is a member of nothing and sees no gated element. `Membership.level` dropped from `/me` and the admin member list — Sentinel R7 retrofit. **2026-08-12**: both remaining items addressed. `/board` now renders nothing to
+an unconnected visitor and issues no post query at all. `Membership.owner` is
+de-enumerated by `shield_membership` — the member's private index moves to
+`OwnerTag` PDA `["mownr", tag]`, whose ADDRESS is
+`SHA-256("aha-owner-tag-v1" ‖ viewing_secret ‖ circle ‖ index)`, so there is no
+field to memcmp and the address is uncomputable without the member's secret;
+`owner` is rebound in the SAME instruction to a key derived from the master
+secret (atomic, so no window exists where the tag is written and the wallet is
+still bound). `findMyMemberships` resolves both generations. NO layout change,
+so no account migration. **Honestly still open**: shielding is OPT-IN and no UI
+exposes it, so existing memberships stay enumerable until they shield; frontend
+write paths other than profile/grant do not yet carry the derived signer;
+transaction history still links wallet↔membership (fees are not relayed);
+`recovery_keys` remain enumerable by the same attack. `docs/visibility.md`.) | Hidden ≡ absent: no lock icons, no "this is private" indicators, identical layout for a sparse newcomer and a private elder. Retrofit so nothing is readable by an unconnected visitor — today `/board` renders posts and author identicons with no wallet connected (posting is gated, reading is not), `Membership.owner` wallets are enumerable via memcmp, and shared material is served through a public IPFS gateway. |
 
 ### E6 — avatar / stone-mark
 | # | Epic | Item | Status | Notes |

@@ -453,8 +453,11 @@ pub struct MaciRound {
     pub proposal: Pubkey,
     pub coordinator: [u8; 32], // x25519 pubkey messages are sealed to
     pub message_count: u64,
+    /// Queue frozen: `publish_maci_message` refuses once this is set. Flipped by
+    /// `close_maci_round` at the proposal deadline (F39) — the freeze is what
+    /// makes `MaciState.frozen_message_count` an honest snapshot.
     pub processed: bool,
-    pub tally_hash: [u8; 32], // set when the coordinator submits the verified tally
+    pub tally_hash: [u8; 32], // set by commit_maci_tally (F39)
     pub bump: u8,
 }
 impl MaciRound {
@@ -961,4 +964,318 @@ impl Post {
         + 4 + Self::MAX_CID            // image_cid
         + 4 + Self::MAX_TEXT           // text
         + 1; // bump
+}
+
+// ---------------------------------------------------------------------------
+// Epic 5 Phase-2 — shielded ownership and the encrypted read path (F60 / F61)
+// ---------------------------------------------------------------------------
+
+/// The blinded owner tag: the de-enumeration primitive for `Membership.owner`.
+///
+/// THE LEAK IT CLOSES. `Membership.owner` is a raw wallet at a fixed offset, so
+/// anyone could `getProgramAccounts` with one memcmp filter and list every
+/// membership a wallet holds — the roster / membership graph Epic 2 and Epic 5
+/// forbid publishing. The member needed that field only for two things: signing
+/// as themselves, and FINDING their own memberships. This account takes the
+/// second job away from it, so `owner` can stop being the member's public
+/// wallet altogether (see `shield_membership`).
+///
+/// PDA: ["mownr", tag] — `tag` is 32 bytes the member derives from a secret only
+/// they hold (their viewing secret, itself derived from the master secret, the
+/// credential of record), domain-separated per Circle and per index. Because the
+/// tag is the ADDRESS, there is no field to scan and nothing to filter on: an
+/// observer can read every one of these accounts and learn only that some
+/// membership is shielded. Deriving the address requires the secret; inverting
+/// it requires breaking SHA-256. Two tags of the SAME member are unlinkable to
+/// each other (distinct Circle inputs, distinct hashes).
+///
+/// It stores no owner, no wallet, no commitment and no authority — deliberately.
+/// An `authority` field would be exactly the memcmp handle this account exists
+/// to remove. Rotation is by minting a fresh tag at the next index; a stale tag
+/// reveals nothing it did not already reveal.
+#[account]
+pub struct OwnerTag {
+    /// The membership this tag resolves to.
+    pub membership: Pubkey,
+    pub bump: u8,
+}
+
+impl OwnerTag {
+    pub const SPACE: usize = 8 + 32 + 1;
+    pub const SEED: &'static [u8] = b"mownr";
+}
+
+/// The member's encrypted profile object — the served bio and the pointer to the
+/// served avatar, as CIPHERTEXT the chain cannot read (F60 Phase-2).
+///
+/// Before this, per-tier visibility was enforced app-side: the plaintext was
+/// never served at all (there was no serving layer), and `mayView` in
+/// `frontend/lib/visibility.ts` was a rendering decision a modified client could
+/// simply ignore. Here the served bytes ARE the ciphertext; a viewer without the
+/// element key gets 200 bytes of noise, which is what "hidden" has to mean.
+///
+/// FIXED-LENGTH BY CONSTRUCTION. `bio_ct` is always the same size, always
+/// written, and always random-looking. A member with no bio stores random bytes
+/// (no key ever opens them) — so "wrote nothing" and "wrote something you may
+/// not read" are the same 200 bytes on chain. Hidden ≡ absent, at the byte
+/// level, not at the CSS level.
+///
+/// PDA: ["mprofile", circle, commitment] — commitment-keyed exactly like
+/// `VisibilityPolicy`, so it adds no linkage that the membership itself does not
+/// already publish, and no wallet appears anywhere in it.
+#[account]
+pub struct MemberProfile {
+    pub circle: Pubkey,
+    /// The owning membership's commitment.
+    pub member: [u8; 32],
+    /// The member's X25519 public key, derived from their viewing secret. This
+    /// is how a viewer computes the shared secret that addresses their key drop.
+    /// It is a public key by definition and links to no wallet.
+    pub enc_pub: [u8; 32],
+    /// Key epoch. Every element key and every key-drop address is derived over
+    /// this number, so bumping it re-keys the profile and silently expires every
+    /// outstanding drop — that is the revocation mechanism, and it emits no
+    /// "revoked X" record about anybody.
+    pub epoch: u16,
+    /// The bio, sealed under the bio element key. Always exactly `BIO_CT` bytes.
+    pub bio_ct: [u8; MemberProfile::BIO_CT],
+    /// Padded pointer (CID) to the avatar ciphertext, or all-zero for none. The
+    /// avatar blob itself is never stored in the clear anywhere.
+    pub avatar_ref: [u8; MemberProfile::AVATAR_REF],
+    pub bump: u8,
+}
+
+impl MemberProfile {
+    /// 24-byte nonce + secretbox(160-byte padded plaintext) = 24 + 160 + 16.
+    pub const BIO_CT: usize = 200;
+    pub const AVATAR_REF: usize = 64;
+    pub const SPACE: usize =
+        8 + 32 + 32 + 32 + 2 + Self::BIO_CT + Self::AVATAR_REF + 1;
+    pub const SEED: &'static [u8] = b"mprofile";
+}
+
+/// One sealed element key, dropped for exactly one viewer (F60 Phase-2).
+///
+/// WHY THIS PUBLISHES NO AUDIENCE GRAPH. The account's ADDRESS is
+/// ["vdrop", H(domain ‖ X25519(owner, viewer) ‖ owner_commitment ‖ epoch)] —
+/// derived from a Diffie-Hellman shared secret, so only the two parties can
+/// compute it. It names neither party. It has no authority field, no owner
+/// field, no recipient field and no membership field: an observer reading every
+/// drop that exists sees a pile of 104-byte blobs and cannot say who granted
+/// what to whom, nor even how many people one member granted. That is why a
+/// "who may read whom" table — the interest graph Epic 5 forbids — never
+/// materialises on chain.
+///
+/// It is deliberately WRITE-ONCE and has no revoke instruction: a closer or an
+/// updater would need an authority, and an authority is a memcmp handle. Access
+/// is withdrawn by bumping `MemberProfile.epoch`, which re-keys the content and
+/// strands every drop of the previous epoch at once.
+#[account]
+pub struct VisibilityKeyDrop {
+    /// 24-byte nonce + secretbox([bio_key ‖ avatar_key]) = 24 + 64 + 16.
+    /// A key the viewer may not have is all-zero inside the plaintext, so a
+    /// partial grant is indistinguishable in size from a full one.
+    pub sealed: [u8; VisibilityKeyDrop::SEALED],
+    pub epoch: u16,
+    pub bump: u8,
+}
+
+impl VisibilityKeyDrop {
+    pub const SEALED: usize = 104;
+    pub const SPACE: usize = 8 + Self::SEALED + 2 + 1;
+    pub const SEED: &'static [u8] = b"vdrop";
+    /// Length of the element-key plaintext inside `sealed`: bio ‖ avatar.
+    pub const KEYS_LEN: usize = 64;
+}
+
+#[cfg(test)]
+mod visibility_phase2_tests {
+    use super::*;
+
+    #[test]
+    fn shielded_ownership_accounts_carry_no_wallet_handle() {
+        // The whole point of OwnerTag is that it has nothing to filter on but
+        // the membership it resolves to. If this ever grows an authority or an
+        // owner field, the memcmp enumeration this closes reopens.
+        assert_eq!(OwnerTag::SPACE, 8 + 32 + 1);
+        // Likewise the key drop: no recipient, no granter, no membership.
+        assert_eq!(
+            VisibilityKeyDrop::SPACE,
+            8 + VisibilityKeyDrop::SEALED + 2 + 1
+        );
+    }
+
+    #[test]
+    fn member_profile_bio_is_fixed_length_so_silence_looks_like_secrecy() {
+        // Fixed-size ciphertext: a member with no bio and a member with a bio
+        // you may not read occupy the same bytes.
+        assert_eq!(MemberProfile::BIO_CT, 200);
+        assert_eq!(
+            MemberProfile::SPACE,
+            8 + 32 + 32 + 32 + 2 + 200 + 64 + 1
+        );
+        // Sealed element keys are two 32-byte keys under one secretbox.
+        assert_eq!(VisibilityKeyDrop::KEYS_LEN, 64);
+        assert_eq!(
+            VisibilityKeyDrop::SEALED,
+            24 + VisibilityKeyDrop::KEYS_LEN + 16
+        );
+    }
+
+    #[test]
+    fn a_membership_key_is_never_the_default_pubkey() {
+        // Regression guard for the shielded path: clearing `owner` to default
+        // must not accidentally authorise the default pubkey.
+        let m = Membership {
+            circle: Pubkey::default(),
+            commitment: [0u8; 32],
+            issued_at: 0,
+            expires_at: 0,
+            level: 0,
+            owner: Pubkey::default(),
+            recovery_keys: [Pubkey::default(); Membership::MAX_GUARDIANS],
+            require_cosign: false,
+            bump: 0,
+        };
+        assert!(!m.is_member_key(&Pubkey::default()));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// F39 — MACI processing + tally (the second half of coercion-resistant voting).
+//
+// `MaciRound` / `MaciMessage` above are the submission layer (round state +
+// append-only sealed queue). Everything below is the part that turns a queue of
+// sealed commands into an outcome: a per-round lifecycle account, the ZK sign-up
+// records that bound the tally, and the front-running guard for sign-up.
+//
+// Read docs/maci.md before changing any of this — in particular the honest
+// statement of what the coordinator can and cannot do.
+// ---------------------------------------------------------------------------
+
+/// Round is open: sign-ups and sealed commands are accepted.
+pub const MACI_STAGE_OPEN: u8 = 0;
+/// Queue frozen at `frozen_message_count`; the crank may fold messages.
+pub const MACI_STAGE_CLOSED: u8 = 1;
+/// Every frozen message has been folded into `chain_digest`.
+pub const MACI_STAGE_PROCESSED: u8 = 2;
+/// The coordinator has committed a tally; the challenge window is running.
+pub const MACI_STAGE_COMMITTED: u8 = 3;
+/// The outcome has been written onto the member proposal. Terminal.
+pub const MACI_STAGE_FINALIZED: u8 = 4;
+
+/// Largest message batch one `process_maci_messages` call may fold. Bounded by
+/// the 1232-byte transaction limit (each message is an extra account meta), not
+/// by compute; clients should use ~20 without an address-lookup table.
+pub const MACI_PROCESS_MAX_BATCH: usize = 32;
+
+/// Upper bound on a round's dispute window (30 days).
+pub const MACI_MAX_CHALLENGE_SECS: i64 = 30 * 24 * 60 * 60;
+
+/// Serialized length of a `MaciMessage` account: 8 discriminator + 32 round +
+/// 8 index + 32 eph_pubkey + 4 vec-len + 176 ciphertext + 1 bump. The crank
+/// reads these accounts as raw bytes (never deserializing them onto the SBF
+/// stack), so the offsets are pinned here next to the struct they mirror.
+pub const MACI_MESSAGE_DATA_LEN: usize = 8 + 32 + 8 + 32 + 4 + MaciMessage::CT_LEN + 1;
+pub const MACI_MSG_OFF_ROUND: usize = 8;
+pub const MACI_MSG_OFF_INDEX: usize = 40;
+pub const MACI_MSG_OFF_EPH: usize = 48;
+pub const MACI_MSG_OFF_CTLEN: usize = 80;
+pub const MACI_MSG_OFF_CT: usize = 84;
+pub const MACI_MSG_OFF_BUMP: usize = MACI_MESSAGE_DATA_LEN - 1;
+
+/// Lifecycle + tally state for one MACI round. Kept in its own PDA so
+/// `MaciRound` (already deployed) is never resized. PDA: ["macistate", round].
+///
+/// `chain_digest` is the load-bearing field: it is folded **on chain**, message
+/// by message, in strict index order, from the actual `MaciMessage` accounts. It
+/// therefore pins the exact multiset AND order of sealed commands the tally was
+/// computed over — a coordinator cannot censor a message, insert one, or reorder
+/// the queue without changing a value the program itself computed.
+#[account]
+pub struct MaciState {
+    pub round: Pubkey,
+    pub proposal: Pubkey,
+    pub circle: Pubkey,
+    /// The wallet that opened the round: the only signer allowed to commit a
+    /// tally. Named on purpose — the coordinator is accountable, not anonymous.
+    pub coordinator_authority: Pubkey,
+    /// Sign-ups and sealed commands are refused from this instant (= the member
+    /// proposal's deadline, snapshotted at open).
+    pub msg_deadline: i64,
+    /// Dispute window between `commit_maci_tally` and `finalize_maci_round`.
+    pub challenge_secs: i64,
+    pub signup_count: u64,
+    /// `MaciRound.message_count` at the moment the queue was frozen.
+    pub frozen_message_count: u64,
+    pub processed_count: u64,
+    pub chain_digest: [u8; 32],
+    /// Running hash over registered sign-up keys, in registration order.
+    pub signup_digest: [u8; 32],
+    pub tally_yes: u64,
+    pub tally_no: u64,
+    /// Coordinator's commitment to the decrypted queue it applied (see
+    /// docs/maci.md — this is what makes a wrong tally provable after the fact).
+    pub plaintext_digest: [u8; 32],
+    /// Binding hash over every public tally input; mirrored into
+    /// `MaciRound.tally_hash`.
+    pub tally_hash: [u8; 32],
+    pub committed_at: i64,
+    pub stage: u8,
+    pub passed: bool,
+    pub bump: u8,
+}
+
+impl MaciState {
+    pub const SPACE: usize = 8        // discriminator
+        + 32 * 4                       // round, proposal, circle, coordinator_authority
+        + 8 * 6                        // msg_deadline, challenge_secs, signup_count,
+                                       // frozen_message_count, processed_count, committed_at
+        + 32 * 4                       // chain_digest, signup_digest, plaintext_digest, tally_hash
+        + 8 + 8                        // tally_yes, tally_no
+        + 1 + 1 + 1; // stage, passed, bump
+}
+
+/// Front-running guard for MACI sign-up. A sign-up publishes a ZK proof and a
+/// MACI signing key, and the proof does NOT bind the key (the `member_vote`
+/// circuit has no input for it, and adding one means a new trusted setup — F44,
+/// out of scope). Without this account, anyone who saw the sign-up transaction
+/// could re-submit the same proof with THEIR key and steal the member's vote.
+///
+/// So sign-up is commit–reveal: first publish
+/// `H("AHA-maci-signup" || round || nullifier || maci_pubkey)`, then reveal in a
+/// LATER slot. An attacker cannot pre-commit — the nullifier is a Poseidon
+/// output they only learn from the reveal itself, by which time their commitment
+/// can no longer be older. The commitment leaks nothing: it is a hash of values
+/// that are unlinkable to the member. PDA: ["macicommit", round, commitment].
+#[account]
+pub struct MaciSignupCommit {
+    pub round: Pubkey,
+    pub commitment: [u8; 32],
+    pub slot: u64,
+    pub bump: u8,
+}
+
+impl MaciSignupCommit {
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 1;
+}
+
+/// One registered MACI voter: an ed25519 key that may sign commands for this
+/// round, admitted by an anonymous `member_vote` proof (Merkle inclusion in the
+/// proposal's snapshotted member set + a per-round nullifier, so one member gets
+/// exactly one key). The key is public — that is fine and is how MACI works; a
+/// *key change* to a key nobody else knows is what defeats coercion, and key
+/// changes only ever travel inside sealed commands. PDA: ["macisignup", round, pubkey].
+#[account]
+pub struct MaciSignup {
+    pub round: Pubkey,
+    pub pubkey: [u8; 32],
+    pub index: u64,
+    /// Voice credits. One member, one voice — reserved for future weighting.
+    pub weight: u64,
+    pub bump: u8,
+}
+
+impl MaciSignup {
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 8 + 1;
 }

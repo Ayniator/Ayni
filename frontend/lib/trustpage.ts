@@ -13,7 +13,7 @@ import { PublicKey } from "@solana/web3.js";
 import { PROGRAM_ID, connection, readOnlyProgram, listCircles, membershipPda } from "./member";
 import { attestPda } from "./admission";
 import { Cord } from "./quipu";
-import { Tier, getVisibility } from "./visibility";
+import { OpenedProfile, Tier, getVisibility, openMemberProfile } from "./visibility";
 
 const seed = (s: string) => new TextEncoder().encode(s);
 const toBytes = (hex: string) => Uint8Array.from((hex.match(/.{1,2}/g) ?? []).map((b) => parseInt(b, 16)));
@@ -30,11 +30,30 @@ export interface TrustPage {
   vouched: "anonymous" | "named" | "none"; // the vouch-proof, if a two-sponsor admission
   cords: Cord[]; // the quipu — never summed
   quipuTier: Tier; // who may see the quipu (default my-circle)
+  /** The served bio, IF this viewer holds the key that opens it. Undefined means
+   *  absent — and it means absent for three different reasons that the caller
+   *  must keep indistinguishable: no profile was published, nothing was written,
+   *  or this viewer is not in the audience. There is no fourth value and no flag
+   *  saying which; a "hidden" indicator here would undo F61. */
+  bio?: string;
+  /** The served avatar (a data URL), on exactly the same terms as `bio`. */
+  avatar?: string;
 }
 
 /** Gather the trust page for a member commitment. `circle` may be given to skip
- *  the lookup; otherwise the membership is found across all Circles. */
-export async function getTrustPage(commitmentHex: string, circleHint?: string): Promise<TrustPage | null> {
+ *  the lookup; otherwise the membership is found across all Circles.
+ *
+ *  `viewerMaster`, when supplied, lets the encrypted elements be opened with the
+ *  viewer's own keys; without it the read path falls back to whatever viewing
+ *  secret this device already holds, and failing that opens nothing. Note what
+ *  is NOT here: no viewer identity is sent anywhere, and no request announces
+ *  who is looking — the drop lookup is an ordinary account read at an address
+ *  that means nothing to the RPC serving it. */
+export async function getTrustPage(
+  commitmentHex: string,
+  circleHint?: string,
+  viewerMaster?: Uint8Array | null
+): Promise<TrustPage | null> {
   const program = readOnlyProgram();
   const commitment = toBytes(commitmentHex);
 
@@ -110,6 +129,14 @@ export async function getTrustPage(commitmentHex: string, circleHint?: string): 
 
   const vis = await getVisibility(new PublicKey(circle), commitmentHex);
 
+  // The encrypted elements (F60 Phase-2). This is the only place the read path
+  // decides anything about bio/avatar, and it decides it by trying to DECRYPT:
+  // the answer is the content or nothing at all. `mayView` is deliberately not
+  // consulted — a rendering rule cannot protect bytes the viewer already has,
+  // and a key the viewer lacks needs no rendering rule.
+  const opened: OpenedProfile = await openMemberProfile(new PublicKey(circle), commitmentHex, viewerMaster)
+    .catch(() => ({} as OpenedProfile));
+
   return {
     commitment: commitmentHex,
     circle,
@@ -121,5 +148,7 @@ export async function getTrustPage(commitmentHex: string, circleHint?: string): 
     vouched,
     cords,
     quipuTier: vis.quipu,
+    bio: opened.bio,
+    avatar: opened.avatar,
   };
 }

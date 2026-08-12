@@ -76,7 +76,17 @@ export default function MemberPage() {
     <>
       <div className="card">
         <div className="row" style={{ flexWrap: "wrap", gap: 12 }}>
-          <Identicon seed={page.commitment} size={56} />
+          {/* The served avatar if this viewer holds its key, the neutral
+              identicon otherwise. Same size, same position, no badge, no
+              placeholder that says "hidden" — a member who never published one
+              and a member whose avatar you may not open look identical. */}
+          {page.avatar ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={page.avatar} alt="" width={56} height={56}
+                 style={{ borderRadius: "50%", objectFit: "cover", border: "1px solid var(--border)" }} />
+          ) : (
+            <Identicon seed={page.commitment} size={56} />
+          )}
           <div className="meta" style={{ flex: 1, minWidth: 0 }}>
             <div className="name" style={{ fontSize: 18 }}>{page.circleName}</div>
             <div className="sub muted">
@@ -85,6 +95,10 @@ export default function MemberPage() {
             </div>
           </div>
         </div>
+        {/* The one-line bio, rendered only when it actually decrypted. No
+            heading and no empty slot when it did not: an absent line is the
+            whole point, not a gap where something obviously used to be. */}
+        {page.bio && <p style={{ margin: "10px 0 0", whiteSpace: "pre-wrap" }}>{page.bio}</p>}
         {vouchLabel && (
           <p className="ok-note" style={{ marginBottom: 0, marginTop: 10 }}>✓ {vouchLabel}</p>
         )}
@@ -100,10 +114,10 @@ export default function MemberPage() {
         </div>
       )}
 
-      {/* The stone-mark avatar is served from the E5 encrypted profile object
-          (F60) — not yet built, so a visitor sees the neutral silhouette (a bare
-          triangle, never a lock). The audience is the avatar tier; when the
-          served object lands, a permitted viewer gets the real mark here. */}
+      {/* Bio and avatar above come from the E5 encrypted profile object (F60
+          Phase-2): ciphertext on chain, opened only by a viewer who holds the
+          element key. Nothing here consults `mayView` — decryption IS the
+          decision, so a patched client gains nothing by ignoring a flag. */}
 
       {/* Presence + bio arrive with the disclosure layer (Epic 5 / F59). Shown
           as not-yet-attested rather than faked — the repo's honest-degradation
