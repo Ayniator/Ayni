@@ -15,10 +15,13 @@ import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { listCircles } from "../lib/member";
 import { mySeatIndices } from "../lib/admin";
 import { isRegistered, registerMessagingKey } from "../lib/messaging";
+import { useT } from "./SettingsProvider";
+import DevnetSignNote from "./DevnetSignNote";
 
 export default function SeatMessagingGate() {
   const { publicKey, connected, signMessage } = useWallet();
   const wallet = useAnchorWallet();
+  const t = useT();
   const me = publicKey?.toBase58();
 
   const [needs, setNeeds] = useState(false);
@@ -68,11 +71,11 @@ export default function SeatMessagingGate() {
     <div className="seat-msg-gate" role="alert">
       <div className="seat-msg-gate-inner">
         <span>
-          <b>You hold a Council seat.</b> Servants must be reachable — enable encrypted messaging so members can write to you.
+          <b>{t("msg.seat.bold")}</b> {t("msg.seat.rest")} <DevnetSignNote />
           {err && <span className="seat-msg-gate-err"> · {err}</span>}
         </span>
         <button className="btn btn-sm" onClick={enable} disabled={busy}>
-          {busy ? "Enabling…" : "Enable messaging"}
+          {busy ? t("msg.enable.busy") : t("msg.enable.button")}
         </button>
       </div>
     </div>

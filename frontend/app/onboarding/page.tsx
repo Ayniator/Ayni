@@ -15,6 +15,7 @@ import Link from "next/link";
 import WalletChooser from "../../components/WalletChooser";
 import QuipuNecklace from "../../components/QuipuNecklace";
 import { fileToAvatarDataUrl, getUserProfile, setUserProfile } from "../../lib/profile";
+import { useT } from "../../components/SettingsProvider";
 
 const STEPS = [
   { n: 1, key: "wallet", label: "Wallet", hint: "Get a wallet" },
@@ -23,14 +24,15 @@ const STEPS = [
 ] as const;
 
 export default function OnboardingPage() {
+  const t = useT();
   const [step, setStep] = useState(1);
   const total = STEPS.length;
 
   return (
     <div className="onboarding" style={{ maxWidth: 760, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: 4 }}>Welcome — let&apos;s get you a seat</h1>
+      <h1 style={{ marginBottom: 4 }}>{t("onboarding.hero.title")}</h1>
       <p className="muted" style={{ marginTop: 0 }}>
-        Three steps. No password, no email, no fee. Most people finish in under ten minutes.
+        {t("onboarding.hero.subtitle")}
       </p>
 
       {/* ALWAYS-VISIBLE position indicator — the newcomer never loses their place. */}
@@ -45,15 +47,15 @@ export default function OnboardingPage() {
       {/* Arrows — one clear forward action, and a way back. */}
       <div className="row" style={{ justifyContent: "space-between", marginTop: 16 }}>
         <button className="btn btn-ghost" onClick={() => setStep((s) => Math.max(1, s - 1))} disabled={step === 1}>
-          ← Back
+          ← {t("onboarding.back")}
         </button>
-        <span className="muted sm">Step {step} of {total}</span>
+        <span className="muted sm">{t("onboarding.stepWord")} {step} {t("onboarding.ofWord")} {total}</span>
         {step < total ? (
           <button className="btn" onClick={() => setStep((s) => Math.min(total, s + 1))}>
-            Next: {STEPS[step].label} →
+            {t("onboarding.nextPrefix")} {t(`onboarding.step.${STEPS[step].key}`)} →
           </button>
         ) : (
-          <Link className="btn" href="/me">Open my page →</Link>
+          <Link className="btn" href="/me">{t("onboarding.openMyPage")} →</Link>
         )}
       </div>
     </div>
@@ -61,6 +63,7 @@ export default function OnboardingPage() {
 }
 
 function PositionIndicator({ current, onJump }: { current: number; onJump: (n: number) => void }) {
+  const t = useT();
   return (
     <div className="row" style={{ gap: 0, marginTop: 12, alignItems: "center" }}>
       {STEPS.map((s, i) => (
@@ -68,7 +71,7 @@ function PositionIndicator({ current, onJump }: { current: number; onJump: (n: n
           <button
             onClick={() => onJump(s.n)}
             className="btn btn-sm"
-            title={s.hint}
+            title={t(`onboarding.hint.${s.key}`)}
             style={{
               borderRadius: 999,
               minWidth: 34,
@@ -81,7 +84,7 @@ function PositionIndicator({ current, onJump }: { current: number; onJump: (n: n
             {s.n}
           </button>
           <span className="sm" style={{ margin: "0 8px", fontWeight: s.n === current ? 700 : 400, opacity: s.n === current ? 1 : 0.6 }}>
-            {s.label}
+            {t(`onboarding.step.${s.key}`)}
           </span>
           {i < STEPS.length - 1 && (
             <span aria-hidden style={{ flex: 1, height: 2, background: "var(--muted, #ccc)", opacity: 0.4, margin: "0 4px" }} />
@@ -99,15 +102,14 @@ function StepWallet() {
   // (Copy only — AHA does not create wallets or handle seed phrases. The wallet
   // apps below do that; we just make sure nobody misses the warning.)
   const [ack, setAck] = useState(false);
+  const t = useT();
   return (
     <section>
-      <h2 style={{ marginTop: 0 }}>1 · Get a wallet</h2>
+      <h2 style={{ marginTop: 0 }}>1 · {t("onboarding.wallet.title")}</h2>
       <p>
-        Your wallet is how you sign in — there is no username or password. When AHA needs to know
-        it&apos;s you, your wallet asks you to <strong>sign a short message</strong>. Signing proves
-        you hold the key; it costs nothing and moves no money.
+        {t("onboarding.wallet.p1a")} <strong>{t("onboarding.wallet.signMsg")}</strong>{t("onboarding.wallet.p1b")}
       </p>
-      <p className="muted sm">Pick one wallet below and install it. Any of them works.</p>
+      <p className="muted sm">{t("onboarding.wallet.pickOne")}</p>
 
       <WalletChooser />
 
@@ -117,29 +119,26 @@ function StepWallet() {
         style={{ borderColor: "var(--warn, #c98a2b)", background: "color-mix(in srgb, var(--warn, #c98a2b) 8%, transparent)", padding: 14, marginTop: 16 }}
       >
         <div className="name" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span aria-hidden>⚠️</span> Write down your seed phrase — this is the one thing you cannot undo
+          <span aria-hidden>⚠️</span> {t("onboarding.wallet.seedWarnTitle")}
         </div>
         <p className="sm" style={{ margin: "8px 0" }}>
-          When your wallet shows you a list of secret words (your <em>seed phrase</em> or
-          <em> recovery phrase</em>), write them on paper and keep them somewhere safe and private.
-          They are the <strong>only</strong> way to recover your account. Nobody — not AHA, not your
-          sponsor, not the wallet company — can restore them for you. Never type them into a website,
-          never photograph them, never share them with anyone who asks.
+          {t("onboarding.wallet.seedP2a")} <em>{t("onboarding.wallet.emSeed")}</em> {t("onboarding.wallet.orWord")}
+          <em> {t("onboarding.wallet.emRecovery")}</em>{t("onboarding.wallet.seedP2b")} <strong>{t("onboarding.wallet.emOnly")}</strong> {t("onboarding.wallet.seedP2c")}
         </p>
         <label className="row sm" style={{ gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
           <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} style={{ marginTop: 3 }} />
-          <span>I have set up a wallet and written my seed phrase down somewhere safe and offline.</span>
+          <span>{t("onboarding.wallet.ackLabel")}</span>
         </label>
       </div>
 
       {!ack && (
         <p className="muted sm" style={{ marginTop: 10 }}>
-          Once you&apos;ve done this, tick the box above — then go to <strong>Step 2</strong> to be vouched for.
+          {t("onboarding.wallet.notAckedA")} <strong>{t("onboarding.wallet.step2")}</strong> {t("onboarding.wallet.notAckedB")}
         </p>
       )}
       {ack && (
         <p className="sm" style={{ marginTop: 10, color: "var(--accent, #6b8f71)" }}>
-          Good. Your keys are yours. Continue to <strong>Step 2 · Vouch</strong> →
+          {t("onboarding.wallet.ackedA")} <strong>{t("onboarding.wallet.step2Vouch")}</strong> →
         </p>
       )}
     </section>
@@ -148,30 +147,29 @@ function StepWallet() {
 
 /* ── Step 2 — Vouch ──────────────────────────────────────────────────────── */
 function StepVouch() {
+  const t = useT();
   return (
     <section>
-      <h2 style={{ marginTop: 0 }}>2 · Get vouched for</h2>
+      <h2 style={{ marginTop: 0 }}>2 · {t("onboarding.vouch.title")}</h2>
       <p>
-        AHA has no sign-up form. You join because someone already inside vouches for you — your{" "}
-        <strong>parrain</strong> (sponsor). They record a private attestation on-chain that says,
-        in effect, <em>&ldquo;I know this person and they belong here.&rdquo;</em>
+        {t("onboarding.vouch.p1a")}{" "}
+        <strong>{t("onboarding.vouch.parrain")}</strong> {t("onboarding.vouch.p1b")} <em>{t("onboarding.vouch.quote")}</em>
       </p>
       <ol className="sm" style={{ lineHeight: 1.7 }}>
-        <li>Tell your parrain the wallet address you just set up.</li>
-        <li>They open their own page and add their attestation for you.</li>
+        <li>{t("onboarding.vouch.li1")}</li>
+        <li>{t("onboarding.vouch.li2")}</li>
         <li>
-          For the tiny network fee your first actions cost, you have a choice:{" "}
-          <strong>fund your wallet</strong> yourself with a small amount of SOL, or use the{" "}
-          <strong>faucet</strong> — a free top-up so cost is never a barrier to a seat.
+          {t("onboarding.vouch.li3a")}{" "}
+          <strong>{t("onboarding.vouch.li3fund")}</strong> {t("onboarding.vouch.li3b")}{" "}
+          <strong>{t("onboarding.vouch.li3faucet")}</strong> {t("onboarding.vouch.li3c")}
         </li>
       </ol>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-        <Link className="btn" href="/me">Go to my page (attestation &amp; faucet) →</Link>
-        <Link className="btn btn-ghost" href="/documents">Read about the Traditions</Link>
+        <Link className="btn" href="/me">{t("onboarding.vouch.goToMyPage")} →</Link>
+        <Link className="btn btn-ghost" href="/documents">{t("onboarding.vouch.readTraditions")}</Link>
       </div>
       <p className="muted sm" style={{ marginTop: 12 }}>
-        The attestation and the faucet both live on your <strong>/me</strong> page — this step just
-        points you there so you don&apos;t have to hunt for them.
+        {t("onboarding.vouch.p3a")} <strong>/me</strong> {t("onboarding.vouch.p3b")}
       </p>
     </section>
   );
@@ -179,6 +177,7 @@ function StepVouch() {
 
 /* ── Step 3 — Face ───────────────────────────────────────────────────────── */
 function StepFace() {
+  const t = useT();
   const [avatar, setAvatar] = useState<string | undefined>(() => getUserProfile().avatar);
   const [bio, setBio] = useState("");
   const [busy, setBusy] = useState(false);
@@ -205,10 +204,9 @@ function StepFace() {
 
   return (
     <section>
-      <h2 style={{ marginTop: 0 }}>3 · Show your face</h2>
+      <h2 style={{ marginTop: 0 }}>3 · {t("onboarding.face.title")}</h2>
       <p>
-        A picture and a line about yourself help your Circle recognise you. Your photo is resized on
-        this device before it is used.
+        {t("onboarding.face.intro")}
       </p>
 
       <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
@@ -220,42 +218,38 @@ function StepFace() {
         >
           {avatar ? (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={avatar} alt="Your profile picture" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src={avatar} alt={t("onboarding.face.avatarAlt")} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
-            <span className="muted sm">no photo yet</span>
+            <span className="muted sm">{t("onboarding.face.noPhoto")}</span>
           )}
         </div>
         <label className="btn btn-sm" style={{ cursor: "pointer" }}>
-          {busy ? "Processing…" : avatar ? "Change photo" : "Choose a photo"}
+          {busy ? t("onboarding.face.processing") : avatar ? t("onboarding.face.changePhoto") : t("onboarding.face.choosePhoto")}
           <input type="file" accept="image/*" onChange={onFile} style={{ display: "none" }} />
         </label>
       </div>
       {err && <p className="error sm">{err}</p>}
       <p className="muted sm" style={{ marginTop: 6 }}>
-        Cartoonisation (a stylised portrait that stays recognisable but defeats face-recognition) is
-        coming — it will run on your phone so the raw photo never leaves it. For now this is a normal
-        picture; keep that in mind when choosing one.
+        {t("onboarding.face.cartoonNote")}
       </p>
 
-      <label className="sm" style={{ display: "block", marginTop: 12, fontWeight: 600 }}>A line about you (optional)</label>
+      <label className="sm" style={{ display: "block", marginTop: 12, fontWeight: 600 }}>{t("onboarding.face.bioLabel")}</label>
       <textarea
         value={bio}
         onChange={(e) => setBio(e.target.value)}
         rows={3}
-        placeholder="A sentence or two — as much or as little as you like."
+        placeholder={t("onboarding.face.bioPlaceholder")}
         style={{ width: "100%", marginTop: 4 }}
       />
       <p className="muted sm" style={{ marginTop: 4 }}>
-        You can edit your full profile any time on your <Link href="/me">/me</Link> page.
+        {t("onboarding.face.editProfileA")} <Link href="/me">/me</Link> {t("onboarding.face.editProfileB")}
       </p>
 
       {/* The bare cord — a beginning, not an absence. */}
       <div className="card" style={{ padding: 14, marginTop: 16 }}>
-        <div className="name">Your quipu</div>
+        <div className="name">{t("onboarding.face.quipuTitle")}</div>
         <p className="muted sm" style={{ margin: "4px 0 8px" }}>
-          Everyone starts here: a single bare cord. As you complete steps, your sponsor ties a knot
-          for each one — it fills over time. There is no score and no &ldquo;how far along&rdquo;;
-          it simply holds what you have done.
+          {t("onboarding.face.quipuDesc")}
         </p>
         <QuipuNecklace cords={[]} height={120} />
       </div>
@@ -266,20 +260,15 @@ function StepFace() {
         className="card"
         style={{ padding: 14, marginTop: 16, borderColor: "var(--accent, #6b8f71)" }}
       >
-        <div className="name">You&apos;re in — provisionally</div>
+        <div className="name">{t("onboarding.face.provTitle")}</div>
         <p className="sm" style={{ margin: "6px 0 0" }}>
-          With one sponsor&apos;s attestation you get a <strong>live page</strong> and the{" "}
-          <strong>faucet</strong>, so you can find your feet right away. Until a{" "}
-          <strong>second sponsor</strong> confirms you, you remain a provisional member: no vote, no
-          roles, and no access to other members&apos; data. This is the fellowship&apos;s way of
-          welcoming you quickly while keeping everyone safe.
+          {t("onboarding.face.provA")} <strong>{t("onboarding.face.provLivePage")}</strong> {t("onboarding.face.provB")}{" "}
+          <strong>{t("onboarding.face.provFaucet")}</strong>{t("onboarding.face.provC")}{" "}
+          <strong>{t("onboarding.face.provSecondSponsor")}</strong> {t("onboarding.face.provD")}
         </p>
         {/* Epic 11 / F78 — say this BEFORE the member finishes, not after they lose a device. */}
         <p className="sm muted" style={{ margin: "8px 0 0" }}>
-          One more thing to know now: <strong>sponsor recovery is not available while you are
-          provisional</strong>. It needs your two sponsors&apos; key-shards, and until your second
-          sponsor confirms you, only one shard exists — so no recovery split is possible yet. Back up
-          your seed phrase carefully in the meantime.
+          {t("onboarding.face.recoveryA")} <strong>{t("onboarding.face.recoveryStrong")}</strong>{t("onboarding.face.recoveryB")}
         </p>
       </div>
     </section>

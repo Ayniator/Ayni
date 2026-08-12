@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import Identicon from "../../../components/Identicon";
+import { useT } from "../../../components/SettingsProvider";
 import QuipuNecklace from "../../../components/QuipuNecklace";
 import { TrustPage, getTrustPage } from "../../../lib/trustpage";
 import { findMyMemberships } from "../../../lib/member";
@@ -22,6 +23,7 @@ import { countryByCode } from "../../../lib/countries";
 const day = (u: number) => (u ? new Date(u * 1000).toLocaleDateString(undefined, { year: "numeric", month: "long" }) : "");
 
 export default function MemberPage() {
+  const t = useT();
   const params = useParams();
   const { publicKey } = useWallet();
   const commitment = String(params?.commitment ?? "");
@@ -53,21 +55,21 @@ export default function MemberPage() {
     return () => { live = false; };
   }, [publicKey]);
 
-  if (loading) return <p className="muted">Reading the cords…</p>;
+  if (loading) return <p className="muted">{t("member.loading")}</p>;
   // A page that doesn't resolve reads as a bare page — no "not found" alarm.
   if (!page) return (
     <div className="card">
       <div className="row">
         <Identicon seed={commitment} size={46} />
-        <div className="meta"><div className="name">A member</div><div className="sub muted">bare cord</div></div>
+        <div className="meta"><div className="name">{t("member.aMember")}</div><div className="sub muted">{t("member.bareCord")}</div></div>
       </div>
     </div>
   );
 
   const country = countryByCode(page.region);
   const vouchLabel =
-    page.vouched === "anonymous" ? "Vouched — by two members in good standing (naming no one)"
-    : page.vouched === "named" ? "Vouched — two-sponsor admission"
+    page.vouched === "anonymous" ? t("member.vouchedAnonymous")
+    : page.vouched === "named" ? t("member.vouchedNamed")
     : "";
 
   return (
@@ -79,7 +81,7 @@ export default function MemberPage() {
             <div className="name" style={{ fontSize: 18 }}>{page.circleName}</div>
             <div className="sub muted">
               {country ? country.name : page.region || "—"}
-              {page.provisional && <span className="badge" style={{ marginLeft: 8 }}>provisional</span>}
+              {page.provisional && <span className="badge" style={{ marginLeft: 8 }}>{t("member.provisional")}</span>}
             </div>
           </div>
         </div>
@@ -93,7 +95,7 @@ export default function MemberPage() {
           to a member who simply has no cords. */}
       {(viewerOwns(page.commitment, viewer) || mayView(page.quipuTier, page.circle, page.commitment, viewer)) && (
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>Quipu</h3>
+          <h3 style={{ marginTop: 0 }}>{t("member.quipu")}</h3>
           <QuipuNecklace cords={page.cords} />
         </div>
       )}
@@ -107,16 +109,14 @@ export default function MemberPage() {
           as not-yet-attested rather than faked — the repo's honest-degradation
           rule. */}
       <div className="card">
-        <div className="sub muted">Presence</div>
+        <div className="sub muted">{t("member.presence")}</div>
         <p className="muted" style={{ margin: "4px 0 0" }}>
-          Presence attestation (“last stood in circle …”) is not yet wired — it
-          needs the ZK presence proof (F59).
+          {t("member.presenceNotWired")}
         </p>
       </div>
 
       <p className="muted sm">
-        Member since {day(page.issuedAt)}. This page shows only what is vouched
-        and shown — never a rating, a score, or a count.
+        {t("member.memberSince")} {day(page.issuedAt)}. {t("member.onlyVouched")}
       </p>
     </>
   );

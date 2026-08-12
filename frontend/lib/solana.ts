@@ -10,6 +10,15 @@ import idl from "./ayni.json";
 export const RPC_URL =
   process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com";
 
+// Which cluster the app is wired to (derived from the RPC URL, devnet by
+// default). Used to warn, before a wallet signs, that its selected network must
+// match — otherwise Solflare/Phantom raise a "Network mismatch" and refuse.
+export const CLUSTER: "mainnet" | "testnet" | "devnet" = /mainnet/i.test(RPC_URL)
+  ? "mainnet"
+  : /testnet/i.test(RPC_URL)
+    ? "testnet"
+    : "devnet";
+
 // Helius (and most RPCs) rate-limit getProgramAccounts / getSignaturesForAddress.
 // Retry 429/502/503 with exponential backoff + jitter so the heavy pages
 // (inbox, foundation directory) don't surface transient "Too many requests".

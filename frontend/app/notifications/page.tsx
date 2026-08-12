@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Notif, buildNotifications, markNotifsRead } from "../../lib/notifications";
+import { useT } from "../../components/SettingsProvider";
 
 const icon = (k: string) =>
   (({ vote: "🗳️", exec: "⚙️", membervote: "🗳️", expiry: "⏳", chip: "🏅" }) as Record<string, string>)[k] ?? "🔔";
 
 export default function Notifications() {
+  const t = useT();
   const { publicKey, connected } = useWallet();
   const [items, setItems] = useState<Notif[] | null>(null);
 
@@ -28,12 +30,12 @@ export default function Notifications() {
 
   return (
     <>
-      <h1>Notifications</h1>
-      <p className="lede">Votes that need you, memberships expiring, and milestones — straight from the chain.</p>
+      <h1>{t("notifications.title")}</h1>
+      <p className="lede">{t("notifications.lede")}</p>
 
-      {!connected && <div className="card"><p className="muted" style={{ margin: 0 }}>Connect a wallet to see your notifications.</p></div>}
-      {connected && items === null && <p className="muted">Loading…</p>}
-      {connected && items && items.length === 0 && <div className="card"><p className="muted" style={{ margin: 0 }}>You&apos;re all caught up. 🎉</p></div>}
+      {!connected && <div className="card"><p className="muted" style={{ margin: 0 }}>{t("notifications.connectPrompt")}</p></div>}
+      {connected && items === null && <p className="muted">{t("notifications.loading")}</p>}
+      {connected && items && items.length === 0 && <div className="card"><p className="muted" style={{ margin: 0 }}>{t("notifications.allCaughtUp")}</p></div>}
 
       {connected && items && items.length > 0 && (
         <div className="members">

@@ -43,6 +43,7 @@ import {
   upsertCircleProfile,
 } from "../../lib/foundation";
 import { todayKey } from "../../lib/ipfs";
+import { useT } from "../../components/SettingsProvider";
 
 const short = (s: string) => `${s.slice(0, 4)}…${s.slice(-4)}`;
 function pk(s: string): PublicKey | null {
@@ -68,6 +69,7 @@ function recallDeleted(p: string): number | null { try { const v = localStorage.
 const fmtDate = (u: number) => new Date(u * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
 export default function Foundation() {
+  const t = useT();
   const { publicKey, connected } = useWallet();
   const wallet = useAnchorWallet();
   const [circles, setCircles] = useState<CircleInfo[]>(() => cachedCircleInfos());
@@ -83,16 +85,15 @@ export default function Foundation() {
 
   return (
     <>
-      <h1>Foundation</h1>
+      <h1>{t("foundation.title")}</h1>
       <p className="lede">
-        The World Service Circle — shared seats, documents, and Daily Reflections for the whole
-        fellowship. You see this because your wallet holds a foundation seat.
+        {t("foundation.lede")}
       </p>
 
-      {!connected && <div className="card"><p className="muted" style={{ margin: 0 }}>Connect your foundation wallet.</p></div>}
-      {connected && !foundation && <div className="card"><p className="muted" style={{ margin: 0 }}>No foundation Circle found on this cluster.</p></div>}
+      {!connected && <div className="card"><p className="muted" style={{ margin: 0 }}>{t("foundation.connectWallet")}</p></div>}
+      {connected && !foundation && <div className="card"><p className="muted" style={{ margin: 0 }}>{t("foundation.noFoundation")}</p></div>}
       {connected && foundation && !isFoundationSeat && (
-        <div className="card"><p className="muted" style={{ margin: 0 }}>This wallet doesn&apos;t hold a foundation seat.</p></div>
+        <div className="card"><p className="muted" style={{ margin: 0 }}>{t("foundation.noSeat")}</p></div>
       )}
 
       {foundation && isFoundationSeat && (
@@ -127,6 +128,7 @@ export default function Foundation() {
 // ===========================================================================
 
 function SeatsPanel({ foundation, wallet, me }: { foundation: CircleInfo; wallet: any; me: string }) {
+  const t = useT();
   const [items, setItems] = useState<CouncilProposal[] | null>(null);
   const [note, setNote] = useState<Note>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -141,12 +143,12 @@ function SeatsPanel({ foundation, wallet, me }: { foundation: CircleInfo; wallet
 
   async function proposeRotate(seatIndex: number) {
     const holder = pk(newHolder);
-    if (!holder) return setNote({ kind: "err", text: "Enter a valid wallet address." });
+    if (!holder) return setNote({ kind: "err", text: t("foundation.seats.invalidWallet") });
     setBusy("rotate");
     setNote(null);
     try {
       const sig = await propose(wallet, new PublicKey(foundation.pubkey), actionRotateSeat(seatIndex, holder));
-      setNote({ kind: "ok", text: `Proposed new ${SEAT_ROLES[seatIndex]} (your seat approved it). Needs 4-of-7.`, sig });
+      setNote({ kind: "ok", text: `${t("foundation.seats.proposedNewPre")} ${SEAT_ROLES[seatIndex]} ${t("foundation.seats.proposedNewPost")}`, sig });
       setEditing(null); setNewHolder("");
       load();
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
@@ -155,7 +157,7 @@ function SeatsPanel({ foundation, wallet, me }: { foundation: CircleInfo; wallet
 
   async function act(label: string, run: () => Promise<string>) {
     setBusy(label); setNote(null);
-    try { const sig = await run(); setNote({ kind: "ok", text: "Done.", sig }); load(); }
+    try { const sig = await run(); setNote({ kind: "ok", text: t("foundation.common.done"), sig }); load(); }
     catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(null); }
   }
@@ -164,7 +166,7 @@ function SeatsPanel({ foundation, wallet, me }: { foundation: CircleInfo; wallet
 
   return (
     <section className="card">
-      <div className="section-head"><h2>The 7 seats</h2><p className="muted sm">Changing a seat is a 4-of-7 Council vote (time-locked, contestable).</p></div>
+      <div className="section-head"><h2>{t("foundation.seats.heading")}</h2><p className="muted sm">{t("foundation.seats.subhead")}</p></div>
 
       <div className="members">
         {SEAT_ROLES.map((role, i) => (
@@ -172,12 +174,12 @@ function SeatsPanel({ foundation, wallet, me }: { foundation: CircleInfo; wallet
             <RoleIcon seat={i} size={26} />
             <div className="meta" style={{ flex: 1, minWidth: 0 }}>
               <div className="name">{role}</div>
-              <div className="sub mono">{short(foundation.seats[i])}{foundation.seats[i] === me ? " · you" : ""}</div>
+              <div className="sub mono">{short(foundation.seats[i])}{foundation.seats[i] === me ? t("foundation.seats.youSuffix") : ""}</div>
             </div>
             {mySeats.length > 0 && (editing === i ? (
               <div className="row" style={{ gap: 6 }}>
-                <input className="mono" value={newHolder} onChange={(e) => setNewHolder(e.target.value)} placeholder="new wallet" style={{ width: 150 }} />
-                <button className="btn btn-sm" disabled={busy === "rotate"} onClick={() => proposeRotate(i)}>{busy === "rotate" ? "…" : "Propose"}</button>
+                <input className="mono" value={newHolder} onChange={(e) => setNewHolder(e.target.value)} placeholder={t("foundation.seats.newWalletPlaceholder")} style={{ width: 150 }} />
+                <button className="btn btn-sm" disabled={busy === "rotate"} onClick={() => proposeRotate(i)}>{busy === "rotate" ? "…" : t("foundation.seats.propose")}</button>
                 <button className="btn btn-sm btn-ghost" onClick={() => setEditing(null)}>×</button>
               </div>
             ) : (
@@ -186,13 +188,13 @@ function SeatsPanel({ foundation, wallet, me }: { foundation: CircleInfo; wallet
                   <Link
                     href={`/inbox?to=${foundation.seats[i]}`}
                     className="btn btn-sm btn-ghost"
-                    title="Send a private message to this seat holder"
-                    aria-label="Send message"
+                    title={t("foundation.seats.messageTitle")}
+                    aria-label={t("foundation.seats.messageAria")}
                   >
                     ✉
                   </Link>
                 )}
-                <button className="btn btn-sm btn-ghost" onClick={() => { setEditing(i); setNewHolder(""); }}>Change</button>
+                <button className="btn btn-sm btn-ghost" onClick={() => { setEditing(i); setNewHolder(""); }}>{t("foundation.seats.change")}</button>
               </div>
             ))}
           </div>
@@ -203,7 +205,7 @@ function SeatsPanel({ foundation, wallet, me }: { foundation: CircleInfo; wallet
 
       {items && items.filter((p) => p.kind === "rotateSeat" && p.status !== "cancelled").length > 0 && (
         <>
-          <h4 style={{ margin: "14px 0 6px" }}>Pending seat votes</h4>
+          <h4 style={{ margin: "14px 0 6px" }}>{t("foundation.seats.pendingHeading")}</h4>
           <div className="votes">
             {items.filter((p) => p.kind === "rotateSeat").map((p) => {
               const iApproved = p.approvedSeats.some((s) => mySeats.includes(s));
@@ -212,17 +214,17 @@ function SeatsPanel({ foundation, wallet, me }: { foundation: CircleInfo; wallet
                 <div className="vote" key={p.pubkey}>
                   <div className="vote-main"><StatusDot status={p.status} /><div>
                     <div className="name">{p.summary}</div>
-                    <div className="sub">{p.approvals}/{p.threshold} approvals{iApproved && " · you approved"}</div>
+                    <div className="sub">{p.approvals}/{p.threshold} {t("foundation.common.approvals")}{iApproved && t("foundation.common.youApproved")}</div>
                   </div></div>
                   <div className="vote-actions">
                     {mySeats.length > 0 && !iApproved && p.status === "running" && (
-                      <button className="btn btn-sm" disabled={!!busy} onClick={() => act("a" + p.pubkey, () => approveProposal(wallet, new PublicKey(foundation.pubkey), new PublicKey(p.pubkey)))}>Approve</button>
+                      <button className="btn btn-sm" disabled={!!busy} onClick={() => act("a" + p.pubkey, () => approveProposal(wallet, new PublicKey(foundation.pubkey), new PublicKey(p.pubkey)))}>{t("foundation.common.approve")}</button>
                     )}
                     {p.status === "passed" && armed && !p.executed && (
-                      <button className="btn btn-sm" disabled={!!busy} onClick={() => act("e" + p.pubkey, () => executeProposal(wallet, new PublicKey(foundation.pubkey), new PublicKey(p.pubkey)))}>Execute</button>
+                      <button className="btn btn-sm" disabled={!!busy} onClick={() => act("e" + p.pubkey, () => executeProposal(wallet, new PublicKey(foundation.pubkey), new PublicKey(p.pubkey)))}>{t("foundation.common.execute")}</button>
                     )}
                     {mySeats.length > 0 && (p.status === "running" || p.status === "passed") && (
-                      <button className="btn btn-sm btn-ghost" disabled={!!busy} onClick={() => act("c" + p.pubkey, () => cancelProposal(wallet, new PublicKey(foundation.pubkey), new PublicKey(p.pubkey)))}>Cancel</button>
+                      <button className="btn btn-sm btn-ghost" disabled={!!busy} onClick={() => act("c" + p.pubkey, () => cancelProposal(wallet, new PublicKey(foundation.pubkey), new PublicKey(p.pubkey)))}>{t("foundation.common.cancel")}</button>
                     )}
                   </div>
                 </div>
@@ -240,6 +242,7 @@ function SeatsPanel({ foundation, wallet, me }: { foundation: CircleInfo; wallet
 // ===========================================================================
 
 function ProfilePanel({ foundation, wallet }: { foundation: CircleInfo; wallet: any }) {
+  const t = useT();
   const [f, setF] = useState<ProfileFields | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<Note>(null);
@@ -262,7 +265,7 @@ function ProfilePanel({ foundation, wallet }: { foundation: CircleInfo; wallet: 
     setBusy(true); setNote(null);
     try {
       const sig = await upsertCircleProfile(wallet, new PublicKey(foundation.pubkey), f);
-      setNote({ kind: "ok", text: "Profile saved — it now powers Find a Circle, Documents, and Reflections.", sig });
+      setNote({ kind: "ok", text: t("foundation.profile.saved"), sig });
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(false); }
   }
@@ -270,22 +273,22 @@ function ProfilePanel({ foundation, wallet }: { foundation: CircleInfo; wallet: 
   if (!f) return null;
   return (
     <section className="card">
-      <div className="section-head"><h2>Documents &amp; directory profile</h2>
-        <p className="muted sm">The IPFS CIDs below drive <a href="/documents">/documents</a> and <a href="/reflections">/reflections</a>. Pin a file on IPFS, then paste its CID here.</p></div>
+      <div className="section-head"><h2>{t("foundation.profile.heading")}</h2>
+        <p className="muted sm">{t("foundation.profile.descPre")} <a href="/documents">/documents</a> {t("foundation.profile.descAnd")} <a href="/reflections">/reflections</a>{t("foundation.profile.descPost")}</p></div>
       <div className="form">
-        <div className="form-row"><label>Name</label><input value={f.name} onChange={(e) => up("name", e.target.value)} /></div>
-        <div className="form-row"><label>City</label><input value={f.city} onChange={(e) => up("city", e.target.value)} /></div>
-        <div className="form-row"><label>Address</label><input value={f.address} onChange={(e) => up("address", e.target.value)} /></div>
+        <div className="form-row"><label>{t("foundation.profile.name")}</label><input value={f.name} onChange={(e) => up("name", e.target.value)} /></div>
+        <div className="form-row"><label>{t("foundation.profile.city")}</label><input value={f.city} onChange={(e) => up("city", e.target.value)} /></div>
+        <div className="form-row"><label>{t("foundation.profile.address")}</label><input value={f.address} onChange={(e) => up("address", e.target.value)} /></div>
         <div className="form-row">
-          <label>Lat / Lon</label>
-          <input type="number" value={f.latMicrodeg} onChange={(e) => up("latMicrodeg", Number(e.target.value))} placeholder="lat µ°" style={{ maxWidth: 130 }} />
-          <input type="number" value={f.lonMicrodeg} onChange={(e) => up("lonMicrodeg", Number(e.target.value))} placeholder="lon µ°" style={{ maxWidth: 130 }} />
-          <span className="muted sm">microdegrees (°×1e6)</span>
+          <label>{t("foundation.profile.latLon")}</label>
+          <input type="number" value={f.latMicrodeg} onChange={(e) => up("latMicrodeg", Number(e.target.value))} placeholder={t("foundation.profile.latPlaceholder")} style={{ maxWidth: 130 }} />
+          <input type="number" value={f.lonMicrodeg} onChange={(e) => up("lonMicrodeg", Number(e.target.value))} placeholder={t("foundation.profile.lonPlaceholder")} style={{ maxWidth: 130 }} />
+          <span className="muted sm">{t("foundation.profile.microdegrees")}</span>
         </div>
-        <div className="form-row"><label>12 Steps CID</label><input className="mono" value={f.twelveStepsCid} onChange={(e) => up("twelveStepsCid", e.target.value)} placeholder="bafy…" /></div>
-        <div className="form-row"><label>Preamble CID</label><input className="mono" value={f.preambleCid} onChange={(e) => up("preambleCid", e.target.value)} placeholder="bafy…" /></div>
-        <div className="form-row"><label>Reflections CID</label><input className="mono" value={f.dailyReflectionsCid} onChange={(e) => up("dailyReflectionsCid", e.target.value)} placeholder="bafy… (the JSON below, pinned)" /></div>
-        <div className="form-actions"><button className="btn btn-sm" onClick={save} disabled={busy}>{busy ? "Saving…" : "Save profile"}</button></div>
+        <div className="form-row"><label>{t("foundation.profile.twelveStepsCid")}</label><input className="mono" value={f.twelveStepsCid} onChange={(e) => up("twelveStepsCid", e.target.value)} placeholder="bafy…" /></div>
+        <div className="form-row"><label>{t("foundation.profile.preambleCid")}</label><input className="mono" value={f.preambleCid} onChange={(e) => up("preambleCid", e.target.value)} placeholder="bafy…" /></div>
+        <div className="form-row"><label>{t("foundation.profile.reflectionsCid")}</label><input className="mono" value={f.dailyReflectionsCid} onChange={(e) => up("dailyReflectionsCid", e.target.value)} placeholder={t("foundation.profile.reflectionsCidPlaceholder")} /></div>
+        <div className="form-actions"><button className="btn btn-sm" onClick={save} disabled={busy}>{busy ? t("foundation.profile.saving") : t("foundation.profile.save")}</button></div>
       </div>
       <TxNote note={note} />
     </section>
@@ -299,6 +302,7 @@ function ProfilePanel({ foundation, wallet }: { foundation: CircleInfo; wallet: 
 const EMPTY = { title: "", quote: "", source: "", reflection: "" };
 
 function ReflectionsPanel({ foundation }: { foundation: CircleInfo }) {
+  const t = useT();
   const [map, setMap] = useState<ReflectionMap>({});
   const [key, setKey] = useState(todayKey());
   const [entry, setEntry] = useState({ ...EMPTY });
@@ -308,10 +312,10 @@ function ReflectionsPanel({ foundation }: { foundation: CircleInfo }) {
   useEffect(() => { setEntry({ ...(map[key] ?? EMPTY) }); }, [key, map]);
 
   function saveEntry() {
-    if (!entry.title.trim() && !entry.reflection.trim()) return setNote({ kind: "err", text: "Add at least a title or reflection." });
+    if (!entry.title.trim() && !entry.reflection.trim()) return setNote({ kind: "err", text: t("foundation.reflections.addTitleOrReflection") });
     const next = { ...map, [key]: { ...entry } };
     setMap(next); saveLocalReflections(foundation.pubkey, next);
-    setNote({ kind: "ok", text: `Saved ${key} locally — it previews on /reflections immediately.` });
+    setNote({ kind: "ok", text: `${t("foundation.reflections.savedPre")} ${key} ${t("foundation.reflections.savedPost")}` });
   }
   function removeEntry() {
     const next = { ...map }; delete next[key];
@@ -328,27 +332,27 @@ function ReflectionsPanel({ foundation }: { foundation: CircleInfo }) {
   const dates = Object.keys(map).sort();
   return (
     <section className="card">
-      <div className="section-head"><h2>Daily Reflections</h2>
-        <p className="muted sm">Compose entries keyed by <span className="mono">MM-DD</span>. They preview instantly on <a href="/reflections">/reflections</a> (cached locally). To publish for everyone, <b>Download JSON</b>, pin it to IPFS, and paste the CID into the Reflections CID above.</p></div>
+      <div className="section-head"><h2>{t("foundation.reflections.heading")}</h2>
+        <p className="muted sm">{t("foundation.reflections.descPre")} <span className="mono">MM-DD</span>{t("foundation.reflections.descMid")} <a href="/reflections">/reflections</a> {t("foundation.reflections.descCached")} <b>{t("foundation.reflections.downloadJson")}</b>{t("foundation.reflections.descPost")}</p></div>
 
       <div className="form">
-        <div className="form-row"><label>Date (MM-DD)</label>
+        <div className="form-row"><label>{t("foundation.reflections.dateLabel")}</label>
           <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="01-01" style={{ maxWidth: 120 }} className="mono" />
           {dates.length > 0 && (
             <select value="" onChange={(e) => e.target.value && setKey(e.target.value)}>
-              <option value="">… existing ({dates.length})</option>
+              <option value="">{t("foundation.reflections.existing")} ({dates.length})</option>
               {dates.map((d) => <option key={d} value={d}>{d} — {map[d].title}</option>)}
             </select>
           )}
         </div>
-        <div className="form-row"><label>Title</label><input value={entry.title} onChange={(e) => setEntry({ ...entry, title: e.target.value })} /></div>
-        <div className="form-row col"><label>Quote</label><textarea rows={2} value={entry.quote} onChange={(e) => setEntry({ ...entry, quote: e.target.value })} /></div>
-        <div className="form-row"><label>Source</label><input value={entry.source} onChange={(e) => setEntry({ ...entry, source: e.target.value })} /></div>
-        <div className="form-row col"><label>Reflection</label><textarea rows={3} value={entry.reflection} onChange={(e) => setEntry({ ...entry, reflection: e.target.value })} /></div>
+        <div className="form-row"><label>{t("foundation.reflections.title")}</label><input value={entry.title} onChange={(e) => setEntry({ ...entry, title: e.target.value })} /></div>
+        <div className="form-row col"><label>{t("foundation.reflections.quote")}</label><textarea rows={2} value={entry.quote} onChange={(e) => setEntry({ ...entry, quote: e.target.value })} /></div>
+        <div className="form-row"><label>{t("foundation.reflections.source")}</label><input value={entry.source} onChange={(e) => setEntry({ ...entry, source: e.target.value })} /></div>
+        <div className="form-row col"><label>{t("foundation.reflections.reflection")}</label><textarea rows={3} value={entry.reflection} onChange={(e) => setEntry({ ...entry, reflection: e.target.value })} /></div>
         <div className="form-actions">
-          <button className="btn btn-sm" onClick={saveEntry}>Save entry</button>
-          {map[key] && <button className="btn btn-sm btn-ghost" onClick={removeEntry}>Delete entry</button>}
-          {dates.length > 0 && <button className="btn btn-sm btn-ghost" onClick={download}>Download JSON ({dates.length})</button>}
+          <button className="btn btn-sm" onClick={saveEntry}>{t("foundation.reflections.saveEntry")}</button>
+          {map[key] && <button className="btn btn-sm btn-ghost" onClick={removeEntry}>{t("foundation.reflections.deleteEntry")}</button>}
+          {dates.length > 0 && <button className="btn btn-sm btn-ghost" onClick={download}>{t("foundation.reflections.downloadJson")} ({dates.length})</button>}
         </div>
       </div>
       <TxNote note={note} />
@@ -365,6 +369,7 @@ const VALIDITY_DAYS = [1, 7, 14, 30, 60, 90];
 function ChildRotationPanel({
   foundation, circles, wallet, me,
 }: { foundation: CircleInfo; circles: CircleInfo[]; wallet: any; me: string }) {
+  const t = useT();
   // The foundation governs its whole federation: direct children + Circles that
   // share its root `parent` (siblings forked from the same World Service root).
   const children = useMemo(() => governable(circles, foundation), [circles, foundation]);
@@ -399,15 +404,15 @@ function ChildRotationPanel({
     const keys: PublicKey[] = [];
     for (let i = 0; i < 7; i++) {
       const k = pk(seats[i]);
-      if (!k) return setNote({ kind: "err", text: `${SEAT_ROLES[i]} is not a valid address.` });
+      if (!k) return setNote({ kind: "err", text: `${SEAT_ROLES[i]} ${t("foundation.childRotation.notValidAddress")}` });
       keys.push(k);
     }
     if (new Set(keys.map((k) => k.toBase58())).size !== 7)
-      return setNote({ kind: "err", text: "All 7 seats must be distinct." });
+      return setNote({ kind: "err", text: t("foundation.childRotation.mustBeDistinct") });
     setBusy("vote"); setNote(null);
     try {
       const sig = await proposeChildRotation(wallet, new PublicKey(foundation.pubkey), new PublicKey(child.pubkey), keys, days);
-      setNote({ kind: "ok", text: `Vote opened to change ${child.name}'s addresses (your seat approved; needs 4-of-7, valid ${days}d).`, sig });
+      setNote({ kind: "ok", text: `${t("foundation.childRotation.voteOpenedPre")} ${child.name}${t("foundation.childRotation.voteOpenedMid")} ${days}${t("foundation.childRotation.voteOpenedPost")}`, sig });
       load();
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(null); }
@@ -415,7 +420,7 @@ function ChildRotationPanel({
 
   async function act(label: string, run: () => Promise<string>) {
     setBusy(label); setNote(null);
-    try { const sig = await run(); setNote({ kind: "ok", text: "Done.", sig }); load(); }
+    try { const sig = await run(); setNote({ kind: "ok", text: t("foundation.common.done"), sig }); load(); }
     catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(null); }
   }
@@ -425,22 +430,20 @@ function ChildRotationPanel({
   return (
     <section className="card">
       <div className="section-head">
-        <h2>Help rotating a Circle position</h2>
+        <h2>{t("foundation.childRotation.heading")}</h2>
         <p className="muted sm">
-          The foundation can help any Circle in its federation change its seats — a 4-of-7 vote
-          among the foundation. All Circles under this foundation's root appear here.
+          {t("foundation.childRotation.desc")}
         </p>
       </div>
 
       {children.length === 0 ? (
         <p className="muted sm">
-          No other Circle in this foundation's federation yet. Circles forked from the same root
-          (or created via <a href="/create">Create a Circle</a>) will appear here.
+          {t("foundation.childRotation.emptyPre")} <a href="/create">{t("foundation.childRotation.createLink")}</a>{t("foundation.childRotation.emptyPost")}
         </p>
       ) : (
         <>
           <div className="form-row col">
-            <label>Circle</label>
+            <label>{t("foundation.childRotation.circleLabel")}</label>
             <select value={sel} onChange={(e) => setSel(e.target.value)}>
               {children.map((c) => <option key={c.pubkey} value={c.pubkey}>{c.name}</option>)}
             </select>
@@ -454,21 +457,21 @@ function ChildRotationPanel({
                     <RoleIcon seat={i} size={16} /> {role}
                   </label>
                   <input className="mono" value={seats[i]} onChange={(e) => setSeat(i, e.target.value)}
-                    placeholder="wallet address" />
+                    placeholder={t("foundation.childRotation.walletPlaceholder")} />
                 </div>
               ))}
               <div className="form-row">
-                <label>Vote valid for</label>
+                <label>{t("foundation.childRotation.voteValidFor")}</label>
                 <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
-                  {VALIDITY_DAYS.map((d) => <option key={d} value={d}>{d} day{d === 1 ? "" : "s"}</option>)}
+                  {VALIDITY_DAYS.map((d) => <option key={d} value={d}>{d} {t("foundation.common.day")}{d === 1 ? "" : "s"}</option>)}
                 </select>
               </div>
               <div className="form-actions">
                 <button className="btn btn-sm" onClick={vote} disabled={busy === "vote" || mySeats.length === 0}>
-                  {busy === "vote" ? "Opening…" : "Vote the Circle Addresses Change"}
+                  {busy === "vote" ? t("foundation.common.opening") : t("foundation.childRotation.voteButton")}
                 </button>
               </div>
-              {mySeats.length === 0 && <p className="muted sm">Only foundation seats can open this vote.</p>}
+              {mySeats.length === 0 && <p className="muted sm">{t("foundation.childRotation.onlySeats")}</p>}
             </div>
           )}
         </>
@@ -478,7 +481,7 @@ function ChildRotationPanel({
 
       {votes && votes.length > 0 && (
         <>
-          <h4 style={{ margin: "14px 0 6px" }}>Pending / past address-change votes</h4>
+          <h4 style={{ margin: "14px 0 6px" }}>{t("foundation.childRotation.pendingHeading")}</h4>
           <div className="votes">
             {votes.map((v) => {
               const iApproved = v.approvedSeats.some((s) => mySeats.includes(s));
@@ -487,22 +490,22 @@ function ChildRotationPanel({
                   <div className="vote-main">
                     <StatusDot status={v.status === "open" ? "running" : v.status} />
                     <div>
-                      <div className="name">Change seats of {childName(v.child)}</div>
+                      <div className="name">{t("foundation.childRotation.changeSeatsOf")} {childName(v.child)}</div>
                       <div className="sub">
-                        {v.approvals}/4 approvals · {v.status}
-                        {v.status !== "executed" && v.status !== "expired" && ` · valid until ${new Date(v.expiresAt * 1000).toLocaleString()}`}
-                        {iApproved && " · you approved"}
+                        {v.approvals}/4 {t("foundation.common.approvals")} · {v.status}
+                        {v.status !== "executed" && v.status !== "expired" && ` · ${t("foundation.childRotation.validUntil")} ${new Date(v.expiresAt * 1000).toLocaleString()}`}
+                        {iApproved && t("foundation.common.youApproved")}
                       </div>
                     </div>
                   </div>
                   <div className="vote-actions">
                     {mySeats.length > 0 && !iApproved && v.status === "open" && (
                       <button className="btn btn-sm" disabled={!!busy}
-                        onClick={() => act("a" + v.pubkey, () => approveChildRotation(wallet, new PublicKey(foundation.pubkey), new PublicKey(v.pubkey)))}>Approve</button>
+                        onClick={() => act("a" + v.pubkey, () => approveChildRotation(wallet, new PublicKey(foundation.pubkey), new PublicKey(v.pubkey)))}>{t("foundation.common.approve")}</button>
                     )}
                     {(v.status === "passed") && (
                       <button className="btn btn-sm" disabled={!!busy}
-                        onClick={() => act("e" + v.pubkey, () => executeChildRotation(wallet, new PublicKey(foundation.pubkey), new PublicKey(v.child), new PublicKey(v.pubkey)))}>Apply</button>
+                        onClick={() => act("e" + v.pubkey, () => executeChildRotation(wallet, new PublicKey(foundation.pubkey), new PublicKey(v.child), new PublicKey(v.pubkey)))}>{t("foundation.childRotation.apply")}</button>
                     )}
                   </div>
                 </div>
@@ -522,6 +525,7 @@ function ChildRotationPanel({
 function ChildClosePanel({
   foundation, circles, wallet, me, onChanged,
 }: { foundation: CircleInfo; circles: CircleInfo[]; wallet: any; me: string; onChanged: () => void }) {
+  const t = useT();
   const children = useMemo(() => governable(circles, foundation), [circles, foundation]);
   const [sel, setSel] = useState("");
   const [days, setDays] = useState(7);
@@ -558,11 +562,11 @@ function ChildClosePanel({
 
   async function vote() {
     if (!sel || !wallet) return;
-    if (!confirm(`Open a 4-of-7 vote to DELETE "${childName(sel)}"? If it passes, the Circle is closed.`)) return;
+    if (!confirm(`${t("foundation.childClose.confirmPre")} "${childName(sel)}"${t("foundation.childClose.confirmPost")}`)) return;
     setBusy("vote"); setNote(null);
     try {
       const sig = await proposeChildClose(wallet, new PublicKey(foundation.pubkey), new PublicKey(sel), days);
-      setNote({ kind: "ok", text: `Delete vote opened for ${childName(sel)} (4-of-7, valid ${days}d).`, sig });
+      setNote({ kind: "ok", text: `${t("foundation.childClose.openedForPre")} ${childName(sel)} ${t("foundation.childClose.openedForMid")} ${days}${t("foundation.childClose.openedForPost")}`, sig });
       load();
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(null); }
@@ -570,7 +574,7 @@ function ChildClosePanel({
 
   async function act(label: string, run: () => Promise<string>) {
     setBusy(label); setNote(null);
-    try { const sig = await run(); setNote({ kind: "ok", text: "Done.", sig }); load(); onChanged(); }
+    try { const sig = await run(); setNote({ kind: "ok", text: t("foundation.common.done"), sig }); load(); onChanged(); }
     catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(null); }
   }
@@ -578,21 +582,21 @@ function ChildClosePanel({
   return (
     <section className="card">
       <div className="section-head">
-        <h2>Delete a Circle</h2>
-        <p className="muted sm">A 4-of-7 foundation vote to permanently close a federation Circle (and delist it). Irreversible once executed.</p>
+        <h2>{t("foundation.childClose.heading")}</h2>
+        <p className="muted sm">{t("foundation.childClose.desc")}</p>
       </div>
       {children.length === 0 ? (
-        <p className="muted sm">No federation Circle to delete.</p>
+        <p className="muted sm">{t("foundation.childClose.empty")}</p>
       ) : (
         <div className="form-row" style={{ flexWrap: "wrap", gap: 8 }}>
           <select value={sel} onChange={(e) => setSel(e.target.value)} style={{ flex: 1, minWidth: 160 }}>
             {children.map((c) => <option key={c.pubkey} value={c.pubkey}>{c.name}</option>)}
           </select>
           <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
-            {[1, 7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d} day{d === 1 ? "" : "s"}</option>)}
+            {[1, 7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d} {t("foundation.common.day")}{d === 1 ? "" : "s"}</option>)}
           </select>
           <button className="btn btn-sm" onClick={vote} disabled={busy === "vote" || mySeats.length === 0}>
-            {busy === "vote" ? "Opening…" : "Vote to delete (4-of-7)"}
+            {busy === "vote" ? t("foundation.common.opening") : t("foundation.childClose.voteButton")}
           </button>
         </div>
       )}
@@ -606,17 +610,17 @@ function ChildClosePanel({
                 <div className="vote-main">
                   <StatusDot status={v.status === "open" ? "running" : v.status} />
                   <div>
-                    <div className="name">Delete {childName(v.child)}</div>
+                    <div className="name">{t("foundation.common.delete")} {childName(v.child)}</div>
                     <div className="sub">
                       {v.approvals}/4 · {v.status}
-                      {v.status === "executed" && (recallDeleted(v.child) ?? execTimes[v.pubkey]) && ` · deleted ${fmtDate((recallDeleted(v.child) ?? execTimes[v.pubkey])!)}`}
-                      {iApproved && " · you approved"}
+                      {v.status === "executed" && (recallDeleted(v.child) ?? execTimes[v.pubkey]) && ` · ${t("foundation.childClose.deleted")} ${fmtDate((recallDeleted(v.child) ?? execTimes[v.pubkey])!)}`}
+                      {iApproved && t("foundation.common.youApproved")}
                     </div>
                   </div>
                 </div>
                 <div className="vote-actions">
                   {mySeats.length > 0 && !iApproved && v.status === "open" && (
-                    <button className="btn btn-sm" disabled={!!busy} onClick={() => act("a" + v.pubkey, () => approveChildClose(wallet, new PublicKey(foundation.pubkey), new PublicKey(v.pubkey)))}>Approve</button>
+                    <button className="btn btn-sm" disabled={!!busy} onClick={() => act("a" + v.pubkey, () => approveChildClose(wallet, new PublicKey(foundation.pubkey), new PublicKey(v.pubkey)))}>{t("foundation.common.approve")}</button>
                   )}
                   {v.status === "passed" && (
                     <button className="btn btn-sm" disabled={!!busy} onClick={() => act("e" + v.pubkey, async () => {
@@ -624,7 +628,7 @@ function ChildClosePanel({
                       const sig = await executeChildClose(wallet, new PublicKey(foundation.pubkey), new PublicKey(v.child), new PublicKey(v.pubkey), prof !== null);
                       stampDeleted(v.child); // record the deletion date locally
                       return sig;
-                    })}>Apply (delete)</button>
+                    })}>{t("foundation.childClose.applyDelete")}</button>
                   )}
                 </div>
               </div>
@@ -647,6 +651,7 @@ type CircleStats = { lastPost: number | null; lastChange: number | null };
 function AllCirclesPanel({
   foundation, circles, wallet, me, onChanged,
 }: { foundation: CircleInfo; circles: CircleInfo[]; wallet: any; me: string; onChanged: () => void }) {
+  const t = useT();
   const [countries, setCountries] = useState<Record<string, string>>({});
   const [stats, setStats] = useState<Record<string, CircleStats>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -682,19 +687,19 @@ function AllCirclesPanel({
     setBusy("c" + c.pubkey); setNote(null);
     try {
       const sig = await setCircleCountry(wallet, new PublicKey(c.pubkey), code);
-      setNote({ kind: "ok", text: `Set ${c.name}'s country to ${countryByCode(code)?.name ?? code}.`, sig });
+      setNote({ kind: "ok", text: `${t("foundation.allCircles.setCountryPre")} ${c.name}${t("foundation.allCircles.setCountryMid")} ${countryByCode(code)?.name ?? code}${t("foundation.allCircles.setCountryPost")}`, sig });
       setCountries((p) => ({ ...p, [c.pubkey]: code.toUpperCase() }));
-    } catch (e: any) { setNote({ kind: "err", text: `${c.name}: ${e?.message || e} (a seat of that Circle must sign).` }); }
+    } catch (e: any) { setNote({ kind: "err", text: `${c.name}: ${e?.message || e} ${t("foundation.allCircles.seatMustSign")}` }); }
     finally { setBusy(null); }
   }
 
   async function del(c: CircleInfo) {
     if (!wallet) return;
-    if (!confirm(`Open a 4-of-7 vote to DELETE "${c.name}"? If it passes, the Circle is closed.`)) return;
+    if (!confirm(`${t("foundation.childClose.confirmPre")} "${c.name}"${t("foundation.childClose.confirmPost")}`)) return;
     setBusy("d" + c.pubkey); setNote(null);
     try {
       const sig = await proposeChildClose(wallet, new PublicKey(foundation.pubkey), new PublicKey(c.pubkey), 7);
-      setNote({ kind: "ok", text: `Delete vote opened for ${c.name} (4-of-7). Approve & execute it under “Delete a Circle” below.`, sig });
+      setNote({ kind: "ok", text: `${t("foundation.allCircles.delOpenedPre")} ${c.name} ${t("foundation.allCircles.delOpenedPost")}`, sig });
       onChanged();
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(null); }
@@ -725,19 +730,19 @@ function AllCirclesPanel({
   return (
     <section className="card">
       <div className="section-head">
-        <h2>All Circles</h2>
-        <p className="muted sm">Every Circle in the federation, grouped by continent and country. Set a Circle&apos;s country, show it on <a href="/">the map</a>, message its 7 seats, or open a delete vote.</p>
+        <h2>{t("foundation.allCircles.heading")}</h2>
+        <p className="muted sm">{t("foundation.allCircles.descPre")} <a href="/">{t("foundation.allCircles.theMap")}</a>{t("foundation.allCircles.descPost")}</p>
       </div>
 
       {circles.length === 0 ? (
-        <p className="muted sm">No Circles found on this cluster.</p>
+        <p className="muted sm">{t("foundation.allCircles.noCircles")}</p>
       ) : groups.map((g) => (
         <div key={g.continent} style={{ marginTop: 10 }}>
           <h3 style={{ margin: "10px 0 2px", fontSize: 15 }}>{g.continent}</h3>
           {g.countries.map((cg) => (
             <div key={cg.country?.code ?? "??"} style={{ marginBottom: 6 }}>
               <div className="muted sm" style={{ fontWeight: 600, margin: "6px 0 2px" }}>
-                {cg.country ? cg.country.name : "Country not set"}
+                {cg.country ? cg.country.name : t("foundation.allCircles.countryNotSet")}
               </div>
               {cg.list.map((c) => {
                 const st = stats[c.pubkey];
@@ -746,17 +751,17 @@ function AllCirclesPanel({
                   <div className="member" key={c.pubkey} style={{ alignItems: "flex-start" }}>
                     <Identicon seed={`AHA${c.pubkey}`} title={c.name} size={30} />
                     <div className="meta" style={{ flex: 1, minWidth: 0 }}>
-                      <div className="name">{c.name}{isFound && <span className="badge badge-alt" style={{ marginLeft: 6 }}>foundation</span>}</div>
+                      <div className="name">{c.name}{isFound && <span className="badge badge-alt" style={{ marginLeft: 6 }}>{t("foundation.allCircles.foundationBadge")}</span>}</div>
                       <div className="sub">
-                        {c.memberCount} member{c.memberCount === 1 ? "" : "s"}
-                        {" · last post "}{st ? (st.lastPost ? fmtDate(st.lastPost) : "—") : "…"}
-                        {" · last change "}{st ? (st.lastChange ? fmtDate(st.lastChange) : "—") : "…"}
+                        {c.memberCount} {t("foundation.allCircles.member")}{c.memberCount === 1 ? "" : "s"}
+                        {t("foundation.allCircles.lastPost")}{st ? (st.lastPost ? fmtDate(st.lastPost) : "—") : "…"}
+                        {t("foundation.allCircles.lastChange")}{st ? (st.lastChange ? fmtDate(st.lastChange) : "—") : "…"}
                       </div>
                       {openSeats === c.pubkey && (
                         <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                           {SEAT_ROLES.map((role, i) =>
                             c.seats[i] && c.seats[i] !== PublicKey.default.toBase58() ? (
-                              <Link key={i} href={`/inbox?to=${c.seats[i]}`} className="btn btn-sm btn-ghost" title={`Message ${role} (${short(c.seats[i])})`}>✉ {role}</Link>
+                              <Link key={i} href={`/inbox?to=${c.seats[i]}`} className="btn btn-sm btn-ghost" title={`${t("foundation.allCircles.messagePrefix")} ${role} (${short(c.seats[i])})`}>✉ {role}</Link>
                             ) : null
                           )}
                         </div>
@@ -767,16 +772,16 @@ function AllCirclesPanel({
                         value={countries[c.pubkey] ?? ""}
                         disabled={busy === "c" + c.pubkey || mySeats.length === 0}
                         onChange={(e) => setCountry(c, e.target.value)}
-                        title="Set this Circle's country (a seat of that Circle must sign)"
+                        title={t("foundation.allCircles.setCountryTitle")}
                         style={{ maxWidth: 150 }}
                       >
-                        <option value="">— country —</option>
+                        <option value="">{t("foundation.allCircles.countryOption")}</option>
                         {COUNTRIES.map((co) => <option key={co.code} value={co.code}>{co.name}</option>)}
                       </select>
-                      <Link href={`/?circle=${c.pubkey}`} className="btn btn-sm btn-ghost" title="Show this Circle on the map">Show on map</Link>
-                      <button className="btn btn-sm btn-ghost" onClick={() => setOpenSeats(openSeats === c.pubkey ? null : c.pubkey)}>✉ seats</button>
+                      <Link href={`/?circle=${c.pubkey}`} className="btn btn-sm btn-ghost" title={t("foundation.allCircles.showOnMapTitle")}>{t("foundation.allCircles.showOnMap")}</Link>
+                      <button className="btn btn-sm btn-ghost" onClick={() => setOpenSeats(openSeats === c.pubkey ? null : c.pubkey)}>✉ {t("foundation.allCircles.seatsBtn")}</button>
                       {isFederation(c) && mySeats.length > 0 && (
-                        <button className="btn btn-sm btn-ghost" disabled={busy === "d" + c.pubkey} onClick={() => del(c)}>{busy === "d" + c.pubkey ? "…" : "Delete"}</button>
+                        <button className="btn btn-sm btn-ghost" disabled={busy === "d" + c.pubkey} onClick={() => del(c)}>{busy === "d" + c.pubkey ? "…" : t("foundation.common.delete")}</button>
                       )}
                     </div>
                   </div>

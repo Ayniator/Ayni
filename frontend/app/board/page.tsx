@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import Identicon from "../../components/Identicon";
+import { useT } from "../../components/SettingsProvider";
 import { ipfsUrl } from "../../lib/ipfs";
 import {
   CircleInfo,
@@ -26,6 +27,7 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 const plusWeek = () => new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
 
 export default function Board() {
+  const t = useT();
   const { publicKey, connected } = useWallet();
   const wallet = useAnchorWallet();
 
@@ -50,16 +52,30 @@ export default function Board() {
   );
   const isSeat = !!(circle && me && mySeatIndices(circle.seats, me).length > 0);
 
+  // Only surface Circles the connected wallet actually belongs to (an active
+  // membership). Non-connected or non-member visitors fall back to the full list
+  // so the public board stays browsable rather than showing an empty picker.
+  const myCircles = useMemo(
+    () => circles.filter((c) => myMems.some((m) => m.circle === c.pubkey && m.active)),
+    [circles, myMems]
+  );
+  const optionCircles = myCircles.length ? myCircles : circles;
+
   useEffect(() => {
-    listCircles().then((cs) => {
-      setCircles(cs);
-      if (!selected && cs.length) setSelected(cs[0].pubkey);
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    listCircles().then(setCircles);
+  }, []);
 
   useEffect(() => {
     if (publicKey && circles.length) findMyMemberships(publicKey, circles).then(setMyMems).catch(() => {});
   }, [publicKey, circles]);
+
+  // Keep the selection inside the option set; default to the first Circle the
+  // member belongs to once their memberships resolve.
+  useEffect(() => {
+    if (optionCircles.length && !optionCircles.some((c) => c.pubkey === selected)) {
+      setSelected(optionCircles[0].pubkey);
+    }
+  }, [optionCircles, selected]);
 
   const load = useCallback(() => {
     if (!selected) return;
@@ -69,9 +85,9 @@ export default function Board() {
 
   async function post() {
     if (!circle || !wallet || !myMembership) return;
-    if (!text.trim() && !imageCid.trim()) return setNote({ kind: "err", text: "Add text or an image CID." });
+    if (!text.trim() && !imageCid.trim()) return setNote({ kind: "err", text: t("board.errNoContent") });
     const s = toEpoch(start), e = toEpoch(end);
-    if (!(e > s)) return setNote({ kind: "err", text: "End date must be after the start date." });
+    if (!(e > s)) return setNote({ kind: "err", text: t("board.errEndAfterStart") });
     setBusy("post");
     setNote(null);
     try {
@@ -79,7 +95,7 @@ export default function Board() {
         wallet, new PublicKey(circle.pubkey), new PublicKey(myMembership.pubkey),
         text.trim(), imageCid.trim(), s, e
       );
-      setNote({ kind: "ok", text: "Posted.", sig });
+      setNote({ kind: "ok", text: t("board.posted"), sig });
       setText(""); setImageCid("");
       load();
     } catch (err: any) {
@@ -95,7 +111,7 @@ export default function Board() {
     setNote(null);
     try {
       const sig = await deletePost(wallet, new PublicKey(circle.pubkey), new PublicKey(p.pubkey));
-      setNote({ kind: "ok", text: "Post deleted.", sig });
+      setNote({ kind: "ok", text: t("board.postDeleted"), sig });
       load();
     } catch (err: any) {
       setNote({ kind: "err", text: String(err?.message || err) });
@@ -106,50 +122,50 @@ export default function Board() {
 
   return (
     <>
-      <h1>Board</h1>
-      <p className="lede">Notices from the Circle. Members post; any Council seat can remove a post.</p>
+      <h1>{t("board.title")}</h1>
+      <p className="lede">{t("board.lede")}</p>
 
       <div className="card">
         <div className="form-row col">
-          <label>Circle</label>
+          <label>{t("board.circleLabel")}</label>
           <select value={selected} onChange={(e) => setSelected(e.target.value)}>
-            {circles.map((c) => <option key={c.pubkey} value={c.pubkey}>{c.name}</option>)}
+            {optionCircles.map((c) => <option key={c.pubkey} value={c.pubkey}>{c.name}</option>)}
           </select>
         </div>
       </div>
 
-      {!connected && <div className="card"><p className="muted" style={{ margin: 0 }}>Connect a wallet to post.</p></div>}
+      {!connected && <div className="card"><p className="muted" style={{ margin: 0 }}>{t("board.connectToPost")}</p></div>}
 
       {connected && circle && (
         myMembership ? (
           <div className="card">
-            <h3 style={{ marginTop: 0 }}>New post</h3>
+            <h3 style={{ marginTop: 0 }}>{t("board.newPost")}</h3>
             <div className="form-row col">
               <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3}
-                placeholder="Share a notice with the Circle…" maxLength={500} />
+                placeholder={t("board.textPlaceholder")} maxLength={500} />
             </div>
             <div className="form-row col">
-              <label>Image IPFS CID (optional)</label>
-              <input value={imageCid} onChange={(e) => setImageCid(e.target.value)} placeholder="bafy… (pin elsewhere)" className="mono" />
+              <label>{t("board.imageCidLabel")}</label>
+              <input value={imageCid} onChange={(e) => setImageCid(e.target.value)} placeholder={t("board.imageCidPlaceholder")} className="mono" />
             </div>
             <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
-              <label className="sm muted">From <input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
-              <label className="sm muted">To <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
-              <button className="btn btn-sm" onClick={post} disabled={busy === "post"}>{busy === "post" ? "Posting…" : "Post"}</button>
+              <label className="sm muted">{t("board.from")} <input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+              <label className="sm muted">{t("board.to")} <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+              <button className="btn btn-sm" onClick={post} disabled={busy === "post"}>{busy === "post" ? t("board.posting") : t("board.post")}</button>
             </div>
           </div>
         ) : (
           <div className="card"><p className="muted sm" style={{ margin: 0 }}>
-            Only members (with a wallet-bound membership in this Circle) may post. Join from{" "}
-            <a href="/me">My Circle</a> first.
+            {t("board.membersOnly")}{" "}
+            <a href="/me">{t("board.myCircle")}</a> {t("board.first")}
           </p></div>
         )
       )}
 
-      {note && <p className={note.kind === "err" ? "error" : "ok-note"}>{note.text}{note.sig && <> · <a href={explorerTx(note.sig)} target="_blank" rel="noreferrer">tx</a></>}</p>}
+      {note && <p className={note.kind === "err" ? "error" : "ok-note"}>{note.text}{note.sig && <> · <a href={explorerTx(note.sig)} target="_blank" rel="noreferrer">{t("board.tx")}</a></>}</p>}
 
-      {posts === null && <p className="muted">Loading posts…</p>}
-      {posts && posts.length === 0 && <p className="muted">No posts yet.</p>}
+      {posts === null && <p className="muted">{t("board.loadingPosts")}</p>}
+      {posts && posts.length === 0 && <p className="muted">{t("board.noPosts")}</p>}
 
       <div className="grid" style={{ marginTop: 6 }}>
         {posts?.map((p) => (
@@ -159,7 +175,7 @@ export default function Board() {
               <div className="meta" style={{ flex: 1, minWidth: 0 }}>
                 <div className="sub">
                   <span className="mono">{short(p.author)}</span> · {day(p.startDate)}–{day(p.endDate)}
-                  {!p.live && <span className="badge" style={{ background: "var(--bg-2)", color: "var(--muted)", borderColor: "var(--border)" }}>not in window</span>}
+                  {!p.live && <span className="badge" style={{ background: "var(--bg-2)", color: "var(--muted)", borderColor: "var(--border)" }}>{t("board.notInWindow")}</span>}
                 </div>
                 {p.text && <p style={{ margin: "6px 0", whiteSpace: "pre-wrap" }}>{p.text}</p>}
                 {p.imageCid && (
@@ -169,7 +185,7 @@ export default function Board() {
               </div>
               {isSeat && (
                 <button className="btn btn-sm btn-ghost" disabled={busy === p.pubkey} onClick={() => remove(p)}>
-                  {busy === p.pubkey ? "…" : "Delete"}
+                  {busy === p.pubkey ? "…" : t("board.delete")}
                 </button>
               )}
             </div>

@@ -6,6 +6,8 @@
 // (the always-visible chrome). Page bodies fall back to English where a string
 // isn't translated yet — adding a key here is all that's needed to extend it.
 
+import { PAGE_STRINGS } from "./i18n.generated";
+
 export interface Lang {
   code: string;
   label: string; // endonym (its own name)
@@ -30,31 +32,24 @@ export const LANGS: Lang[] = [
   { code: "my", label: "မြန်မာ" },
   { code: "vi", label: "Tiếng Việt" },
   { code: "tl", label: "Tagalog" },
+  { code: "qu", label: "Runa Simi" },
 ];
 
 export const RTL = new Set(["ar"]);
 export const DEFAULT_LANG = "en";
 
-export type Key =
-  | "nav.find"
-  | "nav.reflections"
-  | "nav.documents"
-  | "nav.board"
-  | "nav.create"
-  | "nav.me"
-  | "nav.admin"
-  | "brand.tagline"
-  | "home.title"
-  | "home.sub"
-  | "footer.line"
-  | "ctl.language"
-  | "ctl.theme.toLight"
-  | "ctl.theme.toDark";
+// Keys are namespaced strings (`nav.*`, `home.*`, and one namespace per page:
+// `me.*`, `foundation.*`, `admin.*`, `board.*`, `create.*`, `onboarding.*`,
+// `inbox.*`, `reflections.*`, `documents.*`, `notifications.*`, `member.*`).
+// It is a plain `string` rather than a closed union so page bodies can register
+// their own strings without touching this type; `en` below stays the canonical
+// registry of every key and the fallback for every other locale.
+export type Key = string;
 
 type Dict = Partial<Record<Key, string>>;
 
 // English is the source of truth + the fallback for every other locale.
-const en: Record<Key, string> = {
+const en: Record<string, string> = {
   "nav.find": "Find a Circle",
   "nav.reflections": "Daily Reflections",
   "nav.documents": "Documents",
@@ -69,6 +64,27 @@ const en: Record<Key, string> = {
   "ctl.language": "Language",
   "ctl.theme.toLight": "Light",
   "ctl.theme.toDark": "Dark",
+  // Shared messaging-enable UI (inbox + the seat-holder banner).
+  "msg.enable.intro":
+    "Enable messaging to receive encrypted messages. This signs once to derive your encryption key and publishes only its public half.",
+  "msg.enable.button": "Enable messaging",
+  "msg.enable.busy": "Enabling…",
+  "msg.seat.bold": "You hold a Council seat.",
+  "msg.seat.rest":
+    "Servants must be reachable — enable encrypted messaging so members can write to you.",
+  // Shown before signing when the app targets Devnet: the wallet's selected
+  // network must match, or Solflare/Phantom raise a "Network mismatch".
+  "msg.devnetSign":
+    "This publishes on-chain, so your wallet must be connected to Devnet. If your wallet warns of a network mismatch — “Your current network is set to Mainnet, but this transaction is for Devnet” — open it and go to Settings → Network → Devnet, then try again.",
+  // Inbox lede + honest metadata explainer. Deliberately does NOT claim that
+  // "no one can know you contacted this person": content and the sender's
+  // identity are hidden, but the relay still sees which mailbox received mail
+  // and when (recipient-side traffic analysis). Overclaiming here would be the
+  // same class of defect as advertising unshipped coercion-resistance.
+  "msg.inbox.lede":
+    "Private 1:1 messages, end-to-end encrypted to your wallet. Only you and your correspondent can read them — the sender is named only inside the encryption, so no one else can tell who wrote to you.",
+  "msg.inbox.metadata":
+    "These messages never touch the public blockchain — no on-chain record of who received what, or when. The relay that carries them cannot read them and never learns who sent them; it does still see which mailbox received mail and when, so that metadata lives on deletable, private infrastructure rather than a permanent public ledger. Hiding that two people corresponded at all (mixing) is the documented next step, not yet shipped. Checking signs once to derive your key; mail is decrypted on this device only.",
 };
 
 const fr: Dict = {
@@ -360,10 +376,39 @@ const tl: Dict = {
   "ctl.theme.toDark": "Madilim",
 };
 
-const DICT: Record<string, Dict> = {
-  en, fr, es, se, th, hi, zh, de, sv, nb, da, ar, lo, dz, bo, my, vi, tl,
+const qu: Dict = {
+  "nav.find": "Muyuta Maskay",
+  "nav.reflections": "Sapa P'unchaw Yuyaykuna",
+  "nav.documents": "Qillqakuna",
+  "nav.board": "Willakuna",
+  "nav.create": "Muyuta Kamay",
+  "nav.me": "Ñuqaq Muyuy",
+  "nav.admin": "Ñuqaq Muyuypa Kamachiynin",
+  "brand.tagline": "Solana patapi, sutinnaq, apunnaq huñunakuy.",
+  "home.title": "Qayllaykipi Muyuta Maskay",
+  "home.sub": "Ancestral Humanity Anonymous — Solana patapi, sutinnaq, apunnaq huñunakuy.",
+  "footer.line": "AHA — Ancestral Humanity Anonymous · huñuq yuyayninwan kamachisqa, manam huk apuwanchu.",
+  "ctl.language": "Simi",
+  "ctl.theme.toLight": "K'anchay",
+  "ctl.theme.toDark": "Laqha",
 };
 
+const DICT: Record<string, Dict> = {
+  en, fr, es, se, th, hi, zh, de, sv, nb, da, ar, lo, dz, bo, my, vi, tl, qu,
+};
+
+// Resolution order for any key:
+//   1. curated chrome dict for the locale   (DICT[lang])
+//   2. generated page-body dict for the locale (PAGE_STRINGS[lang])
+//   3. English chrome fallback              (DICT.en = en)
+//   4. English page-body fallback           (PAGE_STRINGS.en)
+//   5. the key itself (visible signal that a string is unregistered)
 export function translate(lang: string, key: Key): string {
-  return DICT[lang]?.[key] ?? en[key] ?? key;
+  return (
+    DICT[lang]?.[key] ??
+    PAGE_STRINGS[lang]?.[key] ??
+    en[key] ??
+    PAGE_STRINGS.en?.[key] ??
+    key
+  );
 }

@@ -5,12 +5,14 @@ import Identicon from "../../components/Identicon";
 import { listAllCircles, cachedCircles, Circle } from "../../lib/solana";
 import { fetchDailyReflection, Reflection, todayKey } from "../../lib/ipfs";
 import { getLocalReflections, localReflectionFor } from "../../lib/foundation";
+import { useT } from "../../components/SettingsProvider";
 
 export default function Reflections() {
+  const t = useT();
   const [circles, setCircles] = useState<Circle[]>([]);
   const [sel, setSel] = useState<string>("");
   const [reflection, setReflection] = useState<Reflection | null>(null);
-  const [status, setStatus] = useState<string>("Loading Circles…");
+  const [status, setStatus] = useState<string>(t("reflections.loadingCircles"));
 
   useEffect(() => {
     // A circle qualifies if it has a published reflections CID OR a locally
@@ -19,7 +21,7 @@ export default function Reflections() {
       const withDaily = cs.filter((c) => c.dailyReflectionsCid || Object.keys(getLocalReflections(c.circle)).length > 0);
       setCircles(withDaily);
       if (withDaily.length && !sel) setSel(withDaily[0].pubkey);
-      setStatus(withDaily.length ? "" : "No Circle has published Daily Reflections yet.");
+      setStatus(withDaily.length ? "" : t("reflections.noneYet"));
     };
     const cached = cachedCircles();
     if (cached.length) pickDaily(cached);
@@ -36,24 +38,24 @@ export default function Reflections() {
       setStatus("");
       return;
     }
-    setStatus("Fetching today's reflection from IPFS…");
+    setStatus(t("reflections.fetching"));
     setReflection(null);
     if (!c.dailyReflectionsCid) {
-      setStatus(`No entry for ${todayKey()} yet.`);
+      setStatus(`${t("reflections.noEntryPre")} ${todayKey()} ${t("reflections.noEntryYet")}`);
       return;
     }
     fetchDailyReflection(c.dailyReflectionsCid)
       .then((r) => {
         setReflection(r);
-        setStatus(r ? "" : `No entry for ${todayKey()} in this collection.`);
+        setStatus(r ? "" : `${t("reflections.noEntryPre")} ${todayKey()} ${t("reflections.noEntryInCollection")}`);
       })
-      .catch((e) => setStatus("IPFS error: " + String(e?.message || e)));
+      .catch((e) => setStatus(t("reflections.ipfsError") + String(e?.message || e)));
   }, [sel, circles]);
 
   return (
     <>
-      <h1>Daily Reflections</h1>
-      <p className="lede">A thought for {todayKey()}, published by a Circle and pinned on IPFS.</p>
+      <h1>{t("reflections.title")}</h1>
+      <p className="lede">{t("reflections.ledePre")} {todayKey()}{t("reflections.ledeSuffix")}</p>
 
       {circles.length > 0 && (
         <div className="row" style={{ marginBottom: 16 }}>
@@ -61,7 +63,7 @@ export default function Reflections() {
           <select value={sel} onChange={(e) => setSel(e.target.value)}>
             {circles.map((c) => (
               <option key={c.pubkey} value={c.pubkey}>
-                {c.name || "Circle"} {c.city ? `· ${c.city}` : ""}
+                {c.name || t("reflections.circleFallback")} {c.city ? `· ${c.city}` : ""}
               </option>
             ))}
           </select>
