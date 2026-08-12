@@ -49,6 +49,7 @@ export const I18N_NAMESPACES = [
   "nav", "home", "me", "admin", "board", "create", "onboarding", "inbox",
   "reflections", "documents", "notifications", "member", "msg", "recovery",
   "shard", "twelve", "wallet", "foundation", "brand", "ctl", "footer",
+  "getapp",
 ];
 
 /**
