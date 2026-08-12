@@ -64,3 +64,28 @@ registry and the bookkeeping-exemption path, which is new attack surface.
 **Attribution:** this session. The shared `Ayniator` git identity still makes
 overrides unattributable at the git level; per-session identities remain an open
 request to the user.
+
+## 2026-08-12 · `7d93eed 757dd52 ` · coordinating session
+
+**Reason:** Sentinel tooling only — the verify2 resolution record, the checklist,
+and three fixes to `scripts/sentinel-push-gate.sh` itself. No application or
+program code; nothing reaches devnet.
+
+**Verdict at the time:** FAIL (`NRR-2026-08-12-f60-f61-verify2`) — and that FAIL
+is *about these very fixes*: its three findings are the bypasses these commits
+close, re-tested against the report's own attack strings.
+
+**Why an override was needed at all:** the gate treats `scripts/` as code, so a
+change to the gate cannot pass through itself while the verdict it is fixing is
+still FAIL. That is the gate behaving correctly, not a defect — a fix to the
+reviewer is exactly the thing that should require a stated reason.
+
+**What was NOT reviewed:** no Sentinel round has reviewed the hardened gate. It
+carries new attack surface that did not exist when verify2 was written: the
+`REVIEWED.md` registry, the bookkeeping exemption (which now bypasses the
+verdict check entirely for reports/checklist-only pushes — verify that cannot be
+abused by mixing a payload into an otherwise-bookkeeping push), and the
+symlink-resolved root. The next round should attack those specifically.
+
+**Attribution:** this session. Overrides remain unattributable at the git level
+while sessions share one identity.
