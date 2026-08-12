@@ -62,6 +62,14 @@ export const RELAY_ALLOWLIST: Record<string, AllowedIx> = {
   "14d40fbd45b44597": { name: "cast_vote", payerIndex: 2, accountCount: 4, dataLen: 8 + 1 + 32 + 64 + 128 + 64 },
   // attest_admission_zk(newcomer, root, nullifier, proofs)
   "10a45cd6d203ed97": { name: "attest_admission_zk", payerIndex: 5, accountCount: 7, dataLen: 8 + 32 + 32 + 32 + 64 + 128 + 64 },
+  // activate_faucet_zk(root, nullifier, proofs) — F35's anonymous first-gas
+  // path. Relaying it is the point: the ZK proof hides WHICH member endorsed
+  // the grant, and a self-paid fee would hand that back by naming a wallet at
+  // the exact moment of the endorsement. The relayer pays the `faucetnull`
+  // rent (~0.00089 SOL) and the fee; the grant itself comes out of the Circle's
+  // own jar, never the relayer, so this cannot be turned into a free-money tap
+  // — and the jar pays at most one uniform grant per membership, ever.
+  "297c242a39a3760e": { name: "activate_faucet_zk", payerIndex: 8, accountCount: 10, dataLen: 8 + 32 + 32 + 64 + 128 + 64 },
   // send_message(id, recipient, eph_pubkey, nonce, expires_at, ciphertext[528])
   "392822b2bd0a411a": { name: "send_message", payerIndex: 1, accountCount: 3, dataLen: 8 + 8 + 32 + 32 + 24 + 8 + 4 + 528 },
   // publish_maci_message(eph_pubkey, ciphertext[176])

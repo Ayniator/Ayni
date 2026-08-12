@@ -247,7 +247,7 @@ async function orderedCommitments(circle: string): Promise<string[]> {
 }
 
 /** PDA of a Circle's F54 recent-roots ring buffer. */
-function recentRootsPda(circlePk: PublicKey): PublicKey {
+export function recentRootsPda(circlePk: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([seed("roots"), circlePk.toBytes()], PROGRAM_ID)[0];
 }
 
@@ -318,6 +318,62 @@ export async function castMemberVote(wallet: SigningWallet, circle: string, prop
     .rpc();
 }
 
+/** The pieces an anonymous member-endorsement instruction needs on chain. */
+export interface MemberEndorsement {
+  /** The member root the proof was made against (32 BE bytes). */
+  root: number[];
+  /** Poseidon(secret, externalNullifier) — the circuit's public output. */
+  nullifier: number[];
+  proofA: number[];
+  proofB: number[];
+  proofC: number[];
+}
+
+/**
+ * THE anonymous "some member of this Circle endorses X" primitive, shared by
+ * every Epic 2 instruction that needs one (anonymous admission attestation,
+ * F35 anonymous faucet activation). Proves — with `member_vote.circom`, reused
+ * exactly as voting does — that the caller's membership is in the Circle's
+ * current member tree, under the caller-supplied `externalNullifier`, and emits
+ * `nullifier = Poseidon(secret, externalNullifier)`.
+ *
+ * The external nullifier is the caller's choice because it is what BINDS an
+ * endorsement to one thing and DOMAIN-SEPARATES it from every other kind: reuse
+ * the same value in two different instructions and the same member endorsing
+ * both emits the same nullifier twice, which is a free correlation for anyone
+ * reading the chain. Each call site must pass a distinct, domain-tagged value
+ * that its program-side handler recomputes identically.
+ *
+ * NO identity of the prover touches the chain. Submit the resulting instruction
+ * via the relayer so the fee-payer does not reintroduce the link.
+ */
+export async function proveMemberEndorsement(
+  wallet: SigningWallet,
+  circle: string,
+  proverCommitmentHex: string,
+  externalNullifier: bigint
+): Promise<MemberEndorsement> {
+  const secret = getSecretFor(proverCommitmentHex);
+  if (secret === null) throw new Error("Your membership key isn't on this device — attest from the device you joined on.");
+
+  const order = await orderedCommitments(circle);
+  const tree = await MemberTree.create(20);
+  let myIndex = -1;
+  for (const c of order) {
+    const idx = tree.insert(beToBig(fromHex(c)));
+    if (c === proverCommitmentHex) myIndex = idx;
+  }
+  if (myIndex < 0) throw new Error("Your membership isn't in the current member tree (still provisional?).");
+
+  // F54: crank the ring buffer FIRST, so the root we prove against stays
+  // acceptable even if an admission lands while we're proving.
+  await crankNoteRoot(wallet, new PublicKey(circle));
+
+  const root = to32BE(tree.root);
+  const { nullifier, proofA, proofB, proofC } = await proveVote(tree, secret, myIndex, externalNullifier, true);
+  return { root, nullifier, proofA, proofB, proofC };
+}
+
 /**
  * Epic 2 — attest for a newcomer ANONYMOUSLY. Proves (member_vote circuit,
  * reused exactly as voting does) that the caller's membership is in the Circle's
@@ -333,27 +389,14 @@ export async function attestAdmissionAnonymously(
   parrainCommitmentHex: string,
   newcomerCommitmentHex: string
 ): Promise<string> {
-  const secret = getSecretFor(parrainCommitmentHex);
-  if (secret === null) throw new Error("Your membership key isn't on this device — attest from the device you joined on.");
-
-  const order = await orderedCommitments(circle);
-  const tree = await MemberTree.create(20);
-  let myIndex = -1;
-  for (const c of order) {
-    const idx = tree.insert(beToBig(fromHex(c)));
-    if (c === parrainCommitmentHex) myIndex = idx;
-  }
-  if (myIndex < 0) throw new Error("Your membership isn't in the current member tree (still provisional?).");
-
   const circlePk = new PublicKey(circle);
-
-  // F54: crank the ring buffer FIRST, so the root we prove against stays
-  // acceptable even if an admission lands while we're proving.
-  await crankNoteRoot(wallet, circlePk);
-
   const newcomerId = beToBig(fromHex(newcomerCommitmentHex)); // external nullifier = newcomer commitment
-  const root = to32BE(tree.root);
-  const { nullifier, proofA, proofB, proofC } = await proveVote(tree, secret, myIndex, newcomerId, true);
+  const { root, nullifier, proofA, proofB, proofC } = await proveMemberEndorsement(
+    wallet,
+    circle,
+    parrainCommitmentHex,
+    newcomerId
+  );
 
   const newcomer = [...fromHex(newcomerCommitmentHex)];
   const attestation = PublicKey.findProgramAddressSync(

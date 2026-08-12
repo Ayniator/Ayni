@@ -145,6 +145,13 @@ export interface InnerEnvelope {
   ts: number;   // sender-claimed unix secs
   body: string;
   sig: string;  // base64 Ed25519 by `from` over innerSignedBytes(...)
+  /** F63 v2 cover traffic (mailboxMixing.ts): present and === 1 on a DUMMY.
+   *  It lives INSIDE the ciphertext, so the relay cannot see it and a dummy is
+   *  indistinguishable from real mail at the relay; the recipient drops it
+   *  (partitionCover) before the inbox ever renders a row. Absent on real
+   *  mail — a real message is never suppressed by its own author's choice of
+   *  body, because the marker is a distinct field, not a body prefix. */
+  cover?: number;
 }
 
 /** Bytes the sender signs: binds body to recipient IK + time, so a relay (or

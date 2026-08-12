@@ -209,10 +209,30 @@ pub mod ayni {
         instructions::set_faucet_amount(ctx, lamports)
     }
 
-    /// The neophyte's parrain (their WingPeer) triggers the one-time gas grant —
-    /// one grant per identity commitment, ever, enforced by nullifier.
+    /// DEPRECATED (F35 → Epic 2) — prefer `activate_faucet_zk`. The named pilot
+    /// form: the neophyte's parrain (their WingPeer) signs the one-time gas
+    /// grant, which publishes the sponsor edge (their wallet, their commitment,
+    /// and the claim binding them to the neophyte). Kept only for a parrain
+    /// whose device holds no ZK voting key; the client must prefer the
+    /// anonymous path. One grant per identity commitment, ever, by nullifier.
     pub fn activate_faucet(ctx: Context<ActivateFaucet>) -> Result<()> {
         instructions::activate_faucet(ctx)
+    }
+
+    /// First gas for the neophyte, anonymously endorsed (F35 → Epic 2): a
+    /// Groth16 proof that SOME member of the Circle's member tree endorses this
+    /// grant — no parrain account, commitment or wallet in the transaction.
+    /// Reuses the member_vote circuit + ceremony key, like `attest_admission_zk`;
+    /// same jar economics and same one-shot `faucetnull` guard as the named form.
+    pub fn activate_faucet_zk(
+        ctx: Context<ActivateFaucetZk>,
+        root: [u8; 32],
+        nullifier: [u8; 32],
+        proof_a: [u8; 64],
+        proof_b: [u8; 128],
+        proof_c: [u8; 64],
+    ) -> Result<()> {
+        instructions::activate_faucet_zk(ctx, root, nullifier, proof_a, proof_b, proof_c)
     }
 
     /// Move treasury funds into the jar under a passed anonymous member vote

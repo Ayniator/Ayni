@@ -462,7 +462,7 @@ proptest! {
 /// [prefix, base_account, 32-byte nullifier/commitment].
 const NULLIFIER_PREFIXES: [&[u8]; 7] = [
     b"vouchnull",      // attest_admission_zk
-    b"faucetnull",     // activate_faucet
+    b"faucetnull",     // activate_faucet + activate_faucet_zk (shared one-shot)
     b"vote_nullifier", // cast_vote
     b"nullifier",      // grant_level
     b"ack_nullifier",  // issue_acknowledgment
@@ -536,5 +536,46 @@ proptest! {
         prop_assert_eq!(f[0] & 0xe0, 0); // top 3 bits cleared ⇒ < p (p > 2^253)
         prop_assert_eq!(f[0], pk_bytes[0] & 0x1f);
         prop_assert_eq!(&f[1..], &pk_bytes[1..]);
+    }
+
+    /// F35 anonymous activation — the faucet endorsement's external nullifier
+    /// (`H("AHA-faucet-grant" || circle || neophyte)`, masked into BN254):
+    ///
+    ///   * deterministic (the browser prover and the program must agree, or
+    ///     every proof fails verification);
+    ///   * always a valid field element (top 3 bits cleared ⇒ < p);
+    ///   * BOUND to the pair — a different circle or a different neophyte gives
+    ///     a different external nullifier, so an endorsement can never be
+    ///     re-aimed at another neophyte or replayed into another Circle;
+    ///   * DOMAIN-SEPARATED from `attest_admission_zk`, which uses the raw
+    ///     commitment as its external nullifier. If the two ever coincided, the
+    ///     same member endorsing both would emit the same `Poseidon(secret, ·)`
+    ///     twice and an observer could link the two anonymous acts.
+    #[test]
+    fn faucet_external_nullifier_binds_and_separates(
+        c1 in any::<[u8; 32]>(),
+        c2 in any::<[u8; 32]>(),
+        n1 in arb_field(),
+        n2 in arb_field(),
+    ) {
+        use crate::instructions::activate_faucet_zk::faucet_external_nullifier;
+
+        let circle1 = Pubkey::new_from_array(c1);
+        let circle2 = Pubkey::new_from_array(c2);
+
+        let e = faucet_external_nullifier(&circle1, &n1);
+        prop_assert_eq!(e, faucet_external_nullifier(&circle1, &n1)); // deterministic
+        prop_assert_eq!(e[0] & 0xe0, 0); // in-field
+
+        if circle1 != circle2 {
+            prop_assert_ne!(e, faucet_external_nullifier(&circle2, &n1));
+        }
+        if n1 != n2 {
+            prop_assert_ne!(e, faucet_external_nullifier(&circle1, &n2));
+        }
+
+        // Never equal to the raw commitment (attest_admission_zk's external
+        // nullifier for the same newcomer).
+        prop_assert_ne!(e, n1);
     }
 }

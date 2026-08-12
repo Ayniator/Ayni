@@ -1,4 +1,5 @@
 pub mod activate_faucet;
+pub mod activate_faucet_zk;
 pub mod approve;
 pub mod approve_child_close;
 pub mod approve_child_rotation;
@@ -72,6 +73,7 @@ pub mod verify_fellow_member;
 pub mod withdraw_treasury_token;
 
 pub use activate_faucet::*;
+pub use activate_faucet_zk::*;
 pub use approve::*;
 pub use approve_child_close::*;
 pub use approve_child_rotation::*;

@@ -38,7 +38,7 @@ import { Chip, WingPeerInfo, endWingPeer, establishWingPeer, getWingPeer, listPr
 import QuipuNecklace from "../../components/QuipuNecklace";
 import { Cord } from "../../lib/quipu";
 import { MemberProposal, SeatElectionInfo, SEAT_ROLES, listCircleMembers, listMemberProposals, listSeatElections } from "../../lib/admin";
-import { activateFaucet, getFaucet, hasFaucetGrant, listMenteesOf } from "../../lib/faucet";
+import { activateFaucet, activateFaucetAnonymously, getFaucet, hasFaucetGrant, listMenteesOf } from "../../lib/faucet";
 import { flushLedgerQueue, recordGrantInLedger } from "../../lib/faucetLedger";
 import { attestAdmission, getTwoSponsorPolicy, hasAttestation, issueProvisionalMembership } from "../../lib/admission";
 import { attestAdmissionAnonymously, castMemberVote, haveVotingKey, newMemberIdentity } from "../../lib/zk-vote";
@@ -367,7 +367,16 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
       setNote({ kind: "ok", text: `${t("me.mentor.sendingInAbout")} ${waitS}${t("me.mentor.sendingSuffix")}` });
       await new Promise((r) => setTimeout(r, waitS * 1000));
 
-      await activateFaucet(wallet, new PublicKey(m.circle), m.commitment, menteeCommitment);
+      // F35 → Epic 2: prefer the anonymous endorsement (no sponsor edge, no
+      // parrain wallet in the transaction) whenever this device holds the ZK
+      // voting key; fall back to the deprecated named form only when it can't
+      // prove — same rule as the attestation above.
+      const anon = haveVotingKey(m.commitment);
+      if (anon) {
+        await activateFaucetAnonymously(wallet, new PublicKey(m.circle), m.commitment, menteeCommitment);
+      } else {
+        await activateFaucet(wallet, new PublicKey(m.circle), m.commitment, menteeCommitment);
+      }
 
       // Treasurer's ledger (Epic 0): a sealed, codes-only entry, delivered to
       // the drop-box after its own independent random delay. Codes are shown
@@ -386,7 +395,10 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
       } catch {
         tail = " " + t("me.mentor.ledgerCouldNotPrepare");
       }
-      setNote({ kind: "ok", text: t("me.mentor.firstGasSent") + tail });
+      // Say which form actually went out. The named fallback publishes the
+      // sponsor edge; the member deserves to know that before they use it again.
+      const how = anon ? "" : " " + t("me.mentor.firstGasNamed");
+      setNote({ kind: "ok", text: t("me.mentor.firstGasSent") + how + tail });
       load();
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(null); }

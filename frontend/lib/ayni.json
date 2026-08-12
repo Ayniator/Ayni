@@ -2,7 +2,7 @@
   "address": "AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG",
   "metadata": {
     "name": "ayni",
-    "version": "0.2.0",
+    "version": "0.7.7",
     "spec": "0.1.0",
     "description": "Ayni — Solana implementation of AHA (Ancestral Humanity Anonymous)"
   },
@@ -10,8 +10,12 @@
     {
       "name": "activate_faucet",
       "docs": [
-        "The neophyte's parrain (their WingPeer) triggers the one-time gas grant —",
-        "one grant per identity commitment, ever, enforced by nullifier."
+        "DEPRECATED (F35 → Epic 2) — prefer `activate_faucet_zk`. The named pilot",
+        "form: the neophyte's parrain (their WingPeer) signs the one-time gas",
+        "grant, which publishes the sponsor edge (their wallet, their commitment,",
+        "and the claim binding them to the neophyte). Kept only for a parrain",
+        "whose device holds no ZK voting key; the client must prefer the",
+        "anonymous path. One grant per identity commitment, ever, by nullifier."
       ],
       "discriminator": [
         11,
@@ -212,6 +216,291 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "activate_faucet_zk",
+      "docs": [
+        "First gas for the neophyte, anonymously endorsed (F35 → Epic 2): a",
+        "Groth16 proof that SOME member of the Circle's member tree endorses this",
+        "grant — no parrain account, commitment or wallet in the transaction.",
+        "Reuses the member_vote circuit + ceremony key, like `attest_admission_zk`;",
+        "same jar economics and same one-shot `faucetnull` guard as the named form."
+      ],
+      "discriminator": [
+        41,
+        124,
+        36,
+        42,
+        57,
+        163,
+        118,
+        14
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "docs": [
+            "Boxed, like every other large account here: this instruction's account",
+            "set (Circle + member tree + membership + bond) overflows the 4 KiB SBF",
+            "stack frame if `try_accounts` deserializes them inline — the SBF linker",
+            "flags it as potential frame corruption."
+          ],
+          "relations": [
+            "member_tree",
+            "recent_roots",
+            "neophyte_membership",
+            "wing_peer",
+            "jar"
+          ]
+        },
+        {
+          "name": "member_tree",
+          "docs": [
+            "The set the endorser proves membership of (current root)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recent_roots",
+          "docs": [
+            "F54 ring buffer — pass it (after cranking `note_root`) so the proof",
+            "survives concurrent admissions; may be null for a Circle that has never",
+            "cranked, in which case only the exact current root is accepted."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "neophyte_membership",
+          "docs": [
+            "The newcomer's membership; the grant goes to its `owner` wallet. This is",
+            "the ONLY membership account in the transaction — there is no parrain",
+            "side, which is the entire point."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "neophyte_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wing_peer",
+          "docs": [
+            "The neophyte's sponsor bond — seed-bound to the neophyte, and read only",
+            "for `active`. Its `wing` field is NOT consulted and NOT compared against",
+            "anything: this instruction never learns, asserts, or records who the",
+            "sponsor is."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  103,
+                  112,
+                  101,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "neophyte_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "grant_nullifier",
+          "docs": [
+            "One grant per membership commitment — `init` collision IS the refusal.",
+            "The SAME PDA the named path uses, so the two forms cannot be stacked."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  117,
+                  99,
+                  101,
+                  116,
+                  110,
+                  117,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "neophyte_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "jar",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  117,
+                  99,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "A relayer pays, so no member's wallet appears — the same rule as",
+            "`cast_vote` and `attest_admission_zk`."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nullifier",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "approve",

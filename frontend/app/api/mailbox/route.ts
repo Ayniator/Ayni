@@ -13,17 +13,38 @@
 //   * this file contains no logging call of any kind, and the privacy sweep
 //     greps for that.
 //
-// What the relay still observes, honestly: which mailbox receives mail, when,
-// and the fetcher's IP + timing. That is recipient-side traffic analysis AT
-// THE RELAY — deletable, private infrastructure — instead of on a permanent
-// public ledger, which is the entire point of F63. Mixing/batching is the
-// documented next step.
+// F63 v2 adds METADATA MIXING on top (frontend/lib/mailboxMixing.ts,
+// docs/messaging.md). The relay's half of it, all of it stateless:
+//   * DELIVERY BUCKETS — an envelope is not readable the instant it lands; it
+//     is released on the next boundary of a fixed grid (AHA_MAILBOX_DELIVERY_
+//     BUCKET_SECS, default 60, 0 = off). The grid is a monotone ceiling, so
+//     ordering is never inverted and `get` stays FIFO.
+//   * PADDED REQUESTS — every request body arrives padded to a 2 KiB block, so
+//     put/get/ack/bundle are the same size on the wire. `pad` is validated,
+//     bounded and DISCARDED; nothing about it is stored.
+//   * PADDED REPLIES — every reply is padded to a fixed size, and `get` to a
+//     power-of-two size class, so an on-path observer cannot read a mailbox's
+//     envelope count, nor tell an enrolled wallet from an unenrolled one, off
+//     a response length.
+//   * COVER TRAFFIC is a pure client matter BY DESIGN: a dummy is a genuine
+//     sealed envelope with the marker inside the ciphertext, so this file has
+//     no notion of a dummy and cannot acquire one. That is what makes it
+//     indistinguishable here.
+//
+// What the relay still observes, honestly: which mailbox receives an envelope,
+// when it lands, and the requester's IP. Cover traffic means "an envelope
+// landed" no longer implies "somebody wrote a message", but an operator who
+// correlates SOURCE IPs over time still learns which addresses talk to which
+// mailboxes — that residual needs Tor/a mixnet and is out of scope (§5 of
+// docs/messaging.md). It is at least on deletable, private infrastructure
+// instead of a permanent public ledger, which is the point of F63.
 //
 // Storage: flat files under AHA_MAILBOX_DIR (default <cwd>/.mailbox — keep it
 // out of git). TTL sweep is lazy, per touched mailbox.
 //
 // Env: AHA_MAILBOX_DIR, AHA_MAILBOX_TTL_SECS (default 30 days),
-//      AHA_MAILBOX_MAX_PER_BOX (default 500).
+//      AHA_MAILBOX_MAX_PER_BOX (default 500),
+//      AHA_MAILBOX_DELIVERY_BUCKET_SECS (default 60, 0 = release immediately).
 
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
@@ -41,12 +62,43 @@ import {
   mbxUnb64,
   verifyBundle,
 } from "../../../lib/mailboxCrypto";
+import {
+  MBX_BUNDLE_RESP_BYTES,
+  MBX_DELIVERY_BUCKET_SECS,
+  MBX_GLOBAL_LIMIT,
+  MBX_RATE_LIMIT,
+  MBX_RATE_WINDOW_MS,
+  MBX_REQ_MAX_PAD,
+  mbxReleaseAt,
+  mbxRespTarget,
+  padJson,
+} from "../../../lib/mailboxMixing";
 
 export const runtime = "nodejs";
 
 const DIR = process.env.AHA_MAILBOX_DIR || path.join(process.cwd(), ".mailbox");
 const TTL_SECS = Number(process.env.AHA_MAILBOX_TTL_SECS || 30 * 24 * 3600);
 const MAX_PER_BOX = Number(process.env.AHA_MAILBOX_MAX_PER_BOX || 500);
+const BUCKET_SECS = Number(
+  process.env.AHA_MAILBOX_DELIVERY_BUCKET_SECS ?? MBX_DELIVERY_BUCKET_SECS
+);
+
+/** Every reply is padded, so a reply's LENGTH says nothing: "no bundle" and "a
+ *  bundle" are the same size, an error and an ok are the same size, and a `get`
+ *  is padded to a power-of-two size class of rows. */
+function reply(
+  obj: Record<string, unknown>,
+  status = 200,
+  target = MBX_BUNDLE_RESP_BYTES,
+  extra: Record<string, string> = {}
+): NextResponse {
+  return new NextResponse(padJson(obj, target), {
+    status,
+    headers: { "content-type": "application/json", ...extra },
+  });
+}
+
+const RATE_429 = { "retry-after": "60" };
 
 const MBX_ID = /^[0-9a-f]{32}$/;
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -56,8 +108,10 @@ const FILE_ID = /^[0-9a-f]{24}$/;
 // comes from X-Forwarded-For and is SPOOFABLE, so it is only the first gate; the
 // GLOBAL limiter below is the unspoofable backstop that bounds directory-probe
 // (enrollment-oracle) and put-flood abuse regardless of header rotation.
-const RATE_LIMIT = 30;
-const RATE_WINDOW_MS = 60_000;
+// The limits live in lib/mailboxMixing.ts so the cover-traffic budget and the
+// limiter it must fit inside can never drift apart (tests/mailbox-mixing).
+const RATE_LIMIT = MBX_RATE_LIMIT;
+const RATE_WINDOW_MS = MBX_RATE_WINDOW_MS;
 const hits = new Map<string, number[]>();
 function rateLimited(ip: string): boolean {
   const now = Date.now();
@@ -72,7 +126,7 @@ function rateLimited(ip: string): boolean {
 // to `bundle` and `put` in POST (see there): it bounds enrollment-oracle probing
 // and inbox flooding that X-Forwarded-For rotation would otherwise let an
 // attacker scale freely, WITHOUT coupling read/delete availability to it.
-const GLOBAL_LIMIT = 240;
+const GLOBAL_LIMIT = MBX_GLOBAL_LIMIT;
 let globalHits: number[] = [];
 function globallyRateLimited(): boolean {
   const now = Date.now();
@@ -112,6 +166,36 @@ async function sweep(dir: string): Promise<string[]> {
   return keep;
 }
 
+/**
+ * On-disk row. v2 wraps the envelope with its RELEASE TIME (the delivery
+ * bucket); v1 files are bare envelopes and are read as "release immediately",
+ * so an existing .mailbox directory keeps working across the upgrade.
+ */
+interface StoredRow {
+  v: 2;
+  releaseAt: number; // unix secs; 0 = immediately
+  env: SealedEnvelope;
+}
+
+function readStored(raw: string): { releaseAt: number; env: SealedEnvelope } | null {
+  try {
+    const j = JSON.parse(raw);
+    if (j && j.v === 2 && j.env && typeof j.env.ct === "string") {
+      return { releaseAt: Number(j.releaseAt) || 0, env: j.env as SealedEnvelope };
+    }
+    if (j && typeof j.ct === "string") return { releaseAt: 0, env: j as SealedEnvelope }; // v1 file
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Request bodies are padded to a fixed block; `pad` is bounded and dropped. */
+function badPad(body: any): boolean {
+  if (body?.pad === undefined) return false; // mixing off / older client
+  return typeof body.pad !== "string" || body.pad.length > MBX_REQ_MAX_PAD;
+}
+
 function badEnvelope(env: any): boolean {
   if (!env || env.v !== 1) return true;
   if (typeof env.eph !== "string" || typeof env.nonce !== "string" || typeof env.ct !== "string") return true;
@@ -128,20 +212,24 @@ function badEnvelope(env: any): boolean {
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, configured: true });
+  return reply({ ok: true, configured: true });
 }
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
   // Per-IP gate applies to EVERY op (spoofable, first line of defence).
-  if (rateLimited(ip)) return NextResponse.json({ error: "rate limited" }, { status: 429, headers: { "retry-after": "60" } });
+  if (rateLimited(ip)) return reply({ error: "rate limited" }, 429, MBX_BUNDLE_RESP_BYTES, RATE_429);
 
   let body: any;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "bad json" }, { status: 400 });
+    return reply({ error: "bad json" }, 400);
   }
+  // F63 v2: bodies arrive padded to a fixed block so op sizes are uniform on
+  // the wire. Bound it (a padded body must not become free relay storage or an
+  // amplification lever) and then forget it — `pad` is never read again.
+  if (badPad(body)) return reply({ error: "bad pad" }, 400);
 
   const op = body?.op;
   // The unspoofable GLOBAL cap is scoped to the two abuse-prone ops it exists to
@@ -152,7 +240,7 @@ export async function POST(req: NextRequest) {
   // MEDIUM, 2026-08-11d). Keeping reads/deletes on the per-IP gate means a
   // write-path flood can churn throughput but cannot take down delivery.
   if ((op === "bundle" || op === "put") && globallyRateLimited()) {
-    return NextResponse.json({ error: "rate limited" }, { status: 429, headers: { "retry-after": "60" } });
+    return reply({ error: "rate limited" }, 429, MBX_BUNDLE_RESP_BYTES, RATE_429);
   }
 
   switch (op) {
@@ -160,26 +248,26 @@ export async function POST(req: NextRequest) {
     case "publish": {
       const b = body.bundle as PrekeyBundle;
       if (!b || typeof b.wallet !== "string" || !BASE58.test(b.wallet)) {
-        return NextResponse.json({ error: "bad bundle" }, { status: 400 });
+        return reply({ error: "bad bundle" }, 400);
       }
       let walletPk: PublicKey;
       try {
         walletPk = new PublicKey(b.wallet);
       } catch {
-        return NextResponse.json({ error: "bad wallet" }, { status: 400 });
+        return reply({ error: "bad wallet" }, 400);
       }
       if (typeof b.ik !== "string" || b.ik.length > 64 || typeof b.spk !== "string" || b.spk.length > 64) {
-        return NextResponse.json({ error: "bad bundle" }, { status: 400 });
+        return reply({ error: "bad bundle" }, 400);
       }
       if (!verifyBundle(b, walletPk.toBytes())) {
-        return NextResponse.json({ error: "bundle signature invalid" }, { status: 400 });
+        return reply({ error: "bundle signature invalid" }, 400);
       }
       // Monotonic epochs: an attacker cannot roll a victim's directory entry
       // back to an old prekey (they cannot sign a higher epoch either).
       try {
         const prev = JSON.parse(await fs.readFile(bundlePath(b.wallet), "utf8"));
         if (Number(prev?.epoch) >= b.epoch) {
-          return NextResponse.json({ error: "epoch not newer" }, { status: 409 });
+          return reply({ error: "epoch not newer" }, 409);
         }
       } catch {
         /* first publish */
@@ -187,7 +275,7 @@ export async function POST(req: NextRequest) {
       await ensureDir(path.dirname(bundlePath(b.wallet)));
       const clean: PrekeyBundle = { v: 1, wallet: b.wallet, ik: b.ik, spk: b.spk, epoch: b.epoch, sig: b.sig };
       await fs.writeFile(bundlePath(b.wallet), JSON.stringify(clean));
-      return NextResponse.json({ ok: true });
+      return reply({ ok: true });
     }
 
     case "bundle": {
@@ -204,13 +292,13 @@ export async function POST(req: NextRequest) {
       // enumeration is throttled rather than free.
       const wallet = body.wallet;
       if (typeof wallet !== "string" || !BASE58.test(wallet)) {
-        return NextResponse.json({ error: "bad wallet" }, { status: 400 });
+        return reply({ error: "bad wallet" }, 400);
       }
       try {
         const b = JSON.parse(await fs.readFile(bundlePath(wallet), "utf8"));
-        return NextResponse.json({ bundle: b });
+        return reply({ bundle: b });
       } catch {
-        return NextResponse.json({ bundle: null });
+        return reply({ bundle: null });
       }
     }
 
@@ -218,10 +306,10 @@ export async function POST(req: NextRequest) {
     case "put": {
       const to = body.to;
       if (typeof to !== "string" || !MBX_ID.test(to)) {
-        return NextResponse.json({ error: "bad mailbox" }, { status: 400 });
+        return reply({ error: "bad mailbox" }, 400);
       }
       if (badEnvelope(body.envelope)) {
-        return NextResponse.json({ error: "bad envelope" }, { status: 400 });
+        return reply({ error: "bad envelope" }, 400);
       }
       const dir = boxDir(to);
       await ensureDir(dir);
@@ -256,17 +344,24 @@ export async function POST(req: NextRequest) {
       const e = body.envelope as SealedEnvelope;
       const clean: SealedEnvelope = { v: 1, eph: e.eph, nonce: e.nonce, spkEpoch: e.spkEpoch, ct: e.ct, expiresAt: e.expiresAt };
       const id = crypto.randomBytes(12).toString("hex");
-      await fs.writeFile(path.join(dir, id + ".json"), JSON.stringify(clean));
-      return NextResponse.json({ ok: true });
+      // DELIVERY BUCKET (F63 v2 §1): the envelope is stored now but becomes
+      // readable only at the next grid boundary, so the moment a `get` returns
+      // it is not the moment it was written. `mbxReleaseAt` is a monotone
+      // ceiling — earlier arrivals never release later than later ones — so the
+      // FIFO order `get` sorts by is preserved exactly. BUCKET_SECS = 0 turns
+      // the delay off and the relay behaves like v1.
+      const row: StoredRow = { v: 2, releaseAt: mbxReleaseAt(Date.now() / 1000, BUCKET_SECS), env: clean };
+      await fs.writeFile(path.join(dir, id + ".json"), JSON.stringify(row));
+      return reply({ ok: true });
     }
 
     case "get": {
       const { to, wallet, sig, window } = body;
       if (typeof to !== "string" || !MBX_ID.test(to)) {
-        return NextResponse.json({ error: "bad mailbox" }, { status: 400 });
+        return reply({ error: "bad mailbox" }, 400);
       }
-      if (typeof wallet !== "string" || !BASE58.test(wallet)) return NextResponse.json({ error: "bad wallet" }, { status: 400 });
-      if (typeof sig !== "string" || !Number.isInteger(window)) return NextResponse.json({ error: "bad request" }, { status: 400 });
+      if (typeof wallet !== "string" || !BASE58.test(wallet)) return reply({ error: "bad wallet" }, 400);
+      if (typeof sig !== "string" || !Number.isInteger(window)) return reply({ error: "bad request" }, 400);
       // READ REQUIRES THE RECIPIENT'S SIGNATURE. The mailbox id is derived from
       // the WALLET (not the bundle IK — that was attacker-suppliable), so
       // ownership is exactly: this wallet's key signs getSignedBytes(to,
@@ -285,33 +380,53 @@ export async function POST(req: NextRequest) {
         } catch {
           ok = false;
         }
-        if (!ok) return NextResponse.json({ error: "read refused" }, { status: 403 });
+        if (!ok) return reply({ error: "read refused" }, 403);
       }
 
       const dir = boxDir(to);
-      const names = (await sweep(dir)).slice(0, 100);
-      const out: { id: string; ts: number; envelope: SealedEnvelope }[] = [];
-      for (const n of names) {
+      const nowSecs = Date.now() / 1000;
+      // Stat everything (cheap), order on the FULL-precision arrival time, then
+      // read only as far as the page needs. Ordering before the cap means the
+      // 100 returned are the 100 oldest RELEASED envelopes, and two that landed
+      // in the same second still come back in the order they arrived (v1 sorted
+      // on the whole-second `ts` alone, leaving same-second order to readdir).
+      // Constant-rate polling makes `get` the hot path, so this reads ~100 files
+      // instead of the whole box.
+      const stamped: { n: string; ms: number }[] = [];
+      for (const n of await sweep(dir)) {
         try {
-          const p = path.join(dir, n);
-          const st = await fs.stat(p);
-          out.push({ id: n.replace(/\.json$/, ""), ts: Math.floor(st.mtimeMs / 1000), envelope: JSON.parse(await fs.readFile(p, "utf8")) });
+          stamped.push({ n, ms: (await fs.stat(path.join(dir, n))).mtimeMs });
         } catch {
           /* raced away */
         }
       }
-      out.sort((a, b) => a.ts - b.ts);
-      return NextResponse.json({ messages: out });
+      stamped.sort((a, b) => a.ms - b.ms);
+      const page: { id: string; ts: number; envelope: SealedEnvelope }[] = [];
+      for (const { n, ms } of stamped) {
+        if (page.length >= 100) break;
+        try {
+          const row = readStored(await fs.readFile(path.join(dir, n), "utf8"));
+          if (!row) continue;
+          if (row.releaseAt > nowSecs) continue; // still in its delivery bucket
+          page.push({ id: n.replace(/\.json$/, ""), ts: Math.floor(ms / 1000), envelope: row.env });
+        } catch {
+          /* raced away */
+        }
+      }
+      // Reply padded to a power-of-two size class of rows: an on-path observer
+      // reads only log2(count) off the length, not the count. (The relay itself
+      // obviously knows it — this closes the wire leak, not the operator's.)
+      return reply({ messages: page }, 200, mbxRespTarget(page.length));
     }
 
     case "ack": {
       const { to, wallet, ids, sig } = body;
-      if (typeof to !== "string" || !MBX_ID.test(to)) return NextResponse.json({ error: "bad mailbox" }, { status: 400 });
-      if (typeof wallet !== "string" || !BASE58.test(wallet)) return NextResponse.json({ error: "bad wallet" }, { status: 400 });
+      if (typeof to !== "string" || !MBX_ID.test(to)) return reply({ error: "bad mailbox" }, 400);
+      if (typeof wallet !== "string" || !BASE58.test(wallet)) return reply({ error: "bad wallet" }, 400);
       if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100 || !ids.every((i: any) => typeof i === "string" && FILE_ID.test(i))) {
-        return NextResponse.json({ error: "bad ids" }, { status: 400 });
+        return reply({ error: "bad ids" }, 400);
       }
-      if (typeof sig !== "string") return NextResponse.json({ error: "bad sig" }, { status: 400 });
+      if (typeof sig !== "string") return reply({ error: "bad sig" }, 400);
       // The wallet must own this mailbox: mailboxIdForWallet(wallet) == to, and
       // the ack carries that wallet's Ed25519 signature over the id set. Same
       // wallet-derived ownership as `get` — no attacker-suppliable IK in the
@@ -325,7 +440,7 @@ export async function POST(req: NextRequest) {
       } catch {
         ok = false;
       }
-      if (!ok) return NextResponse.json({ error: "ack refused" }, { status: 403 });
+      if (!ok) return reply({ error: "ack refused" }, 403);
       for (const id of ids) {
         try {
           await fs.unlink(path.join(boxDir(to), id + ".json"));
@@ -333,10 +448,10 @@ export async function POST(req: NextRequest) {
           /* already gone */
         }
       }
-      return NextResponse.json({ ok: true });
+      return reply({ ok: true });
     }
 
     default:
-      return NextResponse.json({ error: "unknown op" }, { status: 400 });
+      return reply({ error: "unknown op" }, 400);
   }
 }

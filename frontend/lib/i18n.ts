@@ -83,14 +83,18 @@ const en: Record<string, string> = {
   "msg.devnetSign":
     "This publishes on-chain, so your wallet must be connected to Devnet. If your wallet warns of a network mismatch — “Your current network is set to Mainnet, but this transaction is for Devnet” — open it and go to Settings → Network → Devnet, then try again.",
   // Inbox lede + honest metadata explainer. Deliberately does NOT claim that
-  // "no one can know you contacted this person": content and the sender's
-  // identity are hidden, but the relay still sees which mailbox received mail
-  // and when (recipient-side traffic analysis). Overclaiming here would be the
-  // same class of defect as advertising unshipped coercion-resistance.
+  // "no one can know you contacted this person". F63 v2 (docs/messaging.md)
+  // shipped the mixing this string used to call "the documented next step":
+  // fixed-size envelopes, fixed-size requests, bucketed release, decoy traffic
+  // and constant-rate polling. It stops there and says so — the source IP the
+  // relay sees next to each mailbox id is a REAL residual that needs Tor or a
+  // mixnet, and a first message to a new contact has no decoys around it.
+  // Overclaiming here would be the same class of defect as advertising
+  // unshipped coercion-resistance; the copy must track docs/messaging.md §5.
   "msg.inbox.lede":
     "Private 1:1 messages, end-to-end encrypted to your wallet. Only you and your correspondent can read them — the sender is named only inside the encryption, so no one else can tell who wrote to you.",
   "msg.inbox.metadata":
-    "These messages never touch the public blockchain — no on-chain record of who received what, or when. The relay that carries them cannot read them and never learns who sent them; it does still see which mailbox received mail and when, so that metadata lives on deletable, private infrastructure rather than a permanent public ledger. Hiding that two people corresponded at all (mixing) is the documented next step, not yet shipped. Checking signs once to derive your key; mail is decrypted on this device only.",
+    "These messages never touch the public blockchain — no on-chain record of who received what, or when. The relay that carries them cannot read them and is never told who sent them. Mixing now ships: every message is padded to one size and every request to one shape, the relay releases mail on a fixed schedule instead of the moment it lands, and your app sends decoy messages and checks its mailbox on a constant timetable whether or not anything is waiting — so “this mailbox received something” no longer means anyone actually wrote to you. What still leaks, plainly: the relay sees the internet address each request comes from alongside the mailbox it names, so an operator watching addresses over time can still infer who is talking to whom, and your first message to a new contact has no decoys around it — closing that needs Tor or a mixnet, which is not shipped. What remains lives on deletable, private infrastructure rather than a permanent public ledger. Checking signs once to derive your key; mail is decrypted on this device only.",
   // /reflections default mode — the built-in Daily Reflection (aa.org-inspired
   // layout) shown when no Circle has published an entry for the chosen day, plus
   // the browse-by-day calendar. The reflection *content* is sourced material and

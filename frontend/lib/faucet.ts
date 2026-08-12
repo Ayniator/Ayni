@@ -1,8 +1,18 @@
 // Gas faucet (Trust Platform Epic 0): a per-Circle jar of "first gas" lamports.
-// The parrain (the neophyte's WingPeer sponsor) triggers a one-time uniform
-// grant to the neophyte's own wallet; a global nullifier (seeded by the
-// neophyte's commitment alone) makes it one grant per identity, ever. Refills
-// come only from a passed anonymous member vote committing to the exact amount.
+// A one-time uniform grant goes to the neophyte's own wallet; a nullifier PDA
+// (seeded by the neophyte's commitment) makes it one grant per identity per
+// Circle, ever. Refills come only from a passed anonymous member vote
+// committing to the exact amount.
+//
+// TWO activation paths, and the choice is not cosmetic (F35 → Epic 2):
+//   * `activateFaucetAnonymously` — PREFERRED. A member_vote Groth16 proof that
+//     *some* member endorses the grant. No parrain account, commitment or
+//     wallet in the transaction; relayed so the fee-payer isn't the link.
+//   * `activateFaucet` — DEPRECATED. The named pilot form, where the parrain
+//     signs and pays and the transaction publishes the sponsor edge. Kept only
+//     for a parrain with no ZK voting key on this device.
+// Callers must branch on `haveVotingKey(parrainCommitment)` and take the
+// anonymous path whenever it is available.
 
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
@@ -18,6 +28,8 @@ import {
 } from "./member";
 import { wingPeerPda } from "./peers";
 import { freshNonce } from "./admin";
+import { proveMemberEndorsement, recentRootsPda } from "./zk-vote";
+import { relayerPubkey, relayInstruction } from "./relayer";
 
 // The on-chain caps (mirrors programs/ayni/src/state.rs).
 export const FAUCET_MAX_GRANT_LAMPORTS = 2_000_000; // 0.002 SOL — absolute cap
@@ -30,6 +42,8 @@ export const FAUCET_AMOUNT_COOLDOWN_SECS = 24 * 60 * 60;
 const seed = (s: string) => new TextEncoder().encode(s);
 const toBytes = (hex: string) => Uint8Array.from((hex.match(/.{1,2}/g) ?? []).map((b) => parseInt(b, 16)));
 const toHex = (b: ArrayLike<number>) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+/** Big-endian 32 bytes → bigint (the circuit's field-element convention). */
+const beToBig = (b: Uint8Array): bigint => { let v = 0n; for (const x of b) v = (v << 8n) | BigInt(x); return v; };
 
 export const faucetPda = (circle: PublicKey) =>
   PublicKey.findProgramAddressSync([seed("faucet"), circle.toBytes()], PROGRAM_ID)[0];
@@ -115,11 +129,106 @@ export async function setFaucetAmount(wallet: SigningWallet, circle: PublicKey, 
 }
 
 // ---------------------------------------------------------------------------
-// The grant — the parrain welcomes the neophyte with first gas
+// The grant — a member welcomes the neophyte with first gas
 // ---------------------------------------------------------------------------
 
 /**
- * The parrain (the neophyte's designated WingPeer) triggers the one-time grant.
+ * The endorsement's external nullifier:
+ * `SHA-256("AHA-faucet-grant" || circle || neophyte_commitment)` with the top 3
+ * bits cleared so it is always a BN254 field element.
+ *
+ * MUST match `faucet_external_nullifier` in
+ * `programs/ayni/src/instructions/activate_faucet_zk.rs` byte for byte — the
+ * program recomputes it and feeds it to the verifier as a public input, so any
+ * disagreement here shows up as "proof invalid", never as a silent weakening.
+ * The domain tag is what keeps a faucet endorsement's nullifier independent of
+ * the same member's admission attestation for the same neophyte.
+ */
+export async function faucetExternalNullifier(circle: PublicKey, neophyte: Uint8Array): Promise<Uint8Array> {
+  const data = new Uint8Array([...seed("AHA-faucet-grant"), ...circle.toBytes(), ...neophyte]);
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+  h[0] &= 0x1f; // BN254 p > 2^253 ⇒ always in field
+  return h;
+}
+
+/**
+ * **F35 → Epic 2 — the preferred path.** First gas for the neophyte, endorsed
+ * ANONYMOUSLY: a `member_vote` Groth16 proof that some member of this Circle's
+ * tree endorses the grant, with no parrain account, commitment or wallet in the
+ * transaction. The old named path put both parties and a transfer between them
+ * in one public transaction — the sponsor edge Epic 2 exists to abolish.
+ *
+ * Everything else is unchanged: the same `["faucetnull", circle, neophyte]`
+ * one-shot guard (shared with the named path, so the two cannot be stacked), the
+ * same uniform `jar.grant_lamports`, the same 24 h retune cooldown, the same
+ * rent floor, paid to the same `Membership.owner` wallet.
+ *
+ * Relayed whenever a relayer is configured — a self-paid fee would name a wallet
+ * at the exact moment of the endorsement, which is the link the proof exists to
+ * remove. Without a relayer this still beats the named path (the program asserts
+ * nothing about the payer, and no parrain membership account appears), but the
+ * fee-payer is a correlation the UI must not pretend away.
+ */
+export async function activateFaucetAnonymously(
+  wallet: SigningWallet,
+  circle: PublicKey,
+  parrainHex: string,
+  neophyteHex: string
+): Promise<string> {
+  const neophyte = toBytes(neophyteHex);
+  const neoMembership = membershipPda(circle, neophyte);
+  const m: any = await (readOnlyProgram().account as any).membership.fetch(neoMembership);
+  const owner: PublicKey = m.owner;
+  if (!owner || owner.equals(PublicKey.default)) {
+    throw new Error("This member has no wallet bound to their membership — the faucet needs a wallet to pay first gas to.");
+  }
+
+  const extNull = await faucetExternalNullifier(circle, neophyte);
+  const { root, nullifier, proofA, proofB, proofC } = await proveMemberEndorsement(
+    wallet,
+    circle.toBase58(),
+    parrainHex,
+    beToBig(extNull)
+  );
+
+  const accounts = {
+    circle,
+    memberTree: memberTreePda(circle),
+    recentRoots: recentRootsPda(circle),
+    neophyteMembership: neoMembership,
+    wingPeer: wingPeerPda(circle, neophyte),
+    grantNullifier: faucetNullPda(circle, neophyte),
+    jar: faucetPda(circle),
+    recipient: owner,
+    payer: PublicKey.default, // replaced below
+    systemProgram: SystemProgram.programId,
+  };
+
+  const relayer = await relayerPubkey();
+  if (relayer) {
+    const ix = await readOnlyProgram()
+      .methods.activateFaucetZk(root, nullifier, proofA, proofB, proofC)
+      .accounts({ ...accounts, payer: relayer })
+      .instruction();
+    return relayInstruction(ix);
+  }
+  return programWith(wallet)
+    .methods.activateFaucetZk(root, nullifier, proofA, proofB, proofC)
+    .accounts({ ...accounts, payer: wallet.publicKey })
+    .rpc();
+}
+
+/**
+ * **DEPRECATED (F35 → Epic 2): prefer `activateFaucetAnonymously`.**
+ *
+ * The named pilot path: the parrain (the neophyte's designated WingPeer) signs
+ * and pays, so the transaction publicly links the parrain's wallet AND
+ * commitment to the neophyte's, with a lamport transfer between them — the
+ * sponsor edge the Traditions audit rejects. Kept only as the fallback for a
+ * parrain whose device holds no ZK voting key (a membership minted before
+ * anonymous identities, or a second device); `haveVotingKey(parrainHex)` is the
+ * test, and the UI must take the anonymous path whenever it is true.
+ *
  * Pays exactly `jar.grant_lamports` to the neophyte's own wallet; the nullifier
  * makes a second grant for that membership impossible, in this Circle, ever.
  */

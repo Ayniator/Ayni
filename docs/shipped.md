@@ -18,6 +18,107 @@
 
 ---
 
+## F35 (Traditions fix) — anonymous faucet activation (2026-08-12f)
+
+The faucet's activation transaction publicly linked **parrain ↔ neophyte**: the
+parrain signed, paid, and passed their own membership PDA, so the chain recorded
+their wallet, their commitment, the neophyte's commitment and wallet, and a
+lamport transfer between the two — the named sponsor edge Epic 2 exists to
+abolish (Sentinel **R2**, the sharpest Traditions tension in shipped code).
+
+**Shipped:** `activate_faucet_zk` (`programs/ayni/src/instructions/activate_faucet_zk.rs`),
+an anonymous activation path where the endorsement is a Groth16 proof instead of
+a signature — "some member of this Circle's member tree endorses first gas for
+this neophyte". No parrain account, commitment or wallet appears.
+
+| Piece | Where | Verified |
+|---|---|---|
+| `activate_faucet_zk(root, nullifier, proof_a/b/c)` | `instructions/activate_faucet_zk.rs` | code, built (`anchor build` clean; SBF stack checked — the account set is Boxed) |
+| `faucet_external_nullifier` = `SHA-256("AHA-faucet-grant" ‖ circle ‖ neophyte)`, masked into BN254 | same file | code, built, **proptest** (`crate::proptests::faucet_external_nullifier_binds_and_separates`) |
+| `pay_uniform_grant` — the shared economics both paths call | `instructions/activate_faucet.rs` | code, built; lifted statement-for-statement out of the old inline body |
+| Client: `activateFaucetAnonymously` + `faucetExternalNullifier` | `frontend/lib/faucet.ts` | code, `tsc --noEmit` clean |
+| Client: `proveMemberEndorsement` (the shared Epic-2 endorsement primitive; `attestAdmissionAnonymously` now calls it) | `frontend/lib/zk-vote.ts` | code, `tsc --noEmit` clean |
+| UI prefers the anonymous path, names the fallback when it can't | `frontend/app/me/page.tsx`, key `me.mentor.firstGasNamed` | code; `i18n-key-check.sh` PASS |
+| Relay allowlist entry (`297c242a39a3760e`, payerIndex 8, 10 accounts, 328 bytes) | `frontend/lib/relayPolicy.ts` | code; discriminator/account-count re-derived from the rebuilt IDL |
+
+**No new circuit, no new ceremony:** `member_vote.circom` and the shipped
+`VERIFYING_KEY_VOTE`, reused exactly as `prove_personhood` and
+`attest_admission_zk` do. Public signals `[nullifier, root, proposalId, choice=1]`.
+
+**Economics untouched:** cooldown, uniform `grant_lamports`, rent floor,
+recipient-must-equal-`owner`, and the *same* `["faucetnull", circle, commitment]`
+one-shot PDA — shared with the named path, so the two cannot be stacked.
+
+**The named path stays, deprecated.** `activate_faucet` is unchanged in behaviour
+and marked deprecated in `lib.rs`, the instruction file, `frontend/lib/faucet.ts`
+and `docs/faucet.md`. It cannot be deleted this round: a parrain whose device
+holds no ZK voting key cannot produce a proof, and their neophyte would be left
+without gas. The client takes it only when `haveVotingKey(parrain)` is false.
+
+**Coverage:** 6 new cases in `tests/faucet.ts` (including a structural assertion
+that the built instruction contains no parrain membership PDA and no parrain
+wallet, and exactly one signer), 1 new proptest (13 lib tests pass), 7 new static
+gates on the F35 checklist entry. **Uncovered:** real-proof e2e — same gap and
+same reason as F53 (`attest_admission_zk`), needs the browser/devnet proving flow.
+
+**Residual, honestly:** the `WingPeer` PDA still publishes the sponsor edge at
+*commitment* level independently of the faucet (that is F27 / R2), so an observer
+can still *guess* the wing endorsed — a guess against the whole member set, not a
+record. One capability genuinely changed hands: a neophyte already in the tree
+can endorse their **own** grant (the named path could not be self-served), since
+an anonymous proof cannot be compared against the neophyte's commitment without a
+new circuit (F44) — the ceremony is lost, not the money (one grant per
+commitment, uniform amount, own wallet, own jar; the faucet's real bound is the
+membership door). Relayer IP/timing, self-pay fallback, and proof-replay timing
+are enumerated in `docs/faucet.md` § "What an observer can and cannot infer".
+
+## F63 v2 — mailbox metadata mixing (2026-08-12f)
+
+The inbox copy used to promise mixing as "the documented next step". It ships
+now, and the copy was rewritten to match reality in all 19 locales.
+
+Four measures, no new infrastructure and no server-side secret store, with the
+pure logic in one module (`frontend/lib/mailboxMixing.ts`) imported by **both**
+the relay route and the client so the cover budget and the rate limits it must
+fit inside can never drift apart:
+
+- **Bucketed release** — the client holds a real `put` for up to 2.5 s of
+  jitter; the relay stores on arrival but releases only on a fixed grid.
+  `releaseAt` is a monotone ceiling, so ordering can never invert. This also
+  *strengthened* v1's FIFO: `get` now sorts on full-precision arrival time and
+  sorts **before** capping the page at 100 (v1 sorted on whole seconds and left
+  same-second order to `readdir`).
+- **Cover traffic** — decoys are genuine sealed envelopes: same op, same field
+  set, same 1040-byte ciphertext, same padded body, and `expiresAt` drawn from
+  exactly the compose form's menu (a fixed value would have been a tell for
+  anyone who sets an expiry). The `cover: 1` marker lives **inside** the
+  ciphertext as its own field — not a body prefix — so no real message can be
+  suppressed by what its author happened to type. Capped at 16 outstanding
+  against `MAX_PER_BOX` 500, so cover can never FIFO-evict real mail; decoy ids
+  ride along on the member's next ack, so the box self-cleans with no extra
+  wallet prompt.
+- **Size padding** — requests padded to a 2 KiB block (all ops one size);
+  replies padded so enrolled and unenrolled `bundle` lookups match.
+- **Constant-rate polling** — the scheduler takes only (state, config, clock),
+  so mailbox contents cannot influence when the app checks.
+
+**What this changes:** "this mailbox received something at T" no longer implies
+anyone wrote to it, and "this member fetched at T" no longer implies they had
+mail or even opened the app.
+
+**What still leaks — stated plainly to members, not buried:** the relay sees the
+**source IP alongside the mailbox id**, so an operator correlating addresses
+over time can still infer who talks to whom — mixing does not close this; a
+**first message to a new contact has no decoys around it**; the prekey directory
+remains an enrollment oracle. A real mixnet/Tor transport and PIR contact
+discovery are documented as deliberately **not** built (`docs/messaging.md` §6)
+rather than half-shipped, because a half-mixnet looks like anonymity without
+providing it.
+
+27/27 mixing tests including an end-to-end run against the real relay route and
+proof that v1 envelopes already on disk still deliver; existing `tests/mailbox.ts`
+9 passing unchanged; gate `tests/sentinel/f63-mixing-check.sh` 15/15.
+
 ## F91 (Steps 1–2) — master-secret rooting groundwork (2026-08-12e)
 
 Epic 11 shipped a recovery UX that is honest about being local — but the

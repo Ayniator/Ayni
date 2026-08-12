@@ -1,0 +1,4 @@
+# Playwright run artefacts (traces, screenshots, HTML report). Regenerated on
+# every run; never committed.
+.results/
+.report/

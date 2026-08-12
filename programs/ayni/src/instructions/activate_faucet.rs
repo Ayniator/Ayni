@@ -3,6 +3,73 @@ use anchor_lang::prelude::*;
 use crate::errors::AyniError;
 use crate::state::{Circle, FaucetJar, Membership, Nullifier, WingPeer, FAUCET_AMOUNT_COOLDOWN};
 
+/// The economics of one faucet grant, shared verbatim by BOTH activation paths
+/// (the deprecated named path below and the anonymous `activate_faucet_zk`).
+///
+/// Extracted so the two can never drift: this is the whole of what a grant
+/// *costs* and *pays*, lifted out of `activate_faucet` unchanged —
+///
+///   1. the uniformity cooldown (only once a jar has started paying),
+///   2. the amount: always exactly `jar.grant_lamports`, never a caller value,
+///   3. the rent-exempt floor the jar must keep,
+///   4. the lamport move, jar → recipient,
+///   5. the `granted` counter.
+///
+/// Statement-for-statement identical to the pre-F35 inline body, in the same
+/// order, with the same errors and the same saturating arithmetic; the only
+/// change is that `now`, the jar and the recipient arrive as parameters instead
+/// of being read off one specific `Context`. Whoever is allowed to *call* a
+/// grant is decided by the caller — that is the only thing the two paths differ
+/// on, and the difference is deliberate.
+pub(crate) fn pay_uniform_grant(
+    jar: &mut Account<'_, FaucetJar>,
+    recipient: &AccountInfo<'_>,
+    now: i64,
+) -> Result<()> {
+    // Uniformity guard: once a jar has started paying, a retuned amount waits
+    // out FAUCET_AMOUNT_COOLDOWN, so the Treasurer cannot set a distinctive
+    // value for one neophyte's activation and restore it afterwards. A jar that
+    // has never granted is simply being configured — nobody to single out yet,
+    // and a circle should not have to wait a day to welcome its first member.
+    if jar.granted > 0 {
+        require!(
+            now.saturating_sub(jar.amount_changed_at) >= FAUCET_AMOUNT_COOLDOWN,
+            AyniError::FaucetAmountCooling
+        );
+    }
+
+    // Pay exactly the uniform grant, preserving the jar account's rent floor.
+    let amount = jar.grant_lamports;
+    let jar_info = jar.to_account_info();
+    let floor = Rent::get()?.minimum_balance(FaucetJar::SPACE);
+    let available = jar_info.lamports().saturating_sub(floor);
+    require!(available >= amount, AyniError::FaucetInsufficient);
+
+    **jar_info.try_borrow_mut_lamports()? -= amount;
+    **recipient.try_borrow_mut_lamports()? += amount;
+
+    jar.granted = jar.granted.saturating_add(1);
+    Ok(())
+}
+
+/// **DEPRECATED (F35 → Epic 2): use `activate_faucet_zk` instead.**
+///
+/// This path is retained only so that a parrain whose device does not hold a ZK
+/// voting key (a membership minted before anonymous identities, or a member
+/// proving from a second device) can still welcome their neophyte. It leaks the
+/// sponsor edge and the client MUST prefer the anonymous path whenever
+/// `haveVotingKey(parrain)` is true (`frontend/lib/faucet.ts`). Nothing new
+/// should be built on it; when every live membership carries a device secret it
+/// can be deleted outright.
+///
+/// What it leaks, precisely — an observer of one such transaction reads:
+/// the parrain's *wallet* (fee-payer + signer), the parrain's *commitment*
+/// (`parrain_membership`'s PDA seeds), the neophyte's *commitment* and *wallet*,
+/// and a program-asserted claim that the first sponsors the second. That is the
+/// sponsor edge Epic 2 exists to abolish, published by us, with a lamport
+/// transfer between the two parties on top. `activate_faucet_zk` asserts none of
+/// it: no parrain account of any kind appears in the transaction.
+///
 /// The parrain activates the Circle's faucet for the neophyte they sponsor —
 /// exactly once, ever (Trust Platform Epic 0).
 ///
@@ -31,7 +98,8 @@ use crate::state::{Circle, FaucetJar, Membership, Nullifier, WingPeer, FAUCET_AM
 ///
 /// Documented pilot limitation (Epic 0 → Epic 2): the transaction publicly links
 /// the parrain's wallet to the neophyte's — as does the WingPeer record it rests
-/// on. The fully anonymous form (ZK vouch-proof + relayer) lands with Epic 2.
+/// on. The fully anonymous form (ZK vouch-proof + relayer) **has now shipped** as
+/// `activate_faucet_zk`; this path remains only as the fallback described above.
 pub fn activate_faucet(ctx: Context<ActivateFaucet>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
 
@@ -66,30 +134,10 @@ pub fn activate_faucet(ctx: Context<ActivateFaucet>) -> Result<()> {
         AyniError::WalletMismatch
     );
 
-    // Uniformity guard: once a jar has started paying, a retuned amount waits
-    // out FAUCET_AMOUNT_COOLDOWN, so the Treasurer cannot set a distinctive
-    // value for one neophyte's activation and restore it afterwards. A jar that
-    // has never granted is simply being configured — nobody to single out yet,
-    // and a circle should not have to wait a day to welcome its first member.
-    if ctx.accounts.jar.granted > 0 {
-        require!(
-            now.saturating_sub(ctx.accounts.jar.amount_changed_at) >= FAUCET_AMOUNT_COOLDOWN,
-            AyniError::FaucetAmountCooling
-        );
-    }
-
-    // Pay exactly the uniform grant, preserving the jar account's rent floor.
-    let amount = ctx.accounts.jar.grant_lamports;
-    let jar_info = ctx.accounts.jar.to_account_info();
-    let floor = Rent::get()?.minimum_balance(FaucetJar::SPACE);
-    let available = jar_info.lamports().saturating_sub(floor);
-    require!(available >= amount, AyniError::FaucetInsufficient);
-
-    **jar_info.try_borrow_mut_lamports()? -= amount;
-    **ctx.accounts.recipient.try_borrow_mut_lamports()? += amount;
-
-    ctx.accounts.jar.granted = ctx.accounts.jar.granted.saturating_add(1);
-    Ok(())
+    // Cooldown + uniform amount + rent floor + transfer + counter — the shared
+    // economics, identical in both activation paths.
+    let recipient = ctx.accounts.recipient.to_account_info();
+    pay_uniform_grant(&mut ctx.accounts.jar, &recipient, now)
 }
 
 #[derive(Accounts)]

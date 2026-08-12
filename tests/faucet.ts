@@ -160,6 +160,37 @@ describe("ayni — gas faucet (Epic 0)", () => {
       .signers([signer])
       .rpc();
 
+  // F35 → Epic 2: the ANONYMOUS activation path. Builds the instruction with a
+  // caller-supplied root/nullifier/proof; the real-proof e2e lives with the
+  // browser-ZK suite (tests/vote.ts), so what is exercised here is the gate
+  // order, the shared one-shot, and the account SHAPE — which is the whole
+  // Traditions point: no parrain account of any kind may appear.
+  const activateZkIx = (
+    neophyteCommitment: Buffer,
+    recipient: anchor.web3.PublicKey,
+    root: Buffer,
+    recentRoots: anchor.web3.PublicKey | null = null
+  ) =>
+    program.methods
+      .activateFaucetZk(
+        [...root] as any,
+        [...makeCommitment()] as any, // nullifier — the PROOF is what must match
+        new Array(64).fill(0) as any,
+        new Array(128).fill(0) as any,
+        new Array(64).fill(0) as any
+      )
+      .accounts({
+        circle: circleA,
+        memberTree: memberTreeA,
+        recentRoots,
+        neophyteMembership: membershipPda(neophyteCommitment),
+        wingPeer: wingPeerPda(neophyteCommitment),
+        grantNullifier: grantNullifierPda(neophyteCommitment),
+        jar: jarA,
+        recipient,
+        payer: payer.publicKey,
+      });
+
   const transferTo = async (to: anchor.web3.PublicKey, lamports: number) => {
     const tx = new anchor.web3.Transaction().add(
       anchor.web3.SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: to, lamports })
@@ -310,6 +341,80 @@ describe("ayni — gas faucet (Epic 0)", () => {
   it("refuses paying any wallet other than the neophyte's own (WalletMismatch)", async () => {
     const elsewhere = anchor.web3.Keypair.generate().publicKey;
     await expectFail(activate(cNeo2, cParrain, elsewhere, parrainOwner), "WalletMismatch");
+  });
+
+  // --- 7. activate_faucet_zk — the anonymous path (F35 → Epic 2) --------------
+  //
+  // The Traditions fix: the grant no longer requires the parrain to sign, so the
+  // transaction cannot publish "this wallet sponsors that neophyte". These cases
+  // pin the properties that survive without a real proof; the real-proof e2e is
+  // the browser-ZK suite's job (tests/vote.ts).
+
+  it("the anonymous activation names NO parrain — not a wallet, not a commitment", async () => {
+    const treeRoot = Buffer.from(
+      (await program.account.memberTree.fetch(memberTreeA)).root as any as number[]
+    );
+    const ix = await activateZkIx(cNeo2, neo2Owner.publicKey, treeRoot).instruction();
+    const keys = ix.keys.map((k) => k.pubkey.toBase58());
+
+    // The parrain's membership PDA, their commitment-derived accounts and their
+    // wallet are all absent. The ONLY membership in the transaction is the
+    // neophyte's, and the only signer is the fee-payer (a relayer in production).
+    assert.notInclude(keys, membershipPda(cParrain).toBase58(), "no parrain membership account");
+    assert.notInclude(keys, parrainOwner.publicKey.toBase58(), "no parrain wallet");
+    assert.include(keys, membershipPda(cNeo2).toBase58(), "the neophyte's own membership is present");
+    assert.equal(
+      ix.keys.filter((k) => k.isSigner).length,
+      1,
+      "exactly one signer — the fee-payer, whose signature means only 'paid the fee'"
+    );
+    assert.isTrue(ix.keys[8].isSigner, "and it sits at the payer index the relay policy pins");
+  });
+
+  it("refuses a root that is neither current nor recent, before any proof work", async () => {
+    await expectFail(
+      activateZkIx(cNeo2, neo2Owner.publicKey, makeCommitment()).rpc(),
+      "RootNotRecent"
+    );
+  });
+
+  it("refuses a garbage proof against the CURRENT root (no proof, no gas)", async () => {
+    const treeRoot = Buffer.from(
+      (await program.account.memberTree.fetch(memberTreeA)).root as any as number[]
+    );
+    const jarBefore = await balance(jarA);
+    await expectFail(activateZkIx(cNeo2, neo2Owner.publicKey, treeRoot).rpc(), "VoteProofInvalid");
+    assert.equal(await balance(jarA), jarBefore, "the jar paid nothing");
+  });
+
+  it("shares the one-shot with the named path — the two forms cannot be stacked", async () => {
+    // cNeo1 already took its grant through `activate_faucet`; the SAME
+    // ["faucetnull", circle, commitment] PDA refuses the anonymous form too,
+    // at account validation, before the root gate.
+    const treeRoot = Buffer.from(
+      (await program.account.memberTree.fetch(memberTreeA)).root as any as number[]
+    );
+    await expectFail(activateZkIx(cNeo1, neo1Owner.publicKey, treeRoot).rpc());
+    const jar = await program.account.faucetJar.fetch(jarA);
+    assert.equal(jar.granted.toNumber(), 1, "still exactly one grant for that neophyte");
+  });
+
+  it("still refuses a recipient that is not the neophyte's own wallet", async () => {
+    const treeRoot = Buffer.from(
+      (await program.account.memberTree.fetch(memberTreeA)).root as any as number[]
+    );
+    const elsewhere = anchor.web3.Keypair.generate().publicKey;
+    await expectFail(activateZkIx(cNeo2, elsewhere, treeRoot).rpc(), "WalletMismatch");
+  });
+
+  it("still refuses a neophyte with no wallet bound", async () => {
+    const treeRoot = Buffer.from(
+      (await program.account.memberTree.fetch(memberTreeA)).root as any as number[]
+    );
+    await expectFail(
+      activateZkIx(cUnset, unsetGuardian.publicKey, treeRoot).rpc(),
+      "NeophyteWalletUnset"
+    );
   });
 
   // --- 8. refill_faucet guards -------------------------------------------------
