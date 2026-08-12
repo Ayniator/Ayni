@@ -83,7 +83,11 @@ function TwelveMenu() {
       >
         {t("nav.twelve")} <span className="nav-caret" aria-hidden="true">▾</span>
       </button>
-      <span className={`nav-drop${open ? " is-open" : ""}`} role="menu">
+      <span className={`nav-drop nav-drop-twelve${open ? " is-open" : ""}`} role="menu">
+        {/* Shown while the member is still choosing — decorative, so it carries
+            an empty alt and stays out of the tab order. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/images/A-H-A.png" alt="" className="nav-drop-art" aria-hidden="true" />
         <Link href="/twelve-steps" role="menuitem" onClick={() => setOpen(false)}>
           {t("nav.twelveSteps")}
         </Link>
