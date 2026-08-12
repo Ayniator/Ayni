@@ -7,19 +7,25 @@ const WalletMultiButton = dynamic(
   async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton,
   {
     ssr: false,
-    loading: () => (
-      <span className="wallet-fallback">
-        <SolanaMark /> Connect Wallet
-      </span>
-    ),
+    loading: () => <span className="wallet-fallback">Connect Wallet</span>,
   }
 );
 
 export default function WalletButton() {
   return (
     <span className="sol-wallet">
-      <span className="sol-badge" aria-hidden="true"><SolanaMark /></span>
       <WalletMultiButton />
+    </span>
+  );
+}
+
+/** The Solana mark in its badge — rendered by the nav immediately before the
+ *  network selector, so the chain mark reads as a label for the cluster combo
+ *  ("Solana · Devnet") instead of decorating the wallet button. */
+export function SolanaBadge() {
+  return (
+    <span className="sol-badge" aria-hidden="true">
+      <SolanaMark />
     </span>
   );
 }

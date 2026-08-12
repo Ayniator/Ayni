@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BrandAyni from "./BrandAyni";
 import NotificationsBell from "./NotificationsBell";
-import WalletButton from "./WalletButton";
+import WalletButton, { SolanaBadge } from "./WalletButton";
 import FoundationNavLink from "./FoundationNavLink";
 import InboxNavLink from "./InboxNavLink";
 import SettingsControls from "./SettingsControls";
@@ -40,6 +40,8 @@ export default function Nav() {
         <NotificationsBell />
         <SettingsControls />
         <WalletButton />
+        {/* The Solana mark sits with the cluster it names, not on the wallet. */}
+        <SolanaBadge />
         <NetworkSelector />
       </div>
     </header>
