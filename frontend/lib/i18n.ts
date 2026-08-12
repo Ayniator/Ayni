@@ -113,7 +113,7 @@ const en: Record<string, string> = {
 };
 
 const fr: Dict = {
-  "nav.find": "Trouver un Cercle",
+  "nav.find": "Trouvez votre Cercle",
   "nav.reflections": "Réflexions du jour",
   "nav.documents": "Documents",
   "nav.board": "Tableau",
@@ -130,7 +130,7 @@ const fr: Dict = {
 };
 
 const es: Dict = {
-  "nav.find": "Buscar un Círculo",
+  "nav.find": "Encuentra tu Círculo",
   "nav.reflections": "Reflexiones diarias",
   "nav.documents": "Documentos",
   "nav.board": "Tablón",
@@ -147,7 +147,7 @@ const es: Dict = {
 };
 
 const se: Dict = {
-  "nav.find": "Gávdne biire",
+  "nav.find": "Gávnna iežat Gierddu",
   "nav.reflections": "Beaivválaš jurdagat",
   "nav.documents": "Dokumeanttat",
   "nav.board": "Diehtotávval",
@@ -164,7 +164,7 @@ const se: Dict = {
 };
 
 const th: Dict = {
-  "nav.find": "ค้นหาวง",
+  "nav.find": "ค้นหาวงของคุณ",
   "nav.reflections": "บทใคร่ครวญประจำวัน",
   "nav.documents": "เอกสาร",
   "nav.board": "กระดาน",
@@ -181,7 +181,7 @@ const th: Dict = {
 };
 
 const hi: Dict = {
-  "nav.find": "एक मंडली खोजें",
+  "nav.find": "अपना मंडल खोजें",
   "nav.reflections": "दैनिक चिंतन",
   "nav.documents": "दस्तावेज़",
   "nav.board": "बोर्ड",
@@ -198,7 +198,7 @@ const hi: Dict = {
 };
 
 const zh: Dict = {
-  "nav.find": "寻找圈子",
+  "nav.find": "寻找你的圆圈",
   "nav.reflections": "每日省思",
   "nav.documents": "文件",
   "nav.board": "公告板",
@@ -215,7 +215,7 @@ const zh: Dict = {
 };
 
 const de: Dict = {
-  "nav.find": "Einen Kreis finden",
+  "nav.find": "Finde deinen Kreis",
   "nav.reflections": "Tägliche Besinnung",
   "nav.documents": "Dokumente",
   "nav.board": "Pinnwand",
@@ -232,7 +232,7 @@ const de: Dict = {
 };
 
 const sv: Dict = {
-  "nav.find": "Hitta en Krets",
+  "nav.find": "Hitta din cirkel",
   "nav.reflections": "Dagliga reflektioner",
   "nav.documents": "Dokument",
   "nav.board": "Anslagstavla",
@@ -249,7 +249,7 @@ const sv: Dict = {
 };
 
 const nb: Dict = {
-  "nav.find": "Finn en Sirkel",
+  "nav.find": "Finn din sirkel",
   "nav.reflections": "Daglige refleksjoner",
   "nav.documents": "Dokumenter",
   "nav.board": "Oppslagstavle",
@@ -266,7 +266,7 @@ const nb: Dict = {
 };
 
 const da: Dict = {
-  "nav.find": "Find en Kreds",
+  "nav.find": "Find din Cirkel",
   "nav.reflections": "Daglige refleksioner",
   "nav.documents": "Dokumenter",
   "nav.board": "Opslagstavle",
@@ -283,7 +283,7 @@ const da: Dict = {
 };
 
 const ar: Dict = {
-  "nav.find": "ابحث عن حلقة",
+  "nav.find": "ابحث عن دائرتك",
   "nav.reflections": "تأملات يومية",
   "nav.documents": "المستندات",
   "nav.board": "اللوحة",
@@ -300,7 +300,7 @@ const ar: Dict = {
 };
 
 const lo: Dict = {
-  "nav.find": "ຊອກຫາວົງ",
+  "nav.find": "ຊອກຫາວົງຂອງເຈົ້າ",
   "nav.reflections": "ການໄຕ່ຕອງປະຈຳວັນ",
   "nav.documents": "ເອກະສານ",
   "nav.board": "ກະດານ",
@@ -317,7 +317,7 @@ const lo: Dict = {
 };
 
 const dz: Dict = {
-  "nav.find": "སྐོར་ལ་འཚོལ",
+  "nav.find": "ཁྱོད་ཀྱི་ སྐོར་ཚོགས་ འཚོལ",
   "nav.reflections": "ཉིན་བསྟར་བསམ་གཞིགས",
   "nav.documents": "ཡིག་ཆ",
   "nav.board": "གསལ་བྱང",
@@ -334,7 +334,7 @@ const dz: Dict = {
 };
 
 const bo: Dict = {
-  "nav.find": "སྐོར་ལ་འཚོལ་བ",
+  "nav.find": "ཁྱེད་ཀྱི་དཀྱིལ་འཁོར་འཚོལ།",
   "nav.reflections": "ཉིན་རེའི་བསམ་གཞིགས",
   "nav.documents": "ཡིག་ཆ",
   "nav.board": "གསལ་བྱང",
@@ -351,7 +351,7 @@ const bo: Dict = {
 };
 
 const my: Dict = {
-  "nav.find": "အသိုင်းအဝိုင်းရှာရန်",
+  "nav.find": "သင့်အဝိုင်းကို ရှာပါ",
   "nav.reflections": "နေ့စဉ်ဆင်ခြင်ချက်",
   "nav.documents": "စာရွက်စာတမ်းများ",
   "nav.board": "ဘုတ်",
@@ -368,7 +368,7 @@ const my: Dict = {
 };
 
 const vi: Dict = {
-  "nav.find": "Tìm một Vòng tròn",
+  "nav.find": "Tìm Vòng tròn của bạn",
   "nav.reflections": "Suy ngẫm hằng ngày",
   "nav.documents": "Tài liệu",
   "nav.board": "Bảng tin",
@@ -385,7 +385,7 @@ const vi: Dict = {
 };
 
 const tl: Dict = {
-  "nav.find": "Maghanap ng Bilog",
+  "nav.find": "Hanapin ang Iyong Bilog",
   "nav.reflections": "Pang-araw-araw na Pagninilay",
   "nav.documents": "Mga Dokumento",
   "nav.board": "Pisara",
@@ -402,7 +402,7 @@ const tl: Dict = {
 };
 
 const qu: Dict = {
-  "nav.find": "Muyuta Maskay",
+  "nav.find": "Muyuykita Maskay",
   "nav.reflections": "Sapa P'unchaw Yuyaykuna",
   "nav.documents": "Qillqakuna",
   "nav.board": "Willakuna",
