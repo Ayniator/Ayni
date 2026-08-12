@@ -37,12 +37,49 @@ LATEST="$REPORTS/latest.md"
 
 say() { printf '%s\n' "$*" >&2; }
 
+OVERRIDES="$REPORTS/OVERRIDES.md"
+
 if [ -n "${SENTINEL_OVERRIDE:-}" ]; then
+  # An override recorded only in a terminal is worthless: several sessions share
+  # one git identity here, so "who overrode this, and why" is unanswerable after
+  # the fact. (That weakness was raised against the first version of this gate,
+  # and it was right.) An override must therefore leave a trace IN THE REPO:
+  # at least one commit being pushed has to touch reports/sentinel/OVERRIDES.md.
+  # That makes every override attributable to a commit, reviewable in the diff,
+  # and impossible to use silently.
+  range_touches_log=0
+  while read -r _local_ref local_sha _remote_ref remote_sha; do
+    [ -z "${local_sha:-}" ] && continue
+    case "$local_sha" in *[!0]*) : ;; *) continue ;; esac   # skip deletions
+    if [ -z "${remote_sha:-}" ] || case "$remote_sha" in *[!0]*) false ;; *) true ;; esac; then
+      rng="$local_sha"                       # new branch: inspect the tip only
+    else
+      rng="$remote_sha..$local_sha"
+    fi
+    if git diff --name-only "$rng" 2>/dev/null | grep -q '^reports/sentinel/OVERRIDES.md$'; then
+      range_touches_log=1
+    fi
+  done < /dev/stdin
+
+  if [ "$range_touches_log" -ne 1 ]; then
+    say ""
+    say "  BLOCKED: SENTINEL_OVERRIDE was set, but no commit in this push records it."
+    say ""
+    say "  An override must be auditable. Append an entry to:"
+    say "    $OVERRIDES"
+    say "  naming the commit(s), the reason, and what was NOT reviewed — then"
+    say "  commit that file and push again."
+    say ""
+    say "  Rationale: several sessions share one git identity in this repo, so an"
+    say "  override that lives only in a terminal cannot be attributed to anyone."
+    say ""
+    exit 1
+  fi
+
   say ""
-  say "  Sentinel push gate OVERRIDDEN."
+  say "  Sentinel push gate OVERRIDDEN — and recorded in $OVERRIDES."
   say "  Reason given: ${SENTINEL_OVERRIDE}"
-  say "  This is recorded only here, in your terminal. If the reason was not a"
-  say "  good one, the next Sentinel round is where it surfaces."
+  say "  The next Sentinel round reviews that entry."
   say ""
   exit 0
 fi

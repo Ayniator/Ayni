@@ -141,11 +141,22 @@ describe("ayni — F54 recent roots / epochs + F56 fellowship anchor", () => {
   // --- F54b: epoch rebuild = good-standing set ------------------------------
   it("begin_member_epoch + reinsert_member: live members re-enter, expired do not, duplicates refused", async () => {
     const parent = anchor.web3.Keypair.generate().publicKey;
-    const circle = await initCircle(parent, "epoch-circle", 2); // 2-second memberships
+    // Membership TTL. This must be comfortably LONGER than everything cLive has
+    // to survive between its issuance and the reinsert call: the mandatory
+    // >1s separation below, plus two on-chain confirmations. The original 2s
+    // left ~370ms of margin before confirmation latency was even counted, so on
+    // a 2-vCPU box cLive was genuinely expired by the time reinsert landed and
+    // the test failed with MembershipExpired (6001) on its first
+    // expected-to-succeed call — a test racing itself, not a program bug.
+    // (Sentinel known_flaky: epic2-reinsert-timing.) The cost of the wider
+    // margin is that cDead now takes TERM_SECS+0.5s to expire.
+    const TERM_SECS = 12;
+    const circle = await initCircle(parent, "epoch-circle", TERM_SECS);
     const cLive = makeCommitment();
     const cDead = makeCommitment();
     await issue(circle, cDead, anchor.web3.Keypair.generate().publicKey);
-    await new Promise((r) => setTimeout(r, 2500)); // cDead expires
+    await new Promise((r) => setTimeout(r, TERM_SECS * 1000 + 500)); // cDead expires
+    const liveIssuedAt = Date.now();
     await issue(circle, cLive, anchor.web3.Keypair.generate().publicKey);
     // Separate the issuance from the rebuild by >1s so cLive.issued_at is
     // strictly < epoch_started_at (reinsert's predate-the-epoch guard uses
@@ -178,6 +189,16 @@ describe("ayni — F54 recent roots / epochs + F56 fellowship anchor", () => {
         })
         .rpc();
 
+    // If this ever fails with MembershipExpired again, the margin — not the
+    // program — is what regressed: raise TERM_SECS rather than relaxing the
+    // assertion. Surfacing the elapsed time makes that diagnosable from the
+    // failure output alone, instead of needing instrumentation.
+    const elapsed = Date.now() - liveIssuedAt;
+    assert.isBelow(
+      elapsed,
+      TERM_SECS * 1000,
+      `cLive must still be live at reinsert: ${elapsed}ms elapsed of a ${TERM_SECS * 1000}ms term`
+    );
     await reinsert(cLive);
     c = await program.account.circle.fetch(circle);
     assert.equal(Number(c.memberCount), 1, "the live member re-entered");
