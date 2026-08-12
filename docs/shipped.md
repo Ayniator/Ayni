@@ -113,6 +113,66 @@ commitment, uniform amount, own wallet, own jar; the faucet's real bound is the
 membership door). Relayer IP/timing, self-pay fallback, and proof-replay timing
 are enumerated in `docs/faucet.md` § "What an observer can and cannot infer".
 
+> **Superseded in part by F35-R2 (below).** The self-endorsement capability
+> described in the paragraph above is closed, and the claim that restoring the
+> ceremony needs a new ceremony (F44) is refuted. The residual `WingPeer` /
+> commitment-level sponsor edge stands, and is now a *record* rather than a
+> guess.
+
+## F35-R2 (Traditions fix, round 2) — mandatory sponsorship, still anonymous
+
+F35 bought the right thing and dropped one property on the way. Replacing the
+parrain's **signature** with a proof of "SOME member of the tree endorses"
+removed the sponsor's wallet from the transaction — the whole point — but the
+named path had a structural guarantee the anonymous one did not: `establish_wing_peer`
+refuses `mentee == wing`, so a member could never serve themselves. An anonymous
+"some member" proof let an admitted neophyte endorse their **own** first gas.
+
+**Shipped:** the proof's `root` is no longer the Circle's member tree. It must
+equal `single_leaf_root(wing_peer.wing)` — a depth-20 Merkle root the **program**
+computes from the bond's own `wing` commitment (single leaf at index 0, zero
+siblings) — so the only witness that satisfies it is a secret `s` with
+`Poseidon(s) == wing`. Mandatory sponsorship restored, still with **no sponsor
+account, no sponsor wallet, no sponsor signature and no transfer** in the
+transaction.
+
+| Piece | Where | Verified |
+|---|---|---|
+| `merkle::single_leaf_root` + `static WING_ZEROS` (`.rodata`, 0 stack) | `programs/ayni/src/merkle.rs` | `cargo test -p ayni --lib` 20/20; `anchor build` clean, **no SBF stack-frame warning** |
+| The gate: `require!(root == single_leaf_root(wing_peer.wing), EndorsementNotByWing)` — a **replacement** of the member-tree/F54-ring check, never an extra `\|\|` arm | `instructions/activate_faucet_zk.rs` | code, built; `tests/sentinel/f35r2-wing-gate.sh` 9/9 |
+| Table integrity `WING_ZEROS[i] == zeros(20)[i]`, fold == a fresh tree with one leaf, injectivity, and "a wing root is never a real member-tree root" | `programs/ayni/src/proptests.rs` | 4 new host tests, all pass |
+| Client `proveWingEndorsement` (no roster rebuild, no `note_root` crank — a tree of one never goes stale) | `frontend/lib/zk-vote.ts` | `tsc --noEmit` clean |
+| `activateFaucetAnonymously` refetches the bond and passes `recentRoots: null` | `frontend/lib/faucet.ts` | `tsc --noEmit` clean |
+| Rejection cases: member-tree root, an unrelated member's tree-of-one, the neophyte's own tree-of-one, a second self-endorsement shape — all `EndorsementNotByWing`; only the wing's root reaches the pairing | `tests/faucet.ts` §7a | written; **not executed** (needs a local validator) |
+
+**No new circuit, no new ceremony, no IDL shape change.** `member_vote.circom`
+constrains only `root === cur[depth]` and never learns which set `root` denotes,
+so 100% of that meaning lives in the program's root check — repointing it is a
+program-side change and nothing else. `VERIFYING_KEY_VOTE` unchanged; **F44 stays
+out of scope**. Instruction args, account count (10) and `payerIndex` (8) are
+unchanged, so `frontend/lib/relayPolicy.ts` needs **no** edit — deliberately, since
+a policy/program skew would make the relayer refuse and the UI fall back to the
+named path, republishing the sponsor wallet.
+
+**Privacy baseline change — deliberate, and documented in the same change.** The
+`root` argument is now a deterministic public function of the wing's commitment,
+so the endorsement's commitment-level anonymity set is **1**: what used to be a
+*guess* (via the world-readable `WingPeer`) is now a *record* of the wing acting
+at that slot. You cannot have the program enforce that the wing endorsed without
+the chain recording it. The **wallet** layer — the F35 win — is untouched.
+`docs/faucet.md` § "What an observer can and cannot infer" is rewritten
+accordingly, and its old claim that restoring the ceremony needed **F44** is
+explicitly refuted there.
+
+**Accepted costs, all written into the code's doc comments:** the wing is no
+longer proved to be in the member tree, so an expired / revoked / not-reinserted
+— and now also a **provisional** — commitment can endorse (parity with the named
+path; descoped for this round, not overlooked); the wing becomes a single point of
+failure for a one-shot grant, with the deprecated named path as the only fallback;
+and after **F27** retires the public bond, this `root` would still arithmetically
+name the wing, so F27 must replace the check with an in-circuit bond proof or it
+silently regresses.
+
 ## F62 / F69 — a mark instead of a face (2026-08-12g)
 
 An anonymity-first fellowship was asking members to upload a photograph of their

@@ -579,3 +579,159 @@ proptest! {
         prop_assert_ne!(e, n1);
     }
 }
+
+// ---------------------------------------------------------------------------
+// 8. F35-R2 — the wing's "tree of one" (mandatory sponsorship, still anonymous)
+// ---------------------------------------------------------------------------
+//
+// `activate_faucet_zk` no longer accepts a proof against the Circle's member
+// tree; it accepts one against `merkle::single_leaf_root(wing_peer.wing)`.
+// These pin the three things that gate has to be true for:
+//
+//   * the const zeros table really is `zeros(20)` (a wrong table would make
+//     every honest proof fail, and — worse — would silently disagree with the
+//     browser prover's `MemberTree.create(20)`);
+//   * the fold is byte-identical to inserting one leaf into a fresh tree, which
+//     is exactly what the browser prover does before calling `proveVote`;
+//   * the map is INJECTIVE over commitments, which is what makes "only the
+//     wing's secret satisfies this root" mean anything — and in particular
+//     `single_leaf_root(mentee) != single_leaf_root(wing)`, i.e. a neophyte
+//     cannot self-endorse.
+
+/// The `.rodata` table must equal `zeros(20)` byte for byte. Not a property
+/// test: it is one fixed comparison and it must never be skipped.
+#[test]
+fn wing_zeros_table_matches_computed_zeros() {
+    let z = merkle::zeros(20).unwrap();
+    for i in 0..20 {
+        assert_eq!(
+            merkle::WING_ZEROS[i], z[i],
+            "WING_ZEROS[{i}] diverges from zeros(20)[{i}] — every wing endorsement would fail"
+        );
+    }
+}
+
+/// `single_leaf_root(c)` == the root of a fresh depth-20 tree after inserting
+/// `c` at index 0 — i.e. the table fold and the incremental tree agree. This is
+/// the on-chain half of the byte-compatibility contract with the browser's
+/// `MemberTree.create(20).insert(c)`.
+#[test]
+fn single_leaf_root_matches_a_fresh_tree_with_one_leaf() {
+    for seed in [0u8, 1, 7, 255] {
+        let mut leaf = [0u8; 32];
+        leaf[31] = seed;
+        leaf[0] = 0x0f; // stay in field
+
+        let mut next_index = 0u64;
+        let mut root = [0u8; 32];
+        let mut filled = [[0u8; 32]; MAX_DEPTH];
+        merkle::init_tree(20, &mut next_index, &mut root, &mut filled).unwrap();
+        merkle::insert_leaf(20, &mut next_index, &mut root, &mut filled, leaf).unwrap();
+
+        assert_eq!(merkle::single_leaf_root(&leaf).unwrap(), root);
+    }
+}
+
+/// CROSS-LANGUAGE PIN. The browser prover (`frontend/lib/zk-vote.ts`,
+/// `proveWingEndorsement`) and the test suite (`tests/faucet.ts`,
+/// `singleLeafRoot`) build this root with circomlibjs. If the two folds ever
+/// diverge — a different zeros convention, a different endianness, a different
+/// leaf position — every honest wing endorsement stops verifying and the ONLY
+/// symptom is `VoteProofInvalid`, which looks exactly like an attack.
+///
+/// The expected value was computed independently with circomlibjs:
+///
+/// ```js
+/// let cur = BigInt("0x" + leafHex), z = 0n;
+/// for (let i = 0; i < 20; i++) { cur = h2(cur, z); z = h2(z, z); }
+/// ```
+#[test]
+fn single_leaf_root_agrees_with_circomlibjs() {
+    let mut leaf = [0u8; 32];
+    leaf[0] = 0x0f;
+    leaf[31] = 0x07;
+    let got = merkle::single_leaf_root(&leaf).unwrap();
+    let hex: String = got.iter().map(|b| format!("{b:02x}")).collect();
+    assert_eq!(
+        hex, "0d010d88dd05fdcef2e50c622e3546f0b3af763ad572e1aca767f1c501443a84",
+        "the on-chain fold diverged from the browser prover's — every wing endorsement would fail"
+    );
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(24))]
+
+    /// Deterministic, and INJECTIVE over commitments.
+    ///
+    /// Injectivity is the whole regression fix: `establish_wing_peer` refuses
+    /// `mentee == wing`, so if `single_leaf_root` never collides then the root
+    /// the program computes for the bond can never be the root a neophyte would
+    /// produce from their own secret. A self-endorsement is refused before any
+    /// pairing work, by `EndorsementNotByWing`.
+    #[test]
+    fn single_leaf_root_is_deterministic_and_injective(a in arb_field(), b in arb_field()) {
+        let ra = merkle::single_leaf_root(&a).unwrap();
+        prop_assert_eq!(ra, merkle::single_leaf_root(&a).unwrap());
+
+        if a != b {
+            // A Poseidon collision here would be a break of the same assumption
+            // the member tree already rests on.
+            prop_assert_ne!(ra, merkle::single_leaf_root(&b).unwrap());
+        }
+    }
+
+    /// A wing's root is NEVER a member-tree root: no set of real leaves folds to
+    /// the wing's tree-of-one root, so the new gate cannot be satisfied by any
+    /// proof that is valid on the OLD path (and, read the other way, a
+    /// wing-derived root could never be mistaken for a ring entry — which is why
+    /// it must never be pushed into `RecentRoots`).
+    #[test]
+    fn wing_root_is_never_a_real_member_tree_root(
+        wing in arb_field(),
+        leaves in pvec(arb_field(), 1..4),
+    ) {
+        let wing_root = merkle::single_leaf_root(&wing).unwrap();
+
+        let mut next_index = 0u64;
+        let mut root = [0u8; 32];
+        let mut filled = [[0u8; 32]; MAX_DEPTH];
+        merkle::init_tree(20, &mut next_index, &mut root, &mut filled).unwrap();
+        prop_assert_ne!(wing_root, root); // the empty tree
+
+        for (i, l) in leaves.iter().enumerate() {
+            merkle::insert_leaf(20, &mut next_index, &mut root, &mut filled, *l).unwrap();
+            // The one legitimate coincidence: a one-leaf tree whose only leaf IS
+            // the wing. That is precisely the root the program computes.
+            if i == 0 && *l == wing {
+                prop_assert_eq!(wing_root, root);
+            } else {
+                prop_assert_ne!(wing_root, root);
+            }
+        }
+    }
+}
+
+/// Sentinel NRR-2026-08-12-f60-f61-maci, CRITICAL: the two consequential MACI
+/// instructions must refuse to run while the chain cannot verify a tally.
+///
+/// `commit_maci_tally` is unverified by its own doc-comment, and
+/// `finalize_maci_round` wrote that result onto `MemberProposal.passed`, which
+/// `install_elected_seat` and `refill_faucet` consume unconditionally. Opening a
+/// round costs ONE seat signature (`require_any_seat`), so a single seat holder
+/// could have installed a Council seat or moved treasury→jar, bypassing the
+/// 4-of-7 every other consequential action requires.
+///
+/// This test fails if anyone re-enables either instruction without shipping
+/// on-chain tally verification. Do not delete it to make a demo pass.
+#[test]
+fn maci_consequential_instructions_stay_disabled() {
+    for (name, src) in [
+        ("commit_maci_tally", include_str!("instructions/commit_maci_tally.rs")),
+        ("finalize_maci_round", include_str!("instructions/finalize_maci_round.rs")),
+    ] {
+        assert!(
+            src.contains("return Err(AyniError::MaciTallyUnverified.into());"),
+            "{name} must return MaciTallyUnverified until an on-chain verified tally ships"
+        );
+    }
+}

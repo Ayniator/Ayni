@@ -2,8 +2,8 @@
 
 Trust Platform **Epic 0**: each Circle operates a faucet that grants a newly
 admitted member a small amount of SOL, **one single time, ever**, so they can
-pay their first transaction fees. Activated on an endorsement from the Circle's
-own membership, tuned by the Treasurer within a program-enforced cap, refilled
+pay their first transaction fees. Activated on an endorsement from the neophyte's
+own sponsor (their WingPeer), tuned by the Treasurer within a program-enforced cap, refilled
 only by an anonymous member vote.
 
 ## Two activation paths — and why
@@ -15,14 +15,28 @@ transaction: the **named sponsor edge** that Epic 2 exists to abolish, published
 by us (Sentinel R2). It was the sharpest Traditions tension in shipped code.
 
 `activate_faucet_zk` replaces it. The endorsement is a **Groth16 proof instead
-of a signature** — "some member of this Circle's tree endorses first gas for
-this neophyte" — and the transaction contains no parrain account, no parrain
-commitment, no parrain wallet and no assertion about who they are.
+of a signature**, and the transaction contains no parrain account, no parrain
+wallet, no parrain signature and no transfer between members.
+
+**F35-R2 — what changed in this round.** F35 as first shipped proved only *"some
+member of this Circle's tree endorses"*. That dropped the one structural property
+the named path had: `establish_wing_peer` refuses `mentee == wing`, so a member
+could never serve themselves. An anonymous "some member" proof let an admitted
+neophyte endorse their **own** first gas — the ceremony became optional in code,
+not merely in spirit. It is now closed. The proof's `root` must equal
+`single_leaf_root(wing_peer.wing)` — a depth-20 Merkle root the **program**
+computes from the bond's own `wing` commitment, with a single leaf and zero
+siblings — so the only witness that satisfies it is a secret `s` with
+`Poseidon(s) == wing`. **Mandatory sponsorship is restored, with no sponsor
+account and no sponsor wallet in the transaction, and with no new circuit and no
+new trusted setup.** The circuit constrains only `root === cur[depth]` and never
+learns which set `root` denotes, so 100% of that meaning lives in the program's
+root check; repointing it is a program-side change and nothing else.
 
 | | `activate_faucet_zk` (**preferred**) | `activate_faucet` (**deprecated**) |
 |---|---|---|
-| Endorsement | ZK proof: a member of the member tree | signature of the neophyte's designated wing |
-| Parrain in the tx | nothing | wallet (signer + fee-payer) **and** membership PDA |
+| Endorsement | ZK proof: **the neophyte's own wing** (F35-R2) | signature of the neophyte's designated wing |
+| Parrain in the tx | no account, no wallet, no signature — but the `root` argument names their **commitment** arithmetically | wallet (signer + fee-payer) **and** membership PDA |
 | Fee/rent payer | the F55 relayer | the parrain |
 | One-shot guard | `["faucetnull", circle, commitment]` | the **same** PDA — the two cannot be stacked |
 | Amount, cooldown, rent floor, recipient | identical (`pay_uniform_grant`) | identical (`pay_uniform_grant`) |
@@ -179,7 +193,7 @@ built yet.
 
 | Epic 0 requirement | Status | How / why |
 |---|---|---|
-| Parrain activates, exactly once, no one else | ✅ / 🟡 | Named path: `activate_faucet` requires a signer holding the wing membership of the neophyte's own `WingPeer`; verified by `tests/faucet.ts` (imposter member, non-wing seat both refused). Anonymous path: "exactly once" is unchanged (same nullifier PDA), but "no one else" relaxes to *any member of the tree* — the price of not naming the parrain, since `member_vote` cannot prove a WingPeer bond without a new ceremony (F44). The bond must still exist and be active |
+| Parrain activates, exactly once, no one else | ✅ | Named path: `activate_faucet` requires a signer holding the wing membership of the neophyte's own `WingPeer`; verified by `tests/faucet.ts` (imposter member, non-wing seat both refused). Anonymous path (F35-R2): "exactly once" is unchanged (same nullifier PDA) and "no one else" is **restored** — the proof must be made against `single_leaf_root(wing_peer.wing)`, so only the holder of the wing's secret can produce it. Verified by `tests/faucet.ts` §7a: the member-tree root, an unrelated member's tree-of-one, and the neophyte's own tree-of-one are all refused with `EndorsementNotByWing`, and only the wing's root reaches the pairing. It does **not** prove the wing is still in the member tree — see "good standing" below |
 | One grant enforced on-chain via nullifier tied to the identity commitment | 🟡 | Enforced (`init` collision is the refusal) — but scoped `["faucetnull", circle, commitment]`, i.e. **one grant per membership per Circle**, not "ever" fellowship-wide. The epic's "ever" is unimplementable without a linkable cross-Circle identifier, which is exactly what Tradition 12 / Epic 2 forbid; fellowship-wide dedup belongs to proof-of-personhood (F5, `require_personhood`) |
 | Treasurer is the only role able to modify the amount, within the absolute on-chain maximum | ✅ | `set_faucet_amount` gates on seat 0; `FAUCET_MAX_GRANT_LAMPORTS = 2_000_000` enforced by the program, not the UI |
 | Cap set at top-circle level, revised each equinox by top-circle vote | 🟡 | The cap is a program constant; revision = a governed program upgrade rather than a top-circle vote account. Same authority in practice (the upgrade key is governance-held); a dedicated top-circle cap PDA is future work if the fellowship wants vote-legibility for cap changes |
@@ -202,33 +216,68 @@ every PDA — which is everyone.
 
 - the Circle, the neophyte's commitment, and the neophyte's wallet (it receives
   the lamports; the recipient must equal `Membership.owner`);
-- that a member of that Circle's tree endorsed the grant, and the value
-  `Poseidon(secret, proposalId)`;
+- that the neophyte's **designated wing** endorsed the grant — and **which
+  commitment that is**. Since F35-R2 the `root` argument is
+  `single_leaf_root(wing_peer.wing)`, a deterministic public function of a
+  commitment that is itself world-readable in `WingPeer`, so anyone can
+  precompute it over the commitment set and read the endorser off the
+  transaction. The endorsement's commitment-level anonymity set is **1**;
+- the value `Poseidon(secret, proposalId)`;
 - that the *relayer* paid, plus the block time.
 
 **NOT learned:**
 
-- **which** member endorsed. The anonymity set is every leaf of the member root
-  the proof was made against;
-- any wallet belonging to the endorser. None appears, and the program asserts
-  nothing about the payer;
+- any **wallet** belonging to the endorser. None appears: no membership account
+  of theirs, no signature, no lamport transfer, and the program asserts nothing
+  about the payer. **This is the F35 win and it survives F35-R2 intact** — the
+  wallet-level sponsor edge, which is the link that deanonymises a person rather
+  than a commitment, is still abolished on this path;
 - any link between this endorsement and the same member's other anonymous acts
   — the ballot nullifier (per proposal), the admission-attestation nullifier
   (per newcomer) and this one (domain-tagged) are three independent Poseidon
-  outputs of the same secret;
-- whether the endorser was the neophyte's actual wing or some other member.
+  outputs of the same secret. One attributed sample of the wing's nullifier
+  function under one domain tag reveals nothing about their ballots,
+  attestations, personhood or visit passes;
+- that the wing is currently **in good standing**. The proof binds to a
+  commitment frozen at bond time, not to the member tree — see the good-standing
+  note below.
+
+> **Baseline change, stated loudly.** Before F35-R2 this section said the
+> anonymity set was *"every leaf of the member root"* and that *"whether the
+> endorser was the neophyte's actual wing"* was **not** learned. Both are now
+> false, deliberately. You cannot have "the program enforces that the wing
+> endorsed" without the chain recording that the wing endorsed; restoring
+> mandatory sponsorship **is** the decision to publish that fact. What is traded
+> is a *guess* becoming a *record* at the commitment layer — the WingPeer bond
+> already named the wing to anyone who looked. What is **not** traded is
+> anything at the wallet layer.
 
 **Residual correlations — stated, not waved away:**
 
-1. **The WingPeer PDA still publishes the sponsor edge at commitment level.**
-   `["wingpeer", circle, neophyte]` is derivable from the neophyte commitment
-   and world-readable, so an observer who sees the grant can look up the bond and
-   *guess* that the wing was the endorser. That guess is available whether or not
-   the faucet exists and whether or not we reference the account — it is **F27 /
-   Sentinel R2**, not F35, and it stands until Epic 2 retires the public bond.
-   What F35 removed is the harder link: the parrain's **wallet**, and the
-   program's own **assertion** that these two parties are sponsor and neophyte.
-   A guess against the full member set is not a record.
+1. **The sponsor edge is public at commitment level, and since F35-R2 the
+   endorsement is a record of it rather than a guess.** `["wingpeer", circle,
+   neophyte]` is derivable from the neophyte commitment and world-readable, so
+   the *edge* was already published independently of the faucet — that is **F27 /
+   Sentinel R2**, and it stands until Epic 2 retires the public bond. What
+   F35-R2 adds on top is a **liveness/timing record**: cryptographic evidence
+   that the holder of that commitment's secret was alive, key-holding and acting
+   at that slot. Two further honesties:
+   - the *edge* is published even more durably than `WingPeer` itself.
+     `establish_wing_peer` is `init_if_needed` and mentee-signed, so the account
+     only ever shows the **current** wing; a wing-derived `root` in ledger data
+     names the wing **at that instant, forever**, surviving a re-point or a
+     closure. That is a permanent historical sponsor record the account layer
+     deliberately does not keep;
+   - the common claim that "the sponsor's wallet is derivable in one hop anyway,
+     via `["membership", circle, wing]` → `owner`" is only *conditionally* true:
+     it fails for a fully anonymous wing whose `owner` is unset. For that member
+     F35-R2's disclosure is not covered by a pre-existing derivation.
+
+   **F27 forward-compat trap.** After F27 retires the public bond, this `root`
+   would still *arithmetically* name the wing, re-introducing by computation
+   exactly the leak F27 removes — in immutable ledger data no later work can
+   retract. F27 must replace this check with an in-circuit proof of the bond
+   (**F44**) in the same change, or it silently regresses.
 2. **The relayer sees IP + timing.** It cannot see who acted (no member
    signature ever reaches it) or the proof's witness, but it observes "someone
    at this IP caused a faucet activation at 12:03". Batching/mixing is the
@@ -247,27 +296,78 @@ every PDA — which is everyone.
    authorised, to the recipient they already fixed; the degree of freedom is
    *timing*. Accepted: adding a vouch-nullifier PDA to close it would cost a
    second rent-exempt account per grant and would make endorsements enumerable.
+   Since F35-R2 such a re-submittable proof is also trivially *attributable* (its
+   `root` names the wing), which changes nothing about what it can cause.
 5. **Timing.** F48's 15–120 s client jitter is tab-bound and weak; the treasurer
    ledger travels on its own 1–7 min delay so the two cannot be lined up.
 
-### One capability that genuinely changed hands
+### The capability that changed hands — and came back (F35-R2)
 
-The named path could not be self-served: `establish_wing_peer` refuses
-`mentee == wing`, so the signer was always someone else. An anonymous proof
-cannot be compared against the neophyte's own commitment without a circuit that
-takes both, so `activate_faucet_zk` **cannot distinguish "my sponsor endorsed
-me" from "I endorsed myself"** — a confirmed member in the tree can, through the
-relayer, take their own first gas without waiting for anyone.
+F35 as shipped lost a property the named path had. The named path could not be
+self-served (`establish_wing_peer` refuses `mentee == wing`, so the signer was
+always someone else); an anonymous "some member of the tree" proof could not tell
+*"my sponsor endorsed me"* from *"I endorsed myself"*, so a confirmed member
+could take their own first gas without waiting for anyone.
 
-Weigh it honestly. What does not change: one grant per commitment ever, the
-uniform amount, the neophyte's own wallet, their own Circle's jar, the refill
-ceiling. What the faucet is actually bounded by is the **membership door**
-(`require_personhood`, closed admission) — a Circle that lets anyone mint
-memberships could already farm its jar through sock-puppet wings, and a Circle
-that doesn't, can't. So the loss is the *ceremony* — the sponsor's act of
-welcome — not the money. Restoring it in-band needs a circuit that proves the
-WingPeer bond, which needs a new trusted setup (**F44**). A Circle that wants
-the ceremony back today keeps using the named path.
+An earlier revision of this document asserted that restoring the ceremony in-band
+*"needs a circuit that proves the WingPeer bond, which needs a new trusted setup
+(F44)"*. **That was wrong, and F35-R2 refutes it.** The bond does not have to be
+proved *inside* the circuit, because the circuit never says what `root` means:
+`member_vote.circom` constrains only `root === cur[depth]`, leaving the prover
+free to choose a root — which is worthless once the **verifier** fixes the target.
+Pinning `root` to `single_leaf_root(wing_peer.wing)`, a value the program folds
+from data it already holds, makes the only satisfying witness a secret whose
+Poseidon image is the wing's commitment. Same circuit, same `VERIFYING_KEY_VOTE`,
+same ceremony, unchanged instruction shape. F44 stays out of scope.
+
+**Claim exactly this much, and no more.** What is restored is that *a capability
+held by a commitment other than the neophyte's must be exercised.* What is **not**
+restored, and never existed on either path:
+
+- **sincerity.** A mentee can re-point their own bond (`establish_wing_peer` is
+  `init_if_needed` and mentee-signed) at a second membership whose secret they
+  hold, and endorse from that. The named path had the identical sock-puppet — the
+  attacker signs with the puppet's wallet instead. Bounded by the **membership
+  door** (`require_personhood`, closed admission, two-sponsor), never by the
+  endorsement;
+- **good standing.** `wing_peer.wing` is frozen at bond time and the wing root is
+  not epoch-scoped, so `begin_member_epoch` — whose whole purpose is that stale
+  roots stop authorising things — no longer constrains this instruction. An
+  expired, revoked or not-yet-reinserted wing can endorse. **A `provisional`
+  commitment can too**: `issue_provisional_membership` writes a `Membership` at
+  the same PDA while deliberately *not* inserting into the member tree, and
+  `establish_wing_peer` accepts any `Membership` of the Circle as a wing. Under
+  F35-as-shipped a provisional could not endorse (the tree *was* the gate); now
+  it can. This is **parity with the deprecated named path**, which never checked
+  the tree either, but it is a real loosening against the *previous ZK path*, and
+  it is **descoped for this round, not overlooked.**
+
+  Bounded loss in every one of those cases: one uniform, one-time grant to the
+  neophyte's **own** wallet, with the neophyte's own membership still required to
+  be unexpired. Do **not** "fix" it by passing the wing's `Membership` to re-check
+  standing — that is the single move that puts a sponsor account back into the
+  transaction and hands back the F35 win. The wallet-free tightenings, neither
+  taken here: require the `EpochLeaf` PDA (`issue_membership` mints none, so it
+  would strand every directly-issued sponsor), or a two-proof/equal-nullifier
+  construction (same circuit, ~250–280k CU, which needs a `ComputeBudget`
+  instruction the relayer cannot currently send).
+
+**Liveness cost, which is real.** The wing is now a single point of failure for
+the neophyte's first gas, and their ZK secret is device-bound (for a legacy
+CSPRNG identity, not shard-recoverable). F35's escape hatch — *any* tree member
+can activate — is gone by design. The remaining fallback is the deprecated named
+`activate_faucet`, where the wing signs with a **wallet** key, which *is*
+recoverable through F9/F10/F11 guardian/Council migration; the price is that it
+re-publishes the sponsor wallet edge for that grant, and the UI must say so before
+the wing takes it. Note what is **not** a fallback: re-pointing the bond.
+`establish_wing_peer` is signer-paid and is not on the relay allowlist, so a
+neophyte with an empty wallet cannot afford the transaction that would unblock
+their own first gas.
+
+**One new failure mode.** Because the mentee can re-point the bond at any moment,
+they can invalidate a proof the wing has already generated or relayed. It harms
+only the mentee, but the client must refetch `wing_peer.wing` immediately before
+proving rather than trusting cached state (`frontend/lib/faucet.ts` does).
 
 ## Pilot limitations (honest)
 
@@ -304,9 +404,12 @@ the ceremony back today keeps using the named path.
   jar is what caps the damage.
 
   The anonymous path does not widen this, and it is worth being exact about why.
-  It *does* relax "only the wing may release the grant" to "any member of the
-  tree may", but the sock-puppet attack never needed that relaxation — the
-  attacker already controlled both sides of the bond. The binding constraints are
+  Since F35-R2 it no longer relaxes "only the wing may release the grant" at all;
+  and even when it did, the sock-puppet attack never needed that relaxation — the
+  attacker already controlled both sides of the bond. What F35-R2 *does* widen
+  here is who may be a sock-puppet wing: with the member tree no longer consulted,
+  a **provisional** membership qualifies, where before it did not (parity with the
+  named path, which never checked the tree either). The binding constraints are
   unchanged: one grant per commitment, and a commitment costs a membership. The
   membership door (personhood / closed admission) is what bounds the faucet; the
   endorsement never was.

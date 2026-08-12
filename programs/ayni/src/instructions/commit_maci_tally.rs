@@ -16,6 +16,7 @@ use crate::state::{MaciRound, MaciState, MACI_STAGE_COMMITTED, MACI_STAGE_PROCES
 /// and `MaciRound.tally_hash` (the field that has sat unused since the
 /// submission layer shipped).
 #[allow(clippy::too_many_arguments)]
+#[allow(unused_variables, unreachable_code)]
 pub fn maci_tally_hash(
     round: &Pubkey,
     chain_digest: &[u8; 32],
@@ -60,20 +61,46 @@ pub fn maci_tally_hash(
 ///   witness, thanks to the Poly1305 tag) cannot open it to a different story;
 ///   one that refuses to open it has publicly refused. Either way a wrong tally
 ///   is provable, and provable by anyone, not just by the members it cheated.
-/// * The author is named — only the wallet that opened the round can sign, and
-///   `finalize_maci_round` will not write the outcome onto the proposal until
-///   the round's dispute window has elapsed.
+/// * The author is named — only the wallet that opened the round can sign it.
 ///
 /// What remains trusted: a coordinator willing to be caught can still commit a
 /// false tally, and members cannot verify their own vote was counted without
 /// destroying the receipt-freeness the whole scheme exists for. That is the
 /// honest trust delta, and docs/maci.md states it in those words.
+///
+/// **Because the tally is unverified, its result decides nothing on chain.**
+/// `finalize_maci_round` records the outcome in `MaciState` and never touches
+/// `MemberProposal.passed`, so no coordinator's claim can reach
+/// `install_elected_seat` or `refill_faucet` (Sentinel
+/// NRR-2026-08-12-f60-f61-maci, CRITICAL — the escalation path is severed at the
+/// consumer, which is stronger than disabling this instruction: it also stops a
+/// future re-enable from silently reopening it). Wiring a MACI result to an
+/// automatic consequence is gated on F44's ZK-verified tally.
+///
+/// # DISABLED ON CHAIN (Sentinel NRR-2026-08-12-f60-f61-maci, CRITICAL)
+///
+/// Two independent things now stand between an unverified tally and a
+/// consequence, and **both must hold**:
+///
+/// 1. *This guard.* The handler refuses outright with `MaciTallyUnverified`, so
+///    no tally can be committed at all until a ZK-verified tally ships (F44).
+///    The body below is kept intact so re-enabling is a deletion, not a rewrite,
+///    and accounts/layouts/IDL are untouched so it is not a migration either.
+/// 2. *The severed consumer.* `finalize_maci_round` records the outcome only in
+///    `MaciState` and never writes `MemberProposal.passed`, so even with this
+///    guard removed, a coordinator's claim cannot reach `install_elected_seat`
+///    or `refill_faucet`.
+///
+/// Do NOT remove either one to make a test or a demo pass. `tests/maci.ts`
+/// asserts both, and will fail if the guard disappears.
+#[allow(unused_variables, unreachable_code)]
 pub fn commit_maci_tally(
     ctx: Context<CommitMaciTally>,
     yes: u64,
     no: u64,
     plaintext_digest: [u8; 32],
 ) -> Result<()> {
+    return Err(AyniError::MaciTallyUnverified.into());
     let round_key = ctx.accounts.round.key();
     let state = &mut ctx.accounts.state;
 

@@ -128,4 +128,8 @@ pub enum AyniError {
     EpochWentBackwards,
     #[msg("Key-drop id must not be zero")]
     InvalidKeyDrop,
+    #[msg("First gas must be endorsed by the neophyte's own wing — prove against the wing's commitment")]
+    EndorsementNotByWing,
+    #[msg("MACI tallying is disabled: the chain cannot yet verify a tally, so its result must not decide seats or treasury")]
+    MaciTallyUnverified,
 }

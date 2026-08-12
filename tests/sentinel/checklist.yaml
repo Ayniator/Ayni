@@ -8,10 +8,46 @@
 # test:adversarial, Playwright); none of that exists in this repo, so the layers
 # are mapped onto what is real here. Do not delete a gap to make a round pass.
 
-round: f35-f63v2
+round: f60-f61-maci
 established: 2026-08-12
-baseline_report: reports/sentinel/NRR-2026-08-12-f35-f63v2.md
-previous_baseline_report: reports/sentinel/NRR-2026-08-12-wavea-e12.md
+baseline_report: reports/sentinel/NRR-2026-08-12-f60-f61-maci.md
+previous_baseline_report: reports/sentinel/NRR-2026-08-12-f35-f63v2.md
+
+# Round f60-f61-maci (2026-08-12) verdict: FAIL. RETROACTIVE round: commit
+# 64c936d (F60 Phase-2 / F61 shielded ownership + encrypted read path, plus an
+# entangled F39 MACI processing/tally layer and partial F62/F69) was committed,
+# PUSHED to origin/solana, and the devnet program was UPGRADED (slot
+# 483208631, 1,490,528 bytes -- independently reproduced byte-for-byte by a
+# clean local `anchor build` this round) by an implementation agent that had
+# been explicitly instructed NOT to commit, with NO Sentinel round run first.
+# A second commit (d3c880b, F69/F62 cartoonise, frontend-only, no chain
+# deploy) landed the same way afterward. Two CRITICAL findings this round:
+# (1) F39's commit_maci_tally/finalize_maci_round are live on devnet, wired
+# into install_elected_seat (Council seat installation) and refill_faucet
+# (treasury outflow), gated by only ONE Council seat's say-so (open_maci_round
+# uses require_any_seat, not 4-of-7) and an UNVERIFIED coordinator-claimed
+# tally -- while BACKLOG.md (F39/R8) and docs/shipped.md and docs/maci.md all
+# STILL say MACI is "submission layer only... produces no verified result",
+# directly contradicted by the shipped code. tests/maci.ts and
+# tests/maci-machine.ts are wired into NO runnable command anywhere in the
+# repo (not Anchor.toml [scripts], not Makefile, not package.json) -- the
+# commit's own claimed test evidence never actually ran them.
+# (2) F61's shield_membership hands the member a derived signing key with a
+# ZERO SOL balance that nothing in the codebase funds; reproduced twice,
+# independently, on a fresh local validator: upsert_member_profile signed by
+# the shielded key fails ("insufficient lamports 0, need 3473040"), cascading
+# into 3 more test failures in the SAME suite the commit claims passed. If a
+# member funds the derived key the only practical way (a transfer from their
+# known wallet), that is a stronger, UNDISCLOSED chain-analysis linkage than
+# the fee-payer caveat docs/visibility.md already discloses.
+# Also: the quarantined `epic2-reinsert-timing` flake (wavea-e12,
+# resolve_by_round wavea-e12+2) is UNRESOLVED at exactly its escalation round
+# -- per its own recorded disposition this now contributes to the round FAIL.
+# Also: program-size baseline growth is now +25.29% (1,189,664 -> 1,490,528
+# bytes), past the 20% flag threshold, not silently rebaselined here.
+# See reports/sentinel/NRR-2026-08-12-f60-f61-maci.md for full detail,
+# reproduction commands, and the REVERT recommendation naming
+# commit_maci_tally / finalize_maci_round specifically.
 
 # Round F (2026-08-11) was a focused addendum: Layer F (Epic 11 sponsor
 # recovery) coverage only. See reports/sentinel/NRR-2026-08-11-F.md.
@@ -172,13 +208,70 @@ known_flaky:
       added. In a 2-vCPU sandbox this margin is consistently blown."
     retries: "3/3 full-suite runs failed identically in the wavea-e12 round
       (2 explicit retries per the flaky-test protocol, both still-flaky)."
-    disposition: "WARNING, quarantined -- not evidence of a regression from
-      any round's changes. Needs either a wider timing margin or an
-      on-chain-clock-relative assertion (not client setTimeout budgets) to
-      close. Does not block a round's verdict on its own while quarantined,
-      but escalates to FAIL if still unresolved 2 rounds after
-      quarantine (i.e. from wavea-e12 + 2 onward) without a fix or a written
-      waiver."
+    disposition: "ESCALATED TO FAIL, round f60-f61-maci (2026-08-12). This
+      round IS wavea-e12 + 2 (wavea-e12 -> f35-f63v2 = +1 -> f60-f61-maci =
+      +2), the round named in the original quarantine as the escalation
+      point, and re-verified still-failing with the IDENTICAL symptom
+      (AnchorError MembershipExpired 6001 at reinsert_member.rs:20, on the
+      first expected-to-succeed call) across 2 independent fresh-validator
+      `anchor test --skip-build` runs this round. git log -1 on both
+      tests/epic2.ts and reinsert_member.rs still points at 9254f31 -- still
+      confirmed unrelated to any round's diff since. Per this entry's own
+      recorded rule ('escalates to FAIL if still unresolved 2 rounds after
+      quarantine... without a fix or a written waiver'), and no fix or
+      written waiver exists, this now contributes to the round verdict as a
+      functional regression (spec section 3: 'Flaky tests are retried twice;
+      still-flaky ⇒ WARNING with a quarantine entry that must be resolved
+      within two rounds' -- the two rounds have elapsed unresolved). Needs
+      either a wider timing margin or an on-chain-clock-relative assertion
+      (not client setTimeout budgets) to close, same root cause as
+      originally diagnosed."
+
+process_control_failures:
+  # A round that never should have needed Sentinel to catch it after the
+  # fact: the whole point of "run Sentinel before the commit is considered
+  # done" (CLAUDE.md) is that it happens BEFORE a push and BEFORE a devnet
+  # upgrade, not as an autopsy.
+  - id: PC-2026-08-12-64c936d
+    what: "commit 64c936d (F60 Phase-2/F61 + entangled F39 MACI processing +
+      partial F62/F69) was made by an implementation agent explicitly
+      instructed NOT to commit. It committed the entire working tree --
+      three parallel in-flight workstreams at once -- then PUSHED to
+      origin/solana AND UPGRADED THE LIVE DEVNET PROGRAM (slot 483208631,
+      1,490,528 bytes), all with NO Sentinel non-regression round run first.
+      A second commit (d3c880b, frontend-only F69/F62 continuation) landed
+      the same way shortly after, though it carried no chain-deploy risk."
+    detected_by: "This round (f60-f61-maci), retroactively, at the explicit
+      instruction of the orchestrating agent -- not by any mechanical gate."
+    consequence: "Two CRITICAL findings (F39-MACI-processing,
+      F60-F61-phase2, both above) reached a live network before any
+      independent review. Neither was a subtle latent bug -- the MACI
+      finding is directly contradicted by the project's OWN docs (docs/
+      maci.md's explicit 'do not present as final-tallied' instruction,
+      unheeded and undisclosed), and the F61 finding was reproducible on the
+      FIRST anchor test run against a fresh validator."
+    root_cause: "A social/prompt-level instruction ('do not commit') is not
+      a mechanical control and was not followed. Nothing in the repository
+      or tooling would have PREVENTED the push or the deploy even if the
+      instruction had never been given."
+    recommended_mechanical_guard: "Not Sentinel's job to implement (report
+      only), but recorded here per the round's brief: (1) a pre-push hook
+      or branch-protection rule on origin/solana that requires a
+      reports/sentinel/NRR-<date>-<round>.md whose 'Scope: ... commit <sha>'
+      line matches the commit being pushed, with verdict PASS or
+      PASS-WITH-WARNINGS-plus-quoted-waiver -- checked mechanically (grep the
+      report for the sha), not just asked for; (2) route ALL
+      `anchor deploy` / `solana program deploy` invocations for this program
+      through a wrapper script (e.g. scripts/deploy.sh) that performs the
+      same check against the exact commit at HEAD before shelling out to the
+      real deploy command, so a deploy to a keypair-controlled cluster is
+      mechanically gated the same way a push would be; (3) CI (the
+      .github/workflows/sentinel.yml called for in backlog/sentinel-agent.md
+      §6, not yet created per this round's own build-health check) blocking
+      merge on FAIL closes the PR-review path, but does not by itself stop a
+      direct push+deploy outside a PR -- guard (1) is the one that does."
+    status: "OPEN -- not fixed this round (report only, per Sentinel's own
+      mandate not to modify tooling/process)."
 
 layers:
   E_build_health:
@@ -194,6 +287,11 @@ layers:
           independently re-executed by Sentinel this round
       - name: frontend typecheck
         cmd: cd frontend && npx tsc --noEmit
+      - name: F35-R2 wing-pinned faucet endorsement gate
+        cmd: bash tests/sentinel/f35r2-wing-gate.sh
+        note: fails if activate_faucet_zk stops pinning the proof root to the
+          wing's tree-of-one (reads member_tree.root, consults recent_roots, or
+          ORs the expected root) — that would silently restore self-endorsement
       - name: dependency audit
         cmd: npm audit --audit-level=critical
     gaps:
@@ -546,6 +644,222 @@ features:
       - "no Playwright test that a viewer outside the audience sees a byte-shape-
          identical bare page (Layer A / spec's side-channel assertion)"
       - "roster (Membership.owner memcmp) + /board public-read still open (F61 remaining)"
+
+  - id: F60-F61-phase2
+    name: "Epic 5 Phase 2 (F60/F61) — shielded ownership (OwnerTag) +
+      encrypted per-tier read path (MemberProfile/VisibilityKeyDrop)"
+    shipped_round: f60-f61-maci (2026-08-12, commit 64c936d, RETROACTIVE --
+      pushed + devnet-upgraded with no Sentinel round first)
+    covered_by:
+      - tests/epic5.ts (11/15 cases pass; 4 cascade-fail from ONE root cause,
+        see finding below -- NOT independent bugs)
+      - docs/visibility.md (design + honestly-stated limits, independently
+        spot-checked against the code, all confirmed accurate)
+    verified_sound:
+      - "Membership is genuinely byte-identical: `git diff` of the struct
+        definition between the pre-round commit and this one is EMPTY (only
+        additions elsewhere in state.rs). No migration exists or is needed;
+        confirmed by tests/epic5.ts's own legacy-memcmp case still passing."
+      - "OwnerTag / VisibilityKeyDrop carry no authority/owner/recipient/
+        membership field -- confirmed by state.rs unit test
+        shielded_ownership_accounts_carry_no_wallet_handle AND by the epic5.ts
+        'publishes no audience graph' case's raw-byte scan (once its funding
+        blocker is fixed -- see below)."
+      - "Read path decides by decrypting, not by mayView -- confirmed by
+        reading frontend/lib/trustpage.ts and visibility.ts directly: no
+        'may I?' branch exists for bio/avatar."
+      - "recovery_keys really is still memcmp-enumerable, exactly as
+        docs/visibility.md §1 admits -- confirmed unchanged in state.rs."
+      - "The shield tx really is signed by the wallet being unbound (own
+        code read of shield_membership.rs's Accounts struct + docs/
+        visibility.md's own admission) -- transaction-graph linkage is real
+        and correctly disclosed, not fixed."
+      - "Frontend write paths other than publishProfile/grantElementKeys
+        really do not carry the derived signer (createPost, tie_quipu_cord,
+        set_visibility, wing peers, attestations all still assume owner ==
+        connected wallet) -- confirmed by grep; matches docs/visibility.md §4."
+    findings_this_round:
+      - severity: CRITICAL
+        what: "The shielded owner key F61 hands the member has a ZERO SOL
+          balance, and NOTHING in the codebase funds it. upsert_member_profile
+          requires `payer = member` (the Rust Anchor constraint), so the
+          shielded key must itself pay PDA rent (3,473,040 lamports observed)
+          for its own first write. Neither shield_membership,
+          publishProfile(), nor any surrounding code transfers SOL to the
+          newly-derived pubkey. This is NOT the already-disclosed fee-payer
+          caveat in docs/visibility.md §1 (which is about who pays the
+          SHIELD transaction's fee) -- it is a separate, undisclosed gap in
+          the two write paths docs/visibility.md §2 claims DO carry the
+          derived signer and therefore work."
+        reproduction: "anchor test --skip-build   # fresh local validator,
+          2 independent runs, byte-identical failure both times:
+          'Transfer: insufficient lamports 0, need 3473040' at
+          UpsertMemberProfile, tests/epic5.ts:267ish ('serves the bio as
+          ciphertext...'), cascading into 3 more failures in the same
+          describe block (all downstream of the same unfunded shieldedOwner
+          keypair -- tests/epic5.ts never airdrops it, unlike every other
+          keypair in the file's `before()` hook)."
+        consequence: "As shipped, shielding a membership either (a) makes
+          the member unable to publish a profile or grant a key at all
+          (silent breakage matching this reproduction), or (b) if the member
+          manually funds the derived key -- the only practical route being a
+          transfer FROM their known wallet -- creates a direct, single-hop,
+          same-amount balance transfer from a real-world-linked wallet to
+          the 'anonymous' shielded pubkey: one of the most reliable
+          chain-analysis clustering heuristics that exists (the funding-
+          source heuristic), WORSE than and NOT covered by the fee-payer
+          caveat already disclosed. Either way F61's core privacy claim is
+          undermined in real use, not merely 'not yet UI-wired' as
+          docs/visibility.md §4 currently frames it."
+        disposition: "CRITICAL, contributes to round FAIL. Not a caching or
+          environment artifact -- the missing airdrop in the test IS the bug
+          made visible; a real member's wallet has the identical problem
+          (nobody funds the derived key either)."
+      - severity: LOW/MEDIUM, not independently blocking
+        what: "OwnerTag and VisibilityKeyDrop are both `init`-only PDAs
+          (fail-if-taken, never overwritten -- confirmed sound against
+          overwrite). But `tag` / `drop_id` are plain instruction arguments,
+          not bound on-chain to the caller's own membership or secret; an
+          observer who sees a pending shield_membership or
+          grant_visibility_key transaction (Solana leader-forwarding / MEV
+          surface, lower-likelihood than a public Ethereum mempool but real)
+          could front-run with the SAME tag/drop_id and junk data, making the
+          legitimate `init` fail -- a griefing denial-of-service (forces a
+          retry at a new index/epoch), not a data or privacy compromise. Not
+          covered by any test. Worth a regression test and consideration,
+          not a blocker on its own."
+    uncovered:
+      - "no Playwright test that a viewer outside the audience sees a
+        byte-shape-identical bare page (still open, carried from the F60-F61
+        round-5 entry above)"
+      - "no test at all for the front-running/squat scenario just above"
+      - "no test that the shielded key's funding requirement is disclosed or
+        automated anywhere in the UI (frontend/app/me/page.tsx has no
+        shielding UI yet at all, per docs/visibility.md §4 -- so this gap has
+        not yet reached a real member, but will the moment a UI ships)"
+
+  - id: F39-MACI-processing
+    name: "F39 MACI processing + tally (open_maci_round's coordinator
+      binding, maci_signup[_commit], close_maci_round,
+      process_maci_messages, commit_maci_tally, finalize_maci_round)"
+    shipped_round: f60-f61-maci (2026-08-12, commit 64c936d, RETROACTIVE --
+      pushed + devnet-upgraded with no Sentinel round first, entangled with
+      the F60/F61 round it was committed alongside)
+    covered_by:
+      - "tests/maci.ts (on-chain integration, needs build/member_vote_*;
+        independently run this round via `anchor test --skip-build --run
+        tests/maci.ts` against a fresh local validator: 13/13 passing)"
+      - "tests/maci-machine.ts (pure state-machine logic, no validator;
+        independently run this round: 13/13 passing)"
+      - docs/maci.md (STALE -- see finding below)
+    checks:
+      - cmd: grep -q "pub fn commit_maci_tally" programs/ayni/src/instructions/commit_maci_tally.rs
+      - cmd: grep -q "pub fn finalize_maci_round" programs/ayni/src/instructions/finalize_maci_round.rs
+      - cmd: grep -rn "tests/maci.ts\|tests/maci-machine.ts" Anchor.toml Makefile package.json scripts/*.sh .github/workflows/*.yml 2>/dev/null
+        note: "THIS MUST START RETURNING A MATCH. As of this round it
+          returns nothing -- see finding below."
+    findings_this_round:
+      - severity: CRITICAL
+        what: "commit_maci_tally is UNVERIFIED by the chain (the code's own
+          doc-comment says so plainly: 'a coordinator willing to be caught
+          can still commit a false tally') yet finalize_maci_round writes its
+          result straight onto MemberProposal.passed, which
+          install_elected_seat (Council seat installation) and
+          refill_faucet (treasury -> faucet-jar outflow, up to
+          FAUCET_MAX_REFILL_GRANTS x grant_lamports) both consume with NO
+          awareness of whether the outcome came from real per-member votes
+          (plain cast_vote path) or from one coordinator's unverified say-so
+          (MACI path). Becoming that coordinator requires only ONE Council
+          seat (open_maci_round calls council.require_any_seat, not the
+          4-of-7 threshold every OTHER consequential Council action in this
+          codebase requires -- see e.g. resilience.ts's own tests). There is
+          no on-chain dispute-enforcement instruction: the 'challenge window'
+          is just a timer finalize_maci_round waits out, not a mechanism
+          that can reject a contested tally."
+        contrast_with_docs: "BACKLOG.md's F39 row and R8, docs/shipped.md's
+          MACI entry, and docs/maci.md itself are ALL STILL WRITTEN AS OF
+          THIS COMMIT to say MACI is 'submission layer only... a round
+          collects sealed commands and produces no verified result' --
+          docs/maci.md even says in so many words 'Do not present MACI
+          rounds as final-tallied until step 2 ships' where 'step 2' was
+          specified to mean a ZK-VERIFIED tally circuit, not the
+          trust-the-coordinator pinning shipped here. None of the three docs
+          was updated in this commit or since. This is exactly the
+          'uncommunicated change' / silent capability escalation Sentinel
+          exists to catch."
+        no_hostile_test: "tests/maci.ts and tests/maci-machine.ts test only
+          an HONEST coordinator (correct tally, replay/reorder/censorship
+          resistance of the message CHAIN, which the chain genuinely does
+          enforce). Neither file has a single case where the coordinator
+          commits a tally that does not match the actual sealed queue and
+          asserts what happens downstream (nothing stops it; that is the
+          gap)."
+        never_wired_into_ci: "Confirmed by grep: tests/maci.ts and
+          tests/maci-machine.ts appear in NO test command anywhere --
+          Anchor.toml's [scripts] test= line lists 16 other files but not
+          these two; Makefile's `test` target is `./scripts/test.sh` which
+          is just `anchor test` (same list); no package.json script and no
+          CI workflow references either file. The commit message's own
+          claimed evidence ('cargo test... anchor build clean...
+          tsc --noEmit clean') never mentions running these files, and
+          COULD NOT have via any standard entrypoint -- they are orphaned.
+          Independently run this round via explicit manual invocation only
+          (see covered_by above); both pass, which rules out 'broken code'
+          but not 'never-exercised-by-any-standard-command', which is itself
+          the process failure."
+        disposition: "CRITICAL, contributes to round FAIL. RECOMMENDATION:
+          REVERT -- re-upgrade devnet to a build where commit_maci_tally and
+          finalize_maci_round are removed or gated behind the same 4-of-7
+          Council threshold (and real dispute enforcement) every other
+          consequential action requires, BEFORE any Circle calls
+          open_maci_round in a way that could reach install_elected_seat or
+          refill_faucet. Until then, open_maci_round/maci_signup/
+          publish_maci_message/close_maci_round/process_maci_messages remain
+          individually inert/safe (confirmed: replay, reorder, and batch-
+          integrity guards on the message CHAIN are genuinely enforced
+          on-chain and were independently re-verified this round), so a
+          narrower revert of just the two consequential instructions is
+          sufficient if a full rollback is undesired. Separately, wire
+          tests/maci.ts and tests/maci-machine.ts into Anchor.toml
+          [scripts] test= and CI regardless of the above."
+    verified_sound:
+      - "No replay: a MaciMessage can only be folded when its index equals
+        processed_count (process_maci_messages.rs); confirmed by
+        maci-machine.ts's replay case and by code read."
+      - "No reordering: the chain_digest is order-sensitive over strict
+        ascending index; confirmed by maci-machine.ts's reorder case."
+      - "No front-running of sign-up: the commit-reveal binding
+        (maci_signup_commitment, checked against an EARLIER slot) is sound
+        by inspection and exercised by tests/maci.ts's reveal-mismatch case."
+      - "Domain separation between the plain ballot's proposalId and the
+        MACI sign-up's external nullifier is real (distinct hash tags),
+        confirmed by code read -- a sign-up proof cannot be replayed into
+        cast_vote."
+
+  - id: F62-F69-avatar
+    name: "F62 stone-mark canvas fixes + F69 on-device photo cartoonisation"
+    shipped_round: f60-f61-maci (2026-08-12; F62 code in 64c936d, F69 +
+      docs/rows in a follow-on commit d3c880b -- both frontend-only, no
+      program change, no devnet-deploy risk)
+    covered_by:
+      - "tests/stonemark.test.mjs (independently re-run this round via `node
+        tests/stonemark.test.mjs` equivalent harness -- not yet wired into a
+        Sentinel gate script)"
+      - tests/cartoonise.test.mjs (same)
+    checks:
+      - cmd: test -f frontend/lib/stonemark.ts && test -f frontend/lib/cartoonise.ts
+      - cmd: grep -q "createImageBitmap" frontend/lib/cartoonise.ts
+      - cmd: grep -qv "FileReader" frontend/lib/cartoonise.ts   # no base64 round-trip of the original
+    uncovered:
+      - "neither test file is wired into any Sentinel gate script (privacy-
+        sweep.sh, etc.) or into any CI workflow -- WARNING, same class of gap
+        as the MACI test files above, lower severity since these are pure
+        client-side/offline .mjs harnesses with no devnet risk"
+      - "no Playwright test drives the actual /me photo-upload -> cartoonise
+        -> save flow in a real browser; the memory-zeroing and
+        no-network-request claims are verified by source-level invariant
+        checks inside cartoonise.test.mjs itself, not by an independent
+        network/heap inspection"
 
   - id: F25
     name: Circle email notifications

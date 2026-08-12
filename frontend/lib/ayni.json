@@ -256,7 +256,13 @@
         {
           "name": "member_tree",
           "docs": [
-            "The set the endorser proves membership of (current root)."
+            "NOT CONSULTED since F35-R2 — kept only so the account count and ordering",
+            "stay exactly what `frontend/lib/relayPolicy.ts` pins (accountCount 10,",
+            "payerIndex 8), because a policy/program skew makes the relayer refuse and",
+            "the UI fall back to the NAMED path, republishing the sponsor wallet — the",
+            "very leak under repair. The endorsement root is",
+            "`single_leaf_root(wing_peer.wing)`, not this tree's root: reading",
+            "`member_tree.root` here would re-open self-endorsement."
           ],
           "pda": {
             "seeds": [
@@ -282,9 +288,11 @@
         {
           "name": "recent_roots",
           "docs": [
-            "F54 ring buffer — pass it (after cranking `note_root`) so the proof",
-            "survives concurrent admissions; may be null for a Circle that has never",
-            "cranked, in which case only the exact current root is accepted."
+            "NOT CONSULTED since F35-R2 — same reason as `member_tree`. A wing's",
+            "\"tree of one\" has no concurrency race and never goes stale, so the F54",
+            "ring is irrelevant to this path; clients should pass `null` (worth",
+            "~8k CU). It must never receive a wing-derived root: see the invariant on",
+            "`merkle::single_leaf_root`."
           ],
           "optional": true,
           "pda": {
@@ -345,10 +353,11 @@
         {
           "name": "wing_peer",
           "docs": [
-            "The neophyte's sponsor bond — seed-bound to the neophyte, and read only",
-            "for `active`. Its `wing` field is NOT consulted and NOT compared against",
-            "anything: this instruction never learns, asserts, or records who the",
-            "sponsor is."
+            "The neophyte's sponsor bond — seed-bound to the neophyte. Since F35-R2",
+            "its `wing` field IS load-bearing: it is folded into the single-leaf root",
+            "the proof must match, which is what makes sponsorship mandatory. No",
+            "account or wallet of the wing's is passed, but the endorser's commitment",
+            "is now derivable from the transaction — see the doc comment above."
           ],
           "pda": {
             "seeds": [
@@ -2516,7 +2525,10 @@
         },
         {
           "name": "proposal",
-          "writable": true,
+          "docs": [
+            "Read-only: the eligible-set snapshot the quorum is measured against.",
+            "This instruction never writes to it — see the doc-comment above."
+          ],
           "relations": [
             "round",
             "state"
@@ -6745,7 +6757,21 @@
           "name": "member",
           "docs": [
             "The membership's current `owner` (or, for an anonymous membership, any",
-            "key it controls). Signs + pays rent."
+            "key it controls). AUTHORISES ONLY — not `mut`, pays nothing.",
+            "",
+            "On a FIRST shield this is the member's ordinary wallet, which could have",
+            "paid. On a RE-shield (rotating to a new tag at the next index) it is the",
+            "previous derived key, which holds nothing — and must never need to, for",
+            "the reason spelled out in `upsert_member_profile`: funding a derived",
+            "\"anonymous\" key from a known wallet links them harder than co-signing",
+            "does. Same split, same reason, both instructions."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Rent payer — any funded wallet, or a relayer."
           ],
           "writable": true,
           "signer": true
@@ -7183,7 +7209,25 @@
         {
           "name": "member",
           "docs": [
-            "A key the member controls (owner or guardian); signs + pays rent."
+            "A key the member controls (owner or guardian). AUTHORISES ONLY — it is",
+            "deliberately not `mut` and pays nothing.",
+            "",
+            "This separation is the whole point. When a membership is shielded, this",
+            "is the derived key from `shield_membership`, which has never held a",
+            "lamport and must never need to. Making it the rent payer would force the",
+            "member to send SOL to a freshly-derived \"anonymous\" pubkey from a wallet",
+            "someone already knows them by — a single-hop funding transfer, which is",
+            "one of the most reliable clustering heuristics in chain analysis, and a",
+            "far stronger link than the co-signature this instruction already",
+            "implies. The derived key signs; somebody else's lamports pay."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Rent payer — any funded wallet. Normally the member's ordinary wallet;",
+            "a relayer can take this slot with no change to the program."
           ],
           "writable": true,
           "signer": true
@@ -8701,6 +8745,16 @@
       "code": 6062,
       "name": "InvalidKeyDrop",
       "msg": "Key-drop id must not be zero"
+    },
+    {
+      "code": 6063,
+      "name": "EndorsementNotByWing",
+      "msg": "First gas must be endorsed by the neophyte's own wing — prove against the wing's commitment"
+    },
+    {
+      "code": 6064,
+      "name": "MaciTallyUnverified",
+      "msg": "MACI tallying is disabled: the chain cannot yet verify a tally, so its result must not decide seats or treasury"
     }
   ],
   "types": [

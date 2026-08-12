@@ -375,6 +375,58 @@ export async function proveMemberEndorsement(
 }
 
 /**
+ * F35-R2 — "I am this neophyte's WING, and I endorse their first gas."
+ *
+ * Same circuit, same artifacts, same ceremony key as `proveMemberEndorsement`;
+ * the ONLY difference is which set `root` denotes. Here the tree has exactly one
+ * leaf — the wing's own commitment, at index 0 — so the root is a value the
+ * PROGRAM can recompute from `wing_peer.wing` (`merkle::single_leaf_root`), and
+ * the only witness that satisfies it is the wing's secret. That is what makes
+ * sponsorship mandatory again after F35 shipped an endorsement any tree member
+ * (including the neophyte) could produce.
+ *
+ * Byte-compatibility with the program is load-bearing and is not an accident:
+ * `MemberTree.create(20)` seeds `z = 0; z = h2(z, z)` exactly as `merkle.rs`
+ * does, and `proof(0)` on a one-leaf tree returns `pathElements = [zeros[l]]`
+ * with `pathIndices` all 0 — the same fold as `single_leaf_root`. Pinned on the
+ * Rust side by `proptests::single_leaf_root_matches_a_fresh_tree_with_one_leaf`.
+ *
+ * Cheaper AND simpler than the member-tree path: no `orderedCommitments()`
+ * roster rebuild (a multi-`getProgramAccounts` sweep), and no `note_root` crank
+ * transaction — a tree of one has no concurrency race and never goes stale.
+ *
+ * BE HONEST WITH THE CALLER ABOUT WHAT THIS PUBLISHES: `root` is a deterministic
+ * public function of the wing's commitment, which is already world-readable in
+ * `WingPeer`. So the transaction now RECORDS that the holder of that commitment
+ * acted at that moment, where before it supported only a guess. No wallet, no
+ * signature, no membership account of the wing's appears — the F35 win is at the
+ * wallet layer and it survives untouched.
+ *
+ * @param wingCommitmentHex the bond's CURRENT `wing` — refetch it immediately
+ *   before proving. `establish_wing_peer` is mentee-signed and `init_if_needed`,
+ *   so a mentee can re-point the bond and invalidate a proof already generated.
+ */
+export async function proveWingEndorsement(
+  circle: string,
+  wingCommitmentHex: string,
+  externalNullifier: bigint
+): Promise<MemberEndorsement> {
+  const secret = getSecretFor(wingCommitmentHex);
+  if (secret === null) {
+    throw new Error(
+      "Only this neophyte's wing can endorse their first gas, and the wing's key isn't on this device — endorse from the device you joined on."
+    );
+  }
+  void circle; // the binding to the Circle lives in `externalNullifier`
+
+  const tree = await MemberTree.create(20);
+  tree.insert(beToBig(fromHex(wingCommitmentHex))); // the only leaf, index 0
+  const root = to32BE(tree.root);
+  const { nullifier, proofA, proofB, proofC } = await proveVote(tree, secret, 0, externalNullifier, true);
+  return { root, nullifier, proofA, proofB, proofC };
+}
+
+/**
  * Epic 2 — attest for a newcomer ANONYMOUSLY. Proves (member_vote circuit,
  * reused exactly as voting does) that the caller's membership is in the Circle's
  * current member tree, with the newcomer's commitment as the external

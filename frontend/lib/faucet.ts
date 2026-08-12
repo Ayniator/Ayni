@@ -6,13 +6,19 @@
 //
 // TWO activation paths, and the choice is not cosmetic (F35 → Epic 2):
 //   * `activateFaucetAnonymously` — PREFERRED. A member_vote Groth16 proof that
-//     *some* member endorses the grant. No parrain account, commitment or
-//     wallet in the transaction; relayed so the fee-payer isn't the link.
+//     the neophyte's OWN WING endorses the grant (F35-R2: the proof is made
+//     against a tree whose only leaf is the wing's commitment, so only the
+//     wing's secret satisfies it). No parrain account, signature, wallet or
+//     lamport transfer in the transaction; relayed so the fee-payer isn't the
+//     link. The endorser's COMMITMENT is derivable from the transaction — it is
+//     already world-readable in `WingPeer`, but this makes the act a record.
 //   * `activateFaucet` — DEPRECATED. The named pilot form, where the parrain
-//     signs and pays and the transaction publishes the sponsor edge. Kept only
-//     for a parrain with no ZK voting key on this device.
-// Callers must branch on `haveVotingKey(parrainCommitment)` and take the
-// anonymous path whenever it is available.
+//     signs and pays and the transaction publishes the sponsor WALLET edge.
+//     Kept only for a wing with no ZK key on this device — and it is now the
+//     ONLY fallback, because F35-R2 removed "any tree member can activate".
+// Callers must branch on `haveVotingKey(wingCommitment)` and take the anonymous
+// path whenever it is available; when they cannot, tell the wing what the named
+// path publishes before they sign it.
 
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
@@ -28,7 +34,7 @@ import {
 } from "./member";
 import { wingPeerPda } from "./peers";
 import { freshNonce } from "./admin";
-import { proveMemberEndorsement, recentRootsPda } from "./zk-vote";
+import { proveWingEndorsement } from "./zk-vote";
 import { relayerPubkey, relayInstruction } from "./relayer";
 
 // The on-chain caps (mirrors programs/ayni/src/state.rs).
@@ -153,10 +159,25 @@ export async function faucetExternalNullifier(circle: PublicKey, neophyte: Uint8
 
 /**
  * **F35 → Epic 2 — the preferred path.** First gas for the neophyte, endorsed
- * ANONYMOUSLY: a `member_vote` Groth16 proof that some member of this Circle's
- * tree endorses the grant, with no parrain account, commitment or wallet in the
- * transaction. The old named path put both parties and a transfer between them
- * in one public transaction — the sponsor edge Epic 2 exists to abolish.
+ * ANONYMOUSLY by their own wing: a `member_vote` Groth16 proof against the tree
+ * whose only leaf is `wing_peer.wing`, so the program can require it without any
+ * parrain account, signature, wallet or transfer in the transaction. The old
+ * named path put both parties and a transfer between them in one public
+ * transaction — the sponsor edge Epic 2 exists to abolish.
+ *
+ * **F35-R2.** F35 as first shipped proved only "some member of the tree", which
+ * dropped the one structural property the named path had (`establish_wing_peer`
+ * refuses `mentee == wing`): an admitted neophyte could endorse their own first
+ * gas. The wing-pinned root restores mandatory sponsorship without a new circuit
+ * or a new ceremony. Cost, stated plainly: the endorser's commitment is now
+ * derivable from the transaction, so the act becomes a public record rather than
+ * a guess. The commitment was already world-readable in `WingPeer`; the wallet
+ * layer — which is what F35 bought — is untouched.
+ *
+ * `parrainHex` is IGNORED for the proof and kept only for call-site
+ * compatibility: the bond is refetched from chain, because a mentee can
+ * re-point `establish_wing_peer` at any moment and a proof against a stale wing
+ * cannot verify.
  *
  * Everything else is unchanged: the same `["faucetnull", circle, neophyte]`
  * one-shot guard (shared with the named path, so the two cannot be stacked), the
@@ -183,20 +204,37 @@ export async function activateFaucetAnonymously(
     throw new Error("This member has no wallet bound to their membership — the faucet needs a wallet to pay first gas to.");
   }
 
+  // Refetch the bond: the program folds ITS `wing` into the root the proof must
+  // match, and the mentee can re-point the bond at any time.
+  const wingPeer = wingPeerPda(circle, neophyte);
+  const wp: any = await (readOnlyProgram().account as any).wingPeer.fetch(wingPeer);
+  if (!wp?.active) throw new Error("This member has no active wing — first gas is a sponsor's welcome, not a self-service tap.");
+  const wingHex = toHex(Uint8Array.from(wp.wing as number[]));
+  if (parrainHex && wingHex !== parrainHex) {
+    // Not fatal — the chain is the authority — but the caller's idea of the bond
+    // is stale, and only the CURRENT wing can produce a verifying proof.
+    console.warn("faucet: wing bond changed on chain; proving as the current wing");
+  }
+
   const extNull = await faucetExternalNullifier(circle, neophyte);
-  const { root, nullifier, proofA, proofB, proofC } = await proveMemberEndorsement(
-    wallet,
+  const { root, nullifier, proofA, proofB, proofC } = await proveWingEndorsement(
     circle.toBase58(),
-    parrainHex,
+    wingHex,
     beToBig(extNull)
   );
 
   const accounts = {
     circle,
     memberTree: memberTreePda(circle),
-    recentRoots: recentRootsPda(circle),
+    // NOT consulted since F35-R2 (a tree of one never goes stale, so the F54
+    // ring is irrelevant here) — null keeps the account count the relay policy
+    // pins at 10 and saves ~8k CU. Do NOT pass a wing-derived root to the ring.
+    // (cast: Anchor's generated type for an Option account is not nullable, but
+    // `null` is exactly what its runtime resolver wants — it substitutes the
+    // program id, which keeps the account COUNT at the 10 the relay policy pins.)
+    recentRoots: null as unknown as PublicKey,
     neophyteMembership: neoMembership,
-    wingPeer: wingPeerPda(circle, neophyte),
+    wingPeer,
     grantNullifier: faucetNullPda(circle, neophyte),
     jar: faucetPda(circle),
     recipient: owner,

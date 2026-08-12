@@ -3,6 +3,7 @@ import { Program } from "@coral-xyz/anchor";
 import { Ayni } from "../target/types/ayni";
 import { assert } from "chai";
 import * as crypto from "crypto";
+import { buildPoseidon } from "circomlibjs";
 
 // Epic 0 — the gas faucet: first gas for the neophyte. No-ZK paths only (the
 // jar, the Treasurer cap, the parrain-triggered one-shot grant, and the
@@ -51,6 +52,28 @@ describe("ayni — gas faucet (Epic 0)", () => {
   const cNeo3 = makeCommitment();
   const cUnset = makeCommitment();
   const cImposter = makeCommitment();
+
+  // F35-R2 — the wing's "tree of one".
+  //
+  // `activate_faucet_zk` no longer accepts a proof against the Circle's member
+  // tree; it accepts one against the depth-20 root whose ONLY leaf is
+  // `wing_peer.wing`. This is the JS mirror of `merkle::single_leaf_root`
+  // (same zeros convention as `merkle.rs` and as the browser's
+  // `MemberTree.create(20)`), so the tests can name the exact root the program
+  // will compute — and, just as importantly, the roots it must REFUSE.
+  let _poseidon: any = null;
+  const singleLeafRoot = async (leaf: Buffer): Promise<Buffer> => {
+    if (!_poseidon) _poseidon = await buildPoseidon();
+    const F = _poseidon.F;
+    const h2 = (a: bigint, b: bigint): bigint => F.toObject(_poseidon([a, b]));
+    let cur = BigInt("0x" + Buffer.from(leaf).toString("hex"));
+    let z = BigInt(0); // zeros[0]  (no `0n` literal: tsconfig targets ES6)
+    for (let i = 0; i < 20; i++) {
+      cur = h2(cur, z);
+      z = h2(z, z); // zeros[i + 1]
+    }
+    return Buffer.from(cur.toString(16).padStart(64, "0"), "hex");
+  };
 
   const pda = (...seeds: (Buffer | Uint8Array)[]) =>
     anchor.web3.PublicKey.findProgramAddressSync([...seeds] as Buffer[], program.programId)[0];
@@ -346,9 +369,22 @@ describe("ayni — gas faucet (Epic 0)", () => {
   // --- 7. activate_faucet_zk — the anonymous path (F35 → Epic 2) --------------
   //
   // The Traditions fix: the grant no longer requires the parrain to sign, so the
-  // transaction cannot publish "this wallet sponsors that neophyte". These cases
-  // pin the properties that survive without a real proof; the real-proof e2e is
-  // the browser-ZK suite's job (tests/vote.ts).
+  // transaction cannot publish "this wallet sponsors that neophyte".
+  //
+  // F35-R2 restores the OTHER half — mandatory sponsorship. The proof's `root`
+  // must equal `single_leaf_root(wing_peer.wing)`, a value the PROGRAM computes,
+  // so the only witness that can satisfy it is the wing's own secret. Every case
+  // below except the last is refused at that gate, BEFORE any pairing work,
+  // which is exactly why they can be pinned here with zero proof bytes: the root
+  // argument alone decides them. The real-proof e2e (a genuine wing proof that
+  // verifies) is the browser-ZK suite's job.
+  //
+  // THE EXCLUSIVITY RULE, restated because the whole fix depends on it: the wing
+  // root REPLACES the member-tree / F54-ring gate and must never join it. If the
+  // program ever accepted `member_tree.root || recent_roots || wing_root`, the
+  // self-endorsement hole would be exactly as wide as before — a self-endorsing
+  // neophyte would simply keep sending the tree root, which is precisely what
+  // "refuses the CURRENT MEMBER TREE root" below submits.
 
   it("the anonymous activation names NO parrain — not a wallet, not a commitment", async () => {
     const treeRoot = Buffer.from(
@@ -371,48 +407,122 @@ describe("ayni — gas faucet (Epic 0)", () => {
     assert.isTrue(ix.keys[8].isSigner, "and it sits at the payer index the relay policy pins");
   });
 
-  it("refuses a root that is neither current nor recent, before any proof work", async () => {
-    await expectFail(
-      activateZkIx(cNeo2, neo2Owner.publicKey, makeCommitment()).rpc(),
-      "RootNotRecent"
+  it("names the wing only ARITHMETICALLY — the F35-R2 disclosure, stated in a test", async () => {
+    // Honest about what F35-R2 costs: `root` is now a deterministic public
+    // function of the wing's commitment, so an observer can precompute it over
+    // the commitment set and read the endorser off the transaction. The
+    // commitment was already world-readable in `WingPeer` (which is in this
+    // transaction anyway); what is new is that the act becomes a record.
+    // The WALLET layer — the whole F35 win — is untouched, as the case above pins.
+    const wingRoot = await singleLeafRoot(cParrain);
+    const ix = await activateZkIx(cNeo2, neo2Owner.publicKey, wingRoot).instruction();
+    assert.isTrue(
+      ix.data.subarray(8, 40).equals(wingRoot),
+      "the root argument IS single_leaf_root(wing) — the disclosure is real and deliberate"
+    );
+    assert.notInclude(
+      ix.keys.map((k) => k.pubkey.toBase58()),
+      membershipPda(cParrain).toBase58(),
+      "and still no wing membership account"
     );
   });
 
-  it("refuses a garbage proof against the CURRENT root (no proof, no gas)", async () => {
+  // --- 7a. MANDATORY SPONSORSHIP (F35-R2) — the regression this round closes ---
+
+  it("REFUSES the current MEMBER TREE root — i.e. every proof the old path accepted", async () => {
+    // This is the exclusivity case. Under F35-as-shipped this root was THE
+    // accepted one, and any tree member could release any neophyte's grant.
     const treeRoot = Buffer.from(
       (await program.account.memberTree.fetch(memberTreeA)).root as any as number[]
     );
     const jarBefore = await balance(jarA);
-    await expectFail(activateZkIx(cNeo2, neo2Owner.publicKey, treeRoot).rpc(), "VoteProofInvalid");
+    await expectFail(
+      activateZkIx(cNeo2, neo2Owner.publicKey, treeRoot).rpc(),
+      "EndorsementNotByWing"
+    );
     assert.equal(await balance(jarA), jarBefore, "the jar paid nothing");
   });
+
+  it("REFUSES a NON-WING member's endorsement (their own tree of one)", async () => {
+    // cImposter is a full, tree-inserted member of this Circle — and is nobody's
+    // wing. Even proving perfectly for themselves, they cannot release cNeo2's
+    // first gas: the program computes the expected root from cNeo2's bond, and
+    // that names cParrain.
+    const imposterRoot = await singleLeafRoot(cImposter);
+    const jarBefore = await balance(jarA);
+    await expectFail(
+      activateZkIx(cNeo2, neo2Owner.publicKey, imposterRoot).rpc(),
+      "EndorsementNotByWing"
+    );
+    assert.equal(await balance(jarA), jarBefore, "the jar paid nothing");
+  });
+
+  it("REFUSES a SELF-ENDORSEMENT — the neophyte's own tree of one", async () => {
+    // THE regression. `establish_wing_peer` refuses `mentee == wing`, so the
+    // bond's wing can never be cNeo2 itself; `single_leaf_root` is injective
+    // (pinned in proptests), so cNeo2's own root can never equal it.
+    const selfRoot = await singleLeafRoot(cNeo2);
+    const jarBefore = await balance(jarA);
+    await expectFail(
+      activateZkIx(cNeo2, neo2Owner.publicKey, selfRoot).rpc(),
+      "EndorsementNotByWing"
+    );
+    assert.equal(await balance(jarA), jarBefore, "the jar paid nothing");
+  });
+
+  it("REFUSES a self-endorsement dressed as a tree proof (the same hole, other clothes)", async () => {
+    // cNeo3 is in the member tree and holds their own secret; under the old gate
+    // this exact submission was valid and paid. It is now refused at the root.
+    const treeRoot = Buffer.from(
+      (await program.account.memberTree.fetch(memberTreeA)).root as any as number[]
+    );
+    await expectFail(
+      activateZkIx(cNeo3, neo3Owner.publicKey, treeRoot).rpc(),
+      "EndorsementNotByWing"
+    );
+  });
+
+  it("lets ONLY the wing's root reach the pairing (garbage proof ⇒ VoteProofInvalid)", async () => {
+    // The positive half of the gate: with the wing's tree-of-one root the
+    // instruction gets past `EndorsementNotByWing` and fails on the PROOF —
+    // which is what proves the gate accepts the wing and only the wing. A real
+    // wing proof verifying here is the browser-ZK suite's e2e.
+    const wingRoot = await singleLeafRoot(cParrain);
+    const jarBefore = await balance(jarA);
+    await expectFail(activateZkIx(cNeo2, neo2Owner.publicKey, wingRoot).rpc(), "VoteProofInvalid");
+    assert.equal(await balance(jarA), jarBefore, "the jar paid nothing");
+  });
+
+  // NOTE on the F54 ring: it is no longer consulted by this instruction at all,
+  // and the two directions of that invariant are pinned elsewhere rather than
+  // here (this suite never cranks `note_root`, so it has no RecentRoots account
+  // to pass): the program cannot READ a ring root into the endorsement (the gate
+  // is a single equality against `single_leaf_root(wing)` — see the tree-root
+  // refusals above), and a wing-derived root must never be WRITTEN into the ring
+  // (`merkle::single_leaf_root`'s doc invariant, plus the proptest
+  // `wing_root_is_never_a_real_member_tree_root`). `attest_admission_zk`'s
+  // soundness rests entirely on every ring entry being a genuine member-tree root.
 
   it("shares the one-shot with the named path — the two forms cannot be stacked", async () => {
     // cNeo1 already took its grant through `activate_faucet`; the SAME
     // ["faucetnull", circle, commitment] PDA refuses the anonymous form too,
     // at account validation, before the root gate.
-    const treeRoot = Buffer.from(
-      (await program.account.memberTree.fetch(memberTreeA)).root as any as number[]
-    );
-    await expectFail(activateZkIx(cNeo1, neo1Owner.publicKey, treeRoot).rpc());
+    const wingRoot = await singleLeafRoot(cParrain);
+    await expectFail(activateZkIx(cNeo1, neo1Owner.publicKey, wingRoot).rpc());
     const jar = await program.account.faucetJar.fetch(jarA);
     assert.equal(jar.granted.toNumber(), 1, "still exactly one grant for that neophyte");
   });
 
   it("still refuses a recipient that is not the neophyte's own wallet", async () => {
-    const treeRoot = Buffer.from(
-      (await program.account.memberTree.fetch(memberTreeA)).root as any as number[]
-    );
+    const wingRoot = await singleLeafRoot(cParrain);
     const elsewhere = anchor.web3.Keypair.generate().publicKey;
-    await expectFail(activateZkIx(cNeo2, elsewhere, treeRoot).rpc(), "WalletMismatch");
+    await expectFail(activateZkIx(cNeo2, elsewhere, wingRoot).rpc(), "WalletMismatch");
   });
 
   it("still refuses a neophyte with no wallet bound", async () => {
-    const treeRoot = Buffer.from(
-      (await program.account.memberTree.fetch(memberTreeA)).root as any as number[]
-    );
+    const wingRoot = await singleLeafRoot(cParrain);
     await expectFail(
-      activateZkIx(cUnset, unsetGuardian.publicKey, treeRoot).rpc(),
+      activateZkIx(cUnset, unsetGuardian.publicKey, wingRoot).rpc(),
       "NeophyteWalletUnset"
     );
   });
