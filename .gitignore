@@ -194,3 +194,6 @@ mobile/ios/App/build/
 mobile/ios/App/output/
 mobile/ios/App/App/public/
 mobile/*.xcarchive
+
+# transient agent probe scripts
+frontend/probe-tmp.mjs

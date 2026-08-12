@@ -18,6 +18,46 @@
 
 ---
 
+## F91 (Steps 1–2) — master-secret rooting groundwork (2026-08-12e)
+
+Epic 11 shipped a recovery UX that is honest about being local — but the
+identity layer never actually used the master secret it shards. `newMemberIdentity()`
+draws its own random Semaphore secret, so reconstructing the master restores a
+*wallet* and nothing else. These two steps lay the contract to close that,
+without changing a single byte of today's behaviour.
+
+**Step 1 — the scalar-field bug.** `frontend/lib/zk-vote.ts` declared `R` as the
+BN254 **scalar** field but held the **base** field value q — byte-identical to
+`Q`. It is inert today only by luck: `rnd[0] &= 0x1f` caps every generated secret
+at 2^253−1, comfortably below both r and q, so `x % q === x % r === x`. Proven a
+no-op over 2000 random masked draws plus the mask maximum and boundary set; old
+and new code write the identical decimal to the identical storage slot, so the
+commitment and on-chain leaf are unchanged. `R` is now the true r, and
+`secretScalarFromBytes()` reduces through it. **Found before rooting shipped, not
+after** — a derived secret ≥ r reduced by the wrong modulus would have minted an
+identity that could never be recovered.
+
+**Step 2 — the v2 derivation contract, shipped dark.**
+`zkSecretForCircle(master, circle, index)` = SHA-256(`aha-zk-secret-v2` ‖ master
+‖ circle32 ‖ u32le(index)). Per-circle domain separation preserves cross-circle
+commitment unlinkability; `index` leaves room to rejoin a Circle with a fresh
+votable identity without breaking determinism. `walletSeed` stays global and
+frozen; `aha-zk-secret-v1` is retired unconsumed. `newMemberIdentity(opts?)`
+derives from the master when handed options and is otherwise byte-identical to
+the current CSPRNG path — and **no call site passes options**, enforced by a test
+that greps the whole frontend. Frozen vectors (master → circle → index → secret
+→ commitment) are pinned in `tests/zk-field-constants.test.mjs` because this
+contract is a one-way door; the modulus itself is pinned three ways, including
+cross-checks against circomlibjs and snarkjs.
+
+22/22 new tests; `zk-e2e` still 23/23 across all three circuits (the real proof
+the constant change broke nothing); `zk-integrity.sh` holds.
+
+**Remaining (Steps 3–5):** the master keystore, rooted joins, and the ceremony's
+load-or-create must land together — shipping them apart would open a window
+where joins root on a master the ceremony does not shard — plus stale-shard
+detection and the re-attach UI.
+
 ## E12 (F86–F89) — the AHA app: embedded wallet + native mobile shells (2026-08-12d)
 
 A new epic: AHA becomes an app you install, with its own wallet — while every
