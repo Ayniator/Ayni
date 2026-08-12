@@ -173,3 +173,33 @@ words.
 should confirm the quoted sentence against the agent transcript independently,
 and check that the interpretation clauses do not quietly widen the one sentence
 the user actually wrote.
+
+## 2026-08-12 · `3889f7a` · coordinating session
+
+**Reason:** fixes a CRITICAL defect **in the push gate itself**, found by
+Sentinel (`NRR-2026-08-12-governance-review`): the per-commit `REVIEWED.md`
+check was dead code. Three `while read` loops shared one stdin stream, so the
+third — the one that actually populates `$unreviewed` — ran zero iterations and
+the gate reported "every pushed commit is reviewed" having checked nothing. With
+a legitimately PASSing verdict, any unreviewed commit would have sailed through.
+
+A second bug of the same family was found while fixing it: on a NEW branch,
+`git diff --name-only <sha>` compares the working tree to that commit (empty on
+a clean tree), so such a push wrongly reported "bookkeeping only" and skipped the
+verdict check entirely.
+
+**Verdict at the time:** FAIL.
+
+**Why an override was needed:** the gate treats `scripts/` as code, so a fix to
+the gate cannot pass through itself while the verdict is red. Same structural
+reason as the earlier gate commits — correct behaviour, not a defect.
+
+**What was NOT reviewed:** no round has read this fix. It ships with
+`tests/sentinel/push-gate-selftest.sh` (5/5), which exercises the real script
+against a throwaway repo — including the smuggling case Sentinel named as unread
+attack surface (code mixed into an otherwise-bookkeeping push must still face the
+gate; it does). The registry and symlink-resolved root now have coverage; the
+next round should still attack them independently.
+
+**Attribution:** this session — accepted as unattributable at the git level under
+the user's waiver of 2026-08-12.
