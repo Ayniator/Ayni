@@ -232,3 +232,40 @@ Devnet remains at the reviewed `dbd1719` build.
 
 **Attribution:** this session; unverifiable at the git level, per the still-open
 attribution finding.
+
+---
+
+## 2026-08-12 · `80ed9c3` · push-gate verdict parser (false block)
+
+**Reason given:** the gate's verdict anchor was `^[[:space:]]*Verdict:`, which
+cannot see past a leading `**`. Sentinel writes the line both ways, and the
+F60/F61 re-round wrote `**Verdict: PASS WITH WARNINGS**`. The round had
+genuinely passed — the CRITICAL was fixed, the suite ran 160/0 — but the gate
+read `<none found>` and blocked a clean push. This commit widens the anchor to
+tolerate leading markdown emphasis and heading marks.
+
+**Why it could not be reviewed first:** the commit is a change to the gate
+itself and to its self-test. Requiring a passing round to push a fix to the
+thing that reads round verdicts is a deadlock; that is the same reason the
+bookkeeping exemption exists.
+
+**Verdict at the time:** PASS WITH WARNINGS
+(`NRR-2026-08-12-f60-f61-usability-reround.md`) — the verdict this commit
+exists to make readable.
+
+**What was NOT weakened:** the controlled-vocabulary check is untouched. An
+unrecognised verdict still blocks, and anything containing FAIL or CRITICAL is
+still vetoed outright. The self-test's existing five cases still pass, and a
+sixth was added pinning the emphasis-wrapped PASS so this false block cannot
+return silently.
+
+**What was NOT reviewed:** no Sentinel round has read this diff. It touches
+`scripts/sentinel-push-gate.sh` and `tests/sentinel/push-gate-selftest.sh`
+only — no application code, no program change, nothing deployable. The next
+round should read it, and should treat a gate that blocks good rounds as a
+finding in its own right: a gate that cries wolf trains people to reach for
+SENTINEL_OVERRIDE by reflex, which is how a real FAIL eventually gets waved
+through.
+
+**Attribution:** this session; unverifiable at the git level, per the user's
+accepted-risk waiver of 2026-08-12.
