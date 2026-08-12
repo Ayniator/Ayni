@@ -1032,6 +1032,9 @@ export const PAGE_STRINGS: Record<string, Record<string, string>> = {
     "twelve.tradition.10": "AHA has no opinion on outside issues; hence the AHA name ought never be drawn into public controversy.",
     "twelve.tradition.11": "Our public relations policy is based on attraction rather than promotion; we need always maintain personal anonymity at the level of new media, press, radio, and films.",
     "twelve.tradition.12": "Anonymity is the spiritual foundation of all our traditions, ever reminding us to place principles before personalities.",
+    "twelve.hub.lede": "Two sets of twelve. The Steps are how a member walks; the Traditions are how the Circles stay whole.",
+    "twelve.hub.stepsSub": "The path a member walks, one Step at a time.",
+    "twelve.hub.traditionsSub": "How Circles stay whole and self-governing.",
   },
   fr: {
     "admin.administrationOf": "Administration de",

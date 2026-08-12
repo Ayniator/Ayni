@@ -74,20 +74,19 @@ function TwelveMenu() {
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
-      <button
-        type="button"
+      {/* The label is itself a link: clicking it lands on /twelve (the choice
+          page), while hovering or focusing reveals the two destinations. */}
+      <Link
+        href="/twelve"
         className="nav-menu-btn"
         aria-haspopup="true"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(false)}
       >
         {t("nav.twelve")} <span className="nav-caret" aria-hidden="true">▾</span>
-      </button>
-      <span className={`nav-drop nav-drop-twelve${open ? " is-open" : ""}`} role="menu">
-        {/* Shown while the member is still choosing — decorative, so it carries
-            an empty alt and stays out of the tab order. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/A-H-A.png" alt="" className="nav-drop-art" aria-hidden="true" />
+      </Link>
+      <span className={`nav-drop${open ? " is-open" : ""}`} role="menu">
         <Link href="/twelve-steps" role="menuitem" onClick={() => setOpen(false)}>
           {t("nav.twelveSteps")}
         </Link>

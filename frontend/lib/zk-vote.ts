@@ -12,9 +12,20 @@ import * as anchor from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 import { PROGRAM_ID, SigningWallet, findMyMemberships, programWith, readOnlyProgram } from "./member";
 import { relayerPubkey, relayInstruction } from "./relayer";
+// Derivation contract only (no chain/network deps come with it).
+import { zkSecretForCircle } from "./sharding";
 
-// BN254 scalar field r (for the secret) and base field q (for G1 negation).
-const R = 21888242871839275222246405745257275088696311157297823662689037894645226208583n;
+// BN254 has TWO different primes and they must never be confused:
+//   R = the SCALAR field r — the field the circuits (and Poseidon) live in; every
+//       secret, commitment and nullifier is an element of it.
+//   Q = the BASE field q — the coordinate field of G1/G2; used here only to
+//       negate a G1 point (`Q - y`) when packing a proof for the on-chain
+//       verifier.
+// r < q, and r ends ...495617 while q ends ...208583. Historically `R` here held
+// q's value; that was a latent bug (it is a no-op for existing secrets — see
+// `secretScalarFromBytes` — but it makes any future full-range reduction produce
+// a non-canonical, out-of-field scalar). Pinned by tests/zk-field-constants.test.mjs.
+const R = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 const Q = 21888242871839275222246405745257275088696311157297823662689037894645226208583n;
 const seed = (s: string) => new TextEncoder().encode(s);
 
@@ -28,6 +39,24 @@ function to32BE(x: bigint): number[] {
 }
 const beToBig = (b: Uint8Array | number[]): bigint => { let v = 0n; for (const x of b) v = (v << 8n) | BigInt(x); return v; };
 
+/**
+ * THE canonical bytes → BN254 scalar reduction. Every secret that will ever be
+ * fed to a circuit goes through here, so there is exactly one definition.
+ *
+ * Big-endian interpretation, then `mod R` (the SCALAR field). Note the accepted
+ * modulo bias: 2^256 is not a multiple of r, so the ~2^256 - 2^255.x residues in
+ * [0, 2^256 mod r) are about 2.4x more likely than the rest. For a 254-bit field
+ * that bias is ~2^-2 on a vanishing slice and is cryptographically irrelevant
+ * here (the input is either a CSPRNG draw or a SHA-256 output). It is ACCEPTED
+ * DELIBERATELY: do not "fix" it with rejection sampling or wide reduction in one
+ * call site only — the derivation is a frozen contract (see
+ * `zkSecretForCircle` in lib/sharding.ts) and any change rotates every derived
+ * identity.
+ */
+export function secretScalarFromBytes(b: Uint8Array): bigint {
+  return beToBig(b) % R;
+}
+
 let _poseidon: any = null;
 async function poseidon() {
   if (!_poseidon) { const { buildPoseidon } = await import("circomlibjs"); _poseidon = await buildPoseidon(); }
@@ -39,13 +68,31 @@ const SK = (commitHex: string) => `aha:zk-secret:${commitHex}`;
 
 /** Mint a fresh, votable anonymous identity: commitment = Poseidon(secret); the
  *  secret is saved on THIS device so the member can prove later. Returns the
- *  commitment bytes to issue the membership with. */
-export async function newMemberIdentity(): Promise<Uint8Array> {
+ *  commitment bytes to issue the membership with.
+ *
+ *  Two ways to obtain the secret, ONE storage slot:
+ *   - `opts` ABSENT (every call site today): a fresh CSPRNG draw. Device-bound —
+ *     the secret exists nowhere else and shard recovery cannot restore it.
+ *   - `opts` PRESENT: ROOTED in the master secret (the credential of record, per
+ *     CLAUDE.md), via the frozen `zkSecretForCircle` contract. Reconstructing the
+ *     master from shards re-derives this exact secret, so the identity survives
+ *     device loss. `index` mints a fresh identity in the same Circle on rejoin.
+ *
+ *  Either way the decimal secret lands in the SAME `aha:zk-secret:<commitHex>`
+ *  slot, so `getSecretFor` / `haveVotingKey` and every prove path stay identical
+ *  and cannot tell the two classes apart — which is exactly why legacy keeps
+ *  working untouched. */
+export async function newMemberIdentity(opts?: { master: Uint8Array; circle: Uint8Array; index?: number }): Promise<Uint8Array> {
   const p = await poseidon();
-  const rnd = new Uint8Array(32);
-  crypto.getRandomValues(rnd);
-  rnd[0] &= 0x1f; // keep it in the field
-  const secret = beToBig(rnd) % R;
+  let secret: bigint;
+  if (opts) {
+    secret = secretScalarFromBytes(await zkSecretForCircle(opts.master, opts.circle, opts.index ?? 0));
+  } else {
+    const rnd = new Uint8Array(32);
+    crypto.getRandomValues(rnd);
+    rnd[0] &= 0x1f; // keep it in the field
+    secret = secretScalarFromBytes(rnd);
+  }
   const commitment = p.F.toObject(p([secret])) as bigint;
   const cBytes = Uint8Array.from(to32BE(commitment));
   try { localStorage.setItem(SK(toHex(cBytes)), secret.toString()); } catch {}

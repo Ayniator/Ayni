@@ -439,13 +439,30 @@ pre.doc { white-space: pre-wrap; word-break: break-word; background: var(--bg-2)
   .twelve-text { font-size: 15.5px; }
 }
 
-/* "The 12" dropdown carries the AHA emblem above the two choices — it is what
-   the member sees while deciding between the Steps and the Traditions. */
-.nav-drop-twelve { min-width: 232px; padding-top: 10px; }
-.nav-drop-art {
-  display: block; width: 100%; max-width: 208px; height: auto; margin: 0 auto 8px;
-  border-radius: 10px; object-fit: contain;
+/* "The 12" landing page — the emblem, then the two doors. */
+.twelve-hub { text-align: center; max-width: 760px; margin: 0 auto; }
+.twelve-hub-art {
+  display: block; width: 100%; max-width: 340px; height: auto;
+  margin: 4px auto 18px; object-fit: contain;
 }
-@media (max-width: 940px) {
-  .nav-drop-art { max-width: 168px; }
+.twelve-hub .twelve-title { text-align: center; }
+.twelve-hub-lede { margin-left: auto; margin-right: auto; text-align: center; }
+.twelve-hub-doors {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px; margin-top: 22px; text-align: left;
 }
+.twelve-door {
+  display: flex; align-items: center; gap: 16px; padding: 20px;
+  text-decoration: none; color: inherit; transition: border-color .12s, transform .12s;
+}
+.twelve-door:hover { text-decoration: none; border-color: var(--accent); transform: translateY(-2px); }
+.twelve-door-alt:hover { border-color: var(--accent-2); }
+.twelve-door-num {
+  font-size: 34px; font-weight: 800; line-height: 1; letter-spacing: -0.03em;
+  color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.twelve-door-alt .twelve-door-num { color: var(--accent-2); }
+.twelve-door-body { display: flex; flex-direction: column; gap: 3px; }
+.twelve-door-title { font-weight: 700; font-size: 17px; }
+.twelve-door-sub { color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+@media (max-width: 560px) { .twelve-hub-art { max-width: 240px; } }
