@@ -12,6 +12,8 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Ayni } from "../target/types/ayni";
 import { assert } from "chai";
+import * as fs from "fs";
+import * as path from "path";
 import nacl from "tweetnacl";
 import { MemberTree, proveVote, to32BE } from "../app/voting/prove";
 import {
@@ -291,8 +293,10 @@ describe("ayni — MACI processing & tally (F39)", () => {
   it("refuses a reveal whose key does not match its commitment (front-running guard)", async () => {
     const honest = nacl.sign.keyPair();
     const attacker = nacl.sign.keyPair();
-    const nullifier = Uint8Array.from(proofs[1].nullifier); // already spent, but the
-    // commitment check fires first — this asserts the binding, not the nullifier.
+    // A nullifier nobody has spent, so the ONLY thing that can refuse the reveal
+    // is the commitment binding (the proof would fail later, but never gets there).
+    const nullifier = new Uint8Array(32);
+    nullifier.set([0x1f, 0x39, 0x39, 0x39]);
     const c = await maciSignupCommitment(roundPda.toBytes(), nullifier, honest.publicKey);
     const commitPda = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("macicommit"), roundPda.toBuffer(), Buffer.from(c)],
@@ -307,7 +311,7 @@ describe("ayni — MACI processing & tally (F39)", () => {
     let msg = "";
     try {
       await program.methods
-        .maciSignup([...attacker.publicKey], proofs[1].nullifier, proofs[1].proofA, proofs[1].proofB, proofs[1].proofC)
+        .maciSignup([...attacker.publicKey], [...nullifier], proofs[1].proofA, proofs[1].proofB, proofs[1].proofC)
         .accounts({
           round: roundPda,
           state: statePda,
@@ -456,89 +460,57 @@ describe("ayni — MACI processing & tally (F39)", () => {
     assert.equal(hexOf(Uint8Array.from(st.chainDigest)), hexOf(expected));
   });
 
-  it("commits a tally only from the coordinator, and only within the sign-up bound", async () => {
+  it("computes the tally off chain — the coerced YES is overridden by the key change", async () => {
     const signups = voters.map((v, i) => ({ pubkey: v.publicKey, index: i }));
     const tally = await coordinatorTally(roundPda.toBytes(), signups, published, coordinatorBox.secretKey);
     assert.deepEqual([tally.yes, tally.no], [2, 1], "the coerced YES was overridden by a key change");
 
-    // A stranger cannot commit.
-    let threw = false;
-    try {
-      await program.methods
-        .commitMaciTally(new anchor.BN(tally.yes), new anchor.BN(tally.no), [...tally.plaintextDigest])
-        .accounts({ round: roundPda, state: statePda, coordinator: seats[2].publicKey })
-        .signers([seats[2]])
-        .rpc();
-    } catch {
-      threw = true;
-    }
-    assert.isTrue(threw, "only the round's coordinator authority may commit");
-
-    // Ballots cannot be invented beyond the registered electorate.
-    threw = false;
-    try {
-      await program.methods
-        .commitMaciTally(new anchor.BN(4), new anchor.BN(0), [...tally.plaintextDigest])
-        .accounts({ round: roundPda, state: statePda, coordinator: seats[0].publicKey })
-        .signers([seats[0]])
-        .rpc();
-    } catch {
-      threw = true;
-    }
-    assert.isTrue(threw, "yes + no may not exceed signup_count");
-
-    await program.methods
-      .commitMaciTally(new anchor.BN(tally.yes), new anchor.BN(tally.no), [...tally.plaintextDigest])
-      .accounts({ round: roundPda, state: statePda, coordinator: seats[0].publicKey })
-      .signers([seats[0]])
-      .rpc();
-
-    const st: any = await (program.account as any).maciState.fetch(statePda);
-    assert.equal(st.stage, 3, "stage COMMITTED");
-    assert.equal(st.tallyYes.toNumber(), 2);
-    assert.equal(st.tallyNo.toNumber(), 1);
-    assert.equal(hexOf(Uint8Array.from(st.tallyHash)), hexOf(tally.tallyHash), "on-chain hash == recomputed hash");
-
-    const r: any = await (program.account as any).maciRound.fetch(roundPda);
-    assert.equal(hexOf(Uint8Array.from(r.tallyHash)), hexOf(tally.tallyHash), "MaciRound.tally_hash is finally used");
-
-    // The off-chain state machine and the digest agree with an independent
-    // replay of the decrypted queue — an auditor's exact procedure.
+    // An independent replay of the decrypted queue — an auditor's exact
+    // procedure — reaches the same numbers.
     const replay = applyMaciQueue(
       signups,
       plaintexts.map((p, i) => ({ index: i, command: p.slice(2, 2 + ((p[0] << 8) | p[1])) })),
       roundPda.toBytes()
     );
     assert.deepEqual([replay.yes, replay.no], [tally.yes, tally.no]);
+
+    // ...and the policy math the round WOULD apply is the plain ballot's.
+    const p = await program.account.memberProposal.fetch(proposalPda);
+    assert.isTrue(maciOutcome(tally.yes, tally.no, p.eligibleCount.toNumber(), 0, 0, 0, 0));
+
+    // Sanity: the sealed queue really is what the chain folded.
+    const st: any = await (program.account as any).maciState.fetch(statePda);
+    assert.equal(
+      hexOf(Uint8Array.from(st.chainDigest)),
+      hexOf(await maciChainDigest(roundPda.toBytes(), published))
+    );
+    assert.equal(
+      hexOf(Uint8Array.from(st.signupDigest)),
+      hexOf(await maciSignupDigest(signups))
+    );
   });
 
-  it("finalizes onto the proposal with the same quorum + pass math as a plain ballot", async () => {
-    await program.methods
-      .finalizeMaciRound()
-      .accounts({
-        round: roundPda,
-        state: statePda,
-        proposal: proposalPda,
-        config: anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("config"), circlePda.toBuffer()], program.programId)[0],
-        finalizer: payer.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
+  it("REFUSES to record that tally on chain — the two consequential instructions are disabled", async () => {
+    // Sentinel NRR-2026-08-12-f60-f61-maci (CRITICAL). The chain cannot verify a
+    // MACI tally (no process/tally circuits — F44), so neither `commit_maci_tally`
+    // nor `finalize_maci_round` may execute. This test is the tripwire: delete
+    // either guard and it fails.
+    const signups = voters.map((v, i) => ({ pubkey: v.publicKey, index: i }));
+    const tally = await coordinatorTally(roundPda.toBytes(), signups, published, coordinatorBox.secretKey);
 
-    const p = await program.account.memberProposal.fetch(proposalPda);
-    const st: any = await (program.account as any).maciState.fetch(statePda);
+    let msg = "";
+    try {
+      await program.methods
+        .commitMaciTally(new anchor.BN(tally.yes), new anchor.BN(tally.no), [...tally.plaintextDigest])
+        .accounts({ round: roundPda, state: statePda, coordinator: seats[0].publicKey })
+        .signers([seats[0]])
+        .rpc();
+    } catch (e: any) {
+      msg = String(e);
+    }
+    assert.include(msg, "MaciTallyUnverified", "commit_maci_tally must stay disabled");
 
-    // Defaults: quorum ceil(3/3) = 1, pass = yes > no. yes 2, no 1 ⇒ passes.
-    const expected = maciOutcome(2, 1, p.eligibleCount.toNumber(), 0, 0, 0, 0);
-    assert.isTrue(expected);
-    assert.equal(p.passed, expected, "outcome matches the policy math");
-    assert.equal(st.stage, 4, "stage FINALIZED");
-    assert.equal(st.passed, expected);
-    assert.equal(p.yes.toNumber(), 0, "the plain counters were never used");
-    assert.equal(p.no.toNumber(), 0);
-
-    // Terminal: a second finalize is refused.
-    let threw = false;
+    msg = "";
     try {
       await program.methods
         .finalizeMaciRound()
@@ -551,9 +523,44 @@ describe("ayni — MACI processing & tally (F39)", () => {
           systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc();
-    } catch {
-      threw = true;
+    } catch (e: any) {
+      msg = String(e);
     }
-    assert.isTrue(threw);
+    assert.include(msg, "MaciTallyUnverified", "finalize_maci_round must stay disabled");
+
+    // Nothing moved: no tally recorded, and above all no consequence reachable.
+    const st: any = await (program.account as any).maciState.fetch(statePda);
+    assert.equal(st.stage, 2, "the round stops at PROCESSED");
+    assert.equal(st.tallyYes.toNumber(), 0);
+    assert.equal(st.tallyNo.toNumber(), 0);
+    assert.isFalse(st.passed);
+
+    const r: any = await (program.account as any).maciRound.fetch(roundPda);
+    assert.equal(hexOf(Uint8Array.from(r.tallyHash)), hexOf(new Uint8Array(32)), "no tally hash was written");
+
+    const p = await program.account.memberProposal.fetch(proposalPda);
+    assert.isFalse(p.passed, "install_elected_seat / refill_faucet stay fail-closed");
+    assert.isTrue(p.finalized);
+    assert.equal(p.yes.toNumber(), 0);
+    assert.equal(p.no.toNumber(), 0);
+  });
+
+  it("pins both guards in the source (they may not be quietly deleted)", () => {
+    const read = (f: string) =>
+      fs.readFileSync(path.join(__dirname, "..", "programs", "ayni", "src", "instructions", f), "utf8");
+
+    for (const f of ["commit_maci_tally.rs", "finalize_maci_round.rs"]) {
+      assert.include(
+        read(f),
+        "return Err(AyniError::MaciTallyUnverified.into());",
+        `${f} must refuse to execute until a ZK-verified tally ships (F44)`
+      );
+    }
+
+    // The structural half of the fix: finalize_maci_round must never write the
+    // proposal's outcome field, even if the guard above is one day removed.
+    const finalize = read("finalize_maci_round.rs");
+    assert.notInclude(finalize, "p.passed = ", "a MACI outcome must not reach MemberProposal.passed");
+    assert.notInclude(finalize, "proposal.passed =", "a MACI outcome must not reach MemberProposal.passed");
   });
 });

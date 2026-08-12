@@ -21,10 +21,12 @@ use crate::state::{
 /// therefore carry **no** ballots yet — a round cannot be opened to discard
 /// votes already cast.
 ///
-/// Note the intermediate state this creates: between `open_maci_round` and
-/// `finalize_maci_round` the proposal reads `finalized = true, passed = false`.
-/// Consumers of a MACI proposal (e.g. `install_elected_seat`) correctly refuse
-/// to act until the MACI outcome is written, which is the fail-closed direction.
+/// The proposal then reads `finalized = true, passed = false` for good: a MACI
+/// outcome is recorded in `MaciState`, never written back onto the proposal,
+/// because the chain cannot verify it (see `finalize_maci_round`). So every
+/// existing consumer of `MemberProposal.passed` — `install_elected_seat`,
+/// `refill_faucet` — stays fail-closed for the whole life of the round. A MACI
+/// round records a group conscience; it does not, on its own, move anything.
 ///
 /// `challenge_secs` is the dispute window between the coordinator committing a
 /// tally and the outcome landing on the proposal (see docs/maci.md). 24 h is the

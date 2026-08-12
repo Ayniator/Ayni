@@ -66,16 +66,30 @@ pub struct UpsertMemberProfile<'info> {
 
     #[account(
         init_if_needed,
-        payer = member,
+        payer = payer,
         space = MemberProfile::SPACE,
         seeds = [MemberProfile::SEED, circle.key().as_ref(), member_membership.commitment.as_ref()],
         bump
     )]
     pub profile: Box<Account<'info, MemberProfile>>,
 
-    /// A key the member controls (owner or guardian); signs + pays rent.
-    #[account(mut)]
+    /// A key the member controls (owner or guardian). AUTHORISES ONLY — it is
+    /// deliberately not `mut` and pays nothing.
+    ///
+    /// This separation is the whole point. When a membership is shielded, this
+    /// is the derived key from `shield_membership`, which has never held a
+    /// lamport and must never need to. Making it the rent payer would force the
+    /// member to send SOL to a freshly-derived "anonymous" pubkey from a wallet
+    /// someone already knows them by — a single-hop funding transfer, which is
+    /// one of the most reliable clustering heuristics in chain analysis, and a
+    /// far stronger link than the co-signature this instruction already
+    /// implies. The derived key signs; somebody else's lamports pay.
     pub member: Signer<'info>,
+
+    /// Rent payer — any funded wallet. Normally the member's ordinary wallet;
+    /// a relayer can take this slot with no change to the program.
+    #[account(mut)]
+    pub payer: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }

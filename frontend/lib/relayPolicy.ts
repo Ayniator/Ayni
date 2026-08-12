@@ -70,6 +70,19 @@ export const RELAY_ALLOWLIST: Record<string, AllowedIx> = {
   // own jar, never the relayer, so this cannot be turned into a free-money tap
   // — and the jar pays at most one uniform grant per membership, ever.
   "297c242a39a3760e": { name: "activate_faucet_zk", payerIndex: 8, accountCount: 10, dataLen: 8 + 32 + 32 + 64 + 128 + 64 },
+  // MACI sign-up (F39), a commit–reveal pair. Relaying is the whole point, for
+  // the same reason as activate_faucet_zk: the sign-up proof establishes "a
+  // member of this Circle joined this round" WITHOUT naming which one, and a
+  // self-paid fee would hand that straight back by putting the member's wallet
+  // on the transaction at the exact moment they enrol. Without these entries
+  // the client detects the gap and self-pays — correct behaviour, but it means
+  // an un-allowlisted relayer silently de-anonymises every sign-up.
+  //
+  // Discriminators verified two ways: sha256("global:<name>")[0..8] computed
+  // independently, and cross-checked against the generated IDL, which also
+  // confirms the account counts (5 and 8).
+  "bb1e1edef153e84e": { name: "maci_signup_commit", payerIndex: 3, accountCount: 5, dataLen: 8 + 32 },
+  "145fa611785ffa3a": { name: "maci_signup", payerIndex: 6, accountCount: 8, dataLen: 8 + 32 + 32 + 64 + 128 + 64 },
   // send_message(id, recipient, eph_pubkey, nonce, expires_at, ciphertext[528])
   "392822b2bd0a411a": { name: "send_message", payerIndex: 1, accountCount: 3, dataLen: 8 + 8 + 32 + 32 + 24 + 8 + 4 + 528 },
   // publish_maci_message(eph_pubkey, ciphertext[176])

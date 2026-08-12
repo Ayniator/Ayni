@@ -433,7 +433,12 @@ export async function crankMaciMessages(
 
 /** Coordinator: decrypt the frozen queue, run the state machine, and commit the
  *  result. Everything it publishes is recomputable by anyone holding the same
- *  public data plus the decryption witnesses (docs/maci.md). */
+ *  public data plus the decryption witnesses (docs/maci.md).
+ *
+ *  **This currently reverts on chain with `MaciTallyUnverified`** — the program
+ *  refuses to record a tally it cannot verify (docs/maci.md §4.1), pending the
+ *  process/tally circuits (F44). Use `coordinatorTally` directly to compute and
+ *  publish the result off chain; the UI must NOT present a round as tallied. */
 export async function commitMaciTally(
   wallet: SigningWallet,
   round: PublicKey,
@@ -449,8 +454,12 @@ export async function commitMaciTally(
   return { signature, yes: tally.yes, no: tally.no, tallyHash: tally.tallyHash };
 }
 
-/** Write the outcome onto the member proposal after the dispute window.
- *  Permissionless — a coordinator cannot sit on a result it dislikes. */
+/** Record the outcome in `MaciState` after the dispute window. Permissionless —
+ *  a coordinator cannot sit on a result it dislikes. It never touches
+ *  `MemberProposal.passed`, so a MACI round moves nothing by itself.
+ *
+ *  **This currently reverts on chain with `MaciTallyUnverified`** — see
+ *  `commitMaciTally` and docs/maci.md §4.1. */
 export async function finalizeMaciRound(
   wallet: SigningWallet,
   round: PublicKey,

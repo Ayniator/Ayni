@@ -754,7 +754,8 @@ Epic 0 faucet landing (`programs/ayni/src/instructions/*.rs`, excluding
 | F8 Forkable federated Circles (`initialize_circle`) | `Circle` | code, built |
 | F28 Member election of Council seats (`link_seat_election`, `install_elected_seat`) | `SeatElection` | code, built; devnet e2e = claimed-only |
 | F34 Foundation-led federation governance (child rotation / close) | `ChildSeatVote`, `ChildCloseVote` | code, built |
-| MACI submission layer (`open_maci_round`, `publish_maci_message`) | `MaciRound`, `MaciMessage` | code, built. **Partial by design** — no coordinator, no process/tally circuits, no `submit_maci_tally`. A round collects sealed commands and produces **no verified result**. |
+| F39 MACI submission + processing (`open_maci_round`, `maci_signup_commit`, `maci_signup`, `publish_maci_message`, `close_maci_round`, `process_maci_messages`) | `MaciRound`, `MaciMessage`, `MaciState`, `MaciSignup`, `MaciSignupCommit` | code, built, localnet e2e (`tests/maci.ts`, real ZK proofs). Enforced by the program: one-member-one-voice ZK sign-up (commit–reveal, domain-separated nullifier), permissionless freeze at the deadline, and a `chain_digest` folded in strict index order — no replay, no reorder, no censoring. |
+| F39 MACI tally (`commit_maci_tally`, `finalize_maci_round`) | `MaciState.tally_*` | **DISABLED ON CHAIN** — both return `MaciTallyUnverified`, and `finalize_maci_round` never writes `MemberProposal.passed`. The chain cannot verify a MACI tally without the process/tally circuits (F44), and an unverified result must not reach `install_elected_seat` or `refill_faucet` (Sentinel NRR-2026-08-12-f60-f61-maci, CRITICAL). Results are computed and audited off chain via `coordinatorTally`; see docs/maci.md §4.1. |
 
 ### Resilience & recovery
 | Feature | Verified |

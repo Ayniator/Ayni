@@ -89,7 +89,7 @@ pub struct ShieldMembership<'info> {
     /// the next derivation index rather than rewriting this.
     #[account(
         init,
-        payer = member,
+        payer = payer,
         space = OwnerTag::SPACE,
         seeds = [OwnerTag::SEED, tag.as_ref()],
         bump
@@ -97,9 +97,19 @@ pub struct ShieldMembership<'info> {
     pub owner_tag: Box<Account<'info, OwnerTag>>,
 
     /// The membership's current `owner` (or, for an anonymous membership, any
-    /// key it controls). Signs + pays rent.
-    #[account(mut)]
+    /// key it controls). AUTHORISES ONLY — not `mut`, pays nothing.
+    ///
+    /// On a FIRST shield this is the member's ordinary wallet, which could have
+    /// paid. On a RE-shield (rotating to a new tag at the next index) it is the
+    /// previous derived key, which holds nothing — and must never need to, for
+    /// the reason spelled out in `upsert_member_profile`: funding a derived
+    /// "anonymous" key from a known wallet links them harder than co-signing
+    /// does. Same split, same reason, both instructions.
     pub member: Signer<'info>,
+
+    /// Rent payer — any funded wallet, or a relayer.
+    #[account(mut)]
+    pub payer: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }

@@ -22,7 +22,7 @@ cluster = "localnet"
 wallet = "~/.config/solana/aha-deployer.json"
 
 [scripts]
-test = "NODE_OPTIONS=--experimental-global-webcrypto node_modules/.bin/ts-mocha -p ./tsconfig.json -t 1000000 tests/ayni.ts tests/resilience.ts tests/cosign.ts tests/faucet.ts tests/epic1.ts tests/epic3.ts tests/epic5.ts tests/profile.ts tests/federation.ts tests/audit-fixes.ts tests/epic2.ts tests/relayer.ts tests/mailbox.ts tests/jazzicon.ts tests/sharding.ts tests/quipu.ts"
+test = "NODE_OPTIONS=--experimental-global-webcrypto node_modules/.bin/ts-mocha -p ./tsconfig.json -t 1000000 tests/ayni.ts tests/resilience.ts tests/cosign.ts tests/faucet.ts tests/epic1.ts tests/epic3.ts tests/epic5.ts tests/profile.ts tests/federation.ts tests/audit-fixes.ts tests/epic2.ts tests/relayer.ts tests/mailbox.ts tests/jazzicon.ts tests/sharding.ts tests/quipu.ts tests/maci-machine.ts tests/maci.ts"
 
 [test]
 startup_wait = 60000
