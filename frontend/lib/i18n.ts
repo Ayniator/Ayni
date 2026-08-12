@@ -50,7 +50,7 @@ type Dict = Partial<Record<Key, string>>;
 
 // English is the source of truth + the fallback for every other locale.
 const en: Record<string, string> = {
-  "nav.find": "Find a Circle",
+  "nav.find": "Find your Circle",
   "nav.reflections": "Daily Reflections",
   "nav.documents": "Documents",
   "nav.board": "Board",
@@ -64,6 +64,9 @@ const en: Record<string, string> = {
     "AHA is a 12 step Core Shamanism recovery and spiritual development program for human beings, built on trust, lineage, and proven ancestral wisdom.",
   "footer.line": "AHA — Ancestral Humanity Anonymous · governed by group conscience, not by an owner.",
   "nav.start": "Start here",
+  "nav.twelve": "The 12",
+  "nav.twelveSteps": "The 12 Steps",
+  "nav.twelveTraditions": "The 12 Traditions",
   "ctl.language": "Language",
   "ctl.theme.toLight": "Light",
   "ctl.theme.toDark": "Dark",

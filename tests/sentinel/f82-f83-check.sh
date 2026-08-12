@@ -148,8 +148,17 @@ grep -q "localReflectionFor(circle.circle, key)" "$FRONTEND/app/reflections/page
   && grep -q "setDisplay(asCircle(local))" "$FRONTEND/app/reflections/page.tsx" \
   && grep -q "if (r) setDisplay(asCircle(r))" "$FRONTEND/app/reflections/page.tsx" \
   || { echo "FAIL — Circle-precedence wiring (local + remote Circle entry beating the built-in) not found in reflections/page.tsx"; fail=1; }
-grep -q "defaultReflectionFor(key)" "$FRONTEND/app/reflections/page.tsx" \
-  || { echo "FAIL — built-in fallback call not found in reflections/page.tsx"; fail=1; }
+# The built-in fallback must still be called with the resolved day key. Since the
+# reflections-localisation round the call also threads the active locale, so this
+# asserts BOTH (strictly stronger than the original key-only check): drop the
+# locale argument and this fails, which is the point — a non-English member would
+# silently get English text back.
+grep -q "defaultReflectionFor(key, lang)" "$FRONTEND/app/reflections/page.tsx" \
+  || { echo "FAIL — built-in fallback call (with locale) not found in reflections/page.tsx"; fail=1; }
+# English stays the source of record: a missing/partial translation must fall back
+# to the English entry rather than render blank.
+grep -q "translated: false" "$FRONTEND/lib/reflections.ts" \
+  || { echo "FAIL — English fallback path missing from lib/reflections.ts"; fail=1; }
 
 # ---- F83: slogan + stealth link ---------------------------------------------
 grep -q "https://www.shamanism.org/core-shamanism/" "$FRONTEND/app/page.tsx" \

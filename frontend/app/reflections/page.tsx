@@ -74,7 +74,9 @@ export default function Reflections() {
       nearest: false,
     });
     const builtin = (): Display | null => {
-      const res = defaultReflectionFor(key);
+      // Sourced texts are shown in the member's language where a translation
+      // exists; English is the source of record and the fallback.
+      const res = defaultReflectionFor(key, lang);
       if (!res) return null;
       const e = res.entry;
       return {
@@ -119,7 +121,7 @@ export default function Reflections() {
     return () => {
       cancelled = true;
     };
-  }, [selKey, sel, circles]);
+  }, [selKey, sel, circles, lang]);
 
   const selCircle = circles.find((c) => c.pubkey === sel) || null;
 

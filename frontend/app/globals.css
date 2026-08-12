@@ -386,3 +386,46 @@ pre.doc { white-space: pre-wrap; word-break: break-word; background: var(--bg-2)
 }
 .seat-msg-gate .btn { background: #fff; color: var(--accent-ink); border: none; }
 .seat-msg-gate-err { opacity: .9; }
+
+/* ---- "The 12" nav dropdown ------------------------------------------------ */
+.nav-menu { position: relative; display: inline-flex; }
+.nav-menu-btn {
+  color: var(--muted); font-weight: 550; font-size: 14px; padding: 7px 10px;
+  border-radius: 9px; white-space: nowrap; background: none; border: none;
+  cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 4px;
+}
+.nav-menu-btn:hover, .nav-menu-btn[aria-expanded="true"] { color: var(--text); background: var(--bg-2); }
+.nav-caret { font-size: 10px; opacity: 0.75; }
+.nav-drop {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 40;
+  display: none; flex-direction: column; min-width: 190px; padding: 6px;
+  background: var(--panel); border: 1px solid var(--border-strong);
+  border-radius: 11px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.nav-drop.is-open { display: flex; }
+.nav-drop a { display: block; padding: 8px 10px; border-radius: 8px; font-size: 14px; }
+[dir="rtl"] .nav-drop { left: auto; right: 0; }
+
+/* ---- The Twelve Steps / Traditions reading pages -------------------------- */
+.twelve-title {
+  font-size: clamp(28px, 5vw, 42px); font-weight: 800; letter-spacing: -0.02em;
+  line-height: 1.1; margin: 6px 0 8px;
+}
+.twelve-lede { max-width: 60ch; }
+.twelve-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-width: 78ch; }
+.twelve-item {
+  display: grid; grid-template-columns: 3.1rem 1fr; align-items: start;
+  gap: 4px; padding: 18px 20px; margin: 0;
+}
+.twelve-num {
+  font-size: clamp(26px, 3.4vw, 34px); font-weight: 800; line-height: 1;
+  letter-spacing: -0.03em; color: var(--accent);
+  font-variant-numeric: tabular-nums; padding-top: 2px;
+}
+.twelve-traditions .twelve-num { color: var(--accent-2); }
+.twelve-text { margin: 0; font-size: 16.5px; line-height: 1.62; }
+.twelve-foot { margin-top: 18px; max-width: 70ch; }
+@media (max-width: 560px) {
+  .twelve-item { grid-template-columns: 2.4rem 1fr; padding: 15px 16px; }
+  .twelve-text { font-size: 15.5px; }
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BrandAyni from "./BrandAyni";
 import NotificationsBell from "./NotificationsBell";
@@ -26,6 +27,7 @@ export default function Nav() {
       <nav>
         <Link href="/">{t("nav.find")}</Link>
         <Link href="/onboarding">{t("nav.start")}</Link>
+        <TwelveMenu />
         <Link href="/me">{t("nav.me")}</Link>
         <InboxNavLink />
         <Link href="/reflections">{t("nav.reflections")}</Link>
@@ -41,5 +43,54 @@ export default function Nav() {
         <NetworkSelector />
       </div>
     </header>
+  );
+}
+
+// "The 12" — the Steps and the Traditions. Opens on hover for pointers and on
+// focus/click for keyboard and touch, so it is reachable without a mouse.
+function TwelveMenu() {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
+  return (
+    <span
+      className="nav-menu"
+      ref={wrap}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        className="nav-menu-btn"
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {t("nav.twelve")} <span className="nav-caret" aria-hidden="true">▾</span>
+      </button>
+      <span className={`nav-drop${open ? " is-open" : ""}`} role="menu">
+        <Link href="/twelve-steps" role="menuitem" onClick={() => setOpen(false)}>
+          {t("nav.twelveSteps")}
+        </Link>
+        <Link href="/twelve-traditions" role="menuitem" onClick={() => setOpen(false)}>
+          {t("nav.twelveTraditions")}
+        </Link>
+      </span>
+    </span>
   );
 }

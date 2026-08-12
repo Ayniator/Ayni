@@ -1471,3 +1471,13 @@ export const DEFAULT_REFLECTIONS: Record<string, DefaultReflection> = {
 
 // All entry keys, sorted — used for nearest-date fallback.
 export const REFLECTION_KEYS: string[] = ["01-01", "01-02", "01-04", "01-05", "01-06", "01-08", "01-09", "01-11", "01-12", "01-13", "01-15", "01-16", "01-18", "01-19", "01-20", "01-22", "01-23", "01-25", "01-26", "01-27", "01-29", "01-30", "02-01", "02-03", "02-04", "02-06", "02-08", "02-10", "02-11", "02-13", "02-15", "02-17", "02-18", "02-20", "02-22", "02-24", "02-25", "02-27", "03-01", "03-04", "03-06", "03-09", "03-12", "03-14", "03-17", "03-19", "03-22", "03-25", "03-27", "03-30", "04-02", "04-05", "04-08", "04-12", "04-15", "04-18", "04-22", "04-25", "04-28", "05-04", "05-12", "05-19", "05-27", "06-01", "06-03", "06-05", "06-07", "06-09", "06-11", "06-13", "06-15", "06-17", "06-19", "06-21", "06-23", "06-25", "06-27", "06-29", "07-02", "07-05", "07-08", "07-11", "07-14", "07-17", "07-20", "07-23", "07-26", "07-29", "08-01", "08-04", "08-07", "08-10", "08-13", "08-16", "08-18", "08-21", "08-24", "08-27", "08-30", "09-01", "09-02", "09-04", "09-06", "09-08", "09-09", "09-11", "09-12", "09-14", "09-16", "09-18", "09-19", "09-21", "09-22", "09-24", "09-26", "09-28", "09-29", "10-02", "10-05", "10-09", "10-12", "10-16", "10-19", "10-22", "10-26", "10-29", "11-01", "11-03", "11-05", "11-07", "11-08", "11-10", "11-12", "11-14", "11-16", "11-18", "11-20", "11-22", "11-23", "11-25", "11-27", "11-29", "12-01", "12-02", "12-04", "12-06", "12-07", "12-09", "12-11", "12-12", "12-14", "12-16", "12-17", "12-19", "12-20", "12-22", "12-24", "12-25", "12-27", "12-29", "12-30"];
+
+/** Per-locale translations of the entries above, keyed by locale then "MM-DD".
+ *  English is the source of record; a locale may be absent or partial, and
+ *  `lib/reflections.ts` overlays field-by-field with English as the fallback,
+ *  so a missing translation degrades to the original rather than to blank.
+ *  Citation fields (author, source, step) are deliberately not translated.
+ *  Populated by the reflections translation round — regenerate, do not hand-edit. */
+export type TranslatedReflection = Partial<Pick<DefaultReflection, "title" | "quote" | "reflection" | "denomination">>;
+
+export const REFLECTIONS_I18N: Record<string, Record<string, TranslatedReflection>> = {};
