@@ -63,6 +63,19 @@ const en: Record<string, string> = {
   "home.slogan":
     "AHA is a 12 step Core Shamanism recovery and spiritual development program for human beings, built on trust, lineage, and proven ancestral wisdom.",
   "footer.line": "AHA — Ancestral Humanity Anonymous · governed by group conscience, not by an owner.",
+  "create.gate.sponsorTitle": "It is too early to create a Circle",
+  "create.gate.sponsorBody":
+    "Your sponsor has not validated you yet. A Circle is founded by a validated member, so this step waits for that validation. Once your sponsor's validation is done, you can create your Circle here.",
+  "create.gate.sponsorAction": "Go to My Circle",
+  "create.gate.fundsTitle": "Not enough SOL to create a Circle",
+  "create.gate.fundsBody":
+    "Founding a Circle writes two accounts on Solana, and both must be paid for up front. Top up your wallet and come back — nothing has been created and nothing has been lost.",
+  "create.gate.needLabel": "Needed:",
+  "create.gate.haveLabel": "You have:",
+  "create.gate.fundsAction": "Open my wallet",
+  "nav.getAppAndroid": "Get AHA for Android",
+  "nav.getAppIos": "Get AHA for iOS",
+  "getapp.title": "Get AHA on your phone",
   "nav.start": "Start Here",
   "nav.twelve": "The 12",
   "nav.twelveSteps": "The 12 Steps",

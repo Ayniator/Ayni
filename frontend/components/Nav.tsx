@@ -10,6 +10,7 @@ import InboxNavLink from "./InboxNavLink";
 import SettingsControls from "./SettingsControls";
 import NetworkSelector from "./NetworkSelector";
 import { useT } from "./SettingsProvider";
+import { Platform, detectPlatform } from "../lib/platform";
 
 export default function Nav() {
   const t = useT();
@@ -34,6 +35,7 @@ export default function Nav() {
         <Link href="/documents">{t("nav.documents")}</Link>
         <Link href="/board">{t("nav.board")}</Link>
         <Link href="/create">{t("nav.create")}</Link>
+        <GetAppLink />
         <FoundationNavLink />
       </nav>
       <div className="nav-right">
@@ -45,6 +47,18 @@ export default function Nav() {
         <NetworkSelector />
       </div>
     </header>
+  );
+}
+
+/** "Get AHA for Android/iOS" — named for the platform the visitor is actually
+ *  on, so the label never promises a store they cannot use. Desktop visitors
+ *  get the Android wording, which is the only installable build today. */
+function GetAppLink() {
+  const t = useT();
+  const [platform, setPlatform] = useState<Platform>("web");
+  useEffect(() => setPlatform(detectPlatform()), []);
+  return (
+    <Link href="/get-app">{platform === "ios" ? t("nav.getAppIos") : t("nav.getAppAndroid")}</Link>
   );
 }
 

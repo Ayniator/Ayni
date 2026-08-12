@@ -164,6 +164,7 @@ describe("ayni — per-element visibility (Epic 5)", () => {
         membership: membershipPda(cShielded),
         ownerTag: ownerTagPda(shieldTag),
         member: shieldOwner.publicKey,
+        payer: shieldOwner.publicKey,
       })
       .signers([shieldOwner]).rpc();
 
@@ -213,21 +214,21 @@ describe("ayni — per-element visibility (Epic 5)", () => {
     // A stranger cannot shield someone else's membership out from under them.
     await expectFail(
       program.methods.shieldMembership([...otherTag], anchor.web3.Keypair.generate().publicKey)
-        .accounts({ membership: membershipPda(cViewer), ownerTag: ownerTagPda(otherTag), member: strangerOwner.publicKey })
+        .accounts({ membership: membershipPda(cViewer), ownerTag: ownerTagPda(otherTag), member: strangerOwner.publicKey, payer: strangerOwner.publicKey })
         .signers([strangerOwner]).rpc(),
       "Unauthorized"
     );
     // Nor can a Council seat impose it.
     await expectFail(
       program.methods.shieldMembership([...otherTag], anchor.web3.Keypair.generate().publicKey)
-        .accounts({ membership: membershipPda(cViewer), ownerTag: ownerTagPda(otherTag), member: seats[0].publicKey })
+        .accounts({ membership: membershipPda(cViewer), ownerTag: ownerTagPda(otherTag), member: seats[0].publicKey, payer: seats[0].publicKey })
         .signers([seats[0]]).rpc(),
       "Unauthorized"
     );
     // Shielding to the signing wallet would look done and change nothing.
     await expectFail(
       program.methods.shieldMembership([...otherTag], viewerOwner.publicKey)
-        .accounts({ membership: membershipPda(cViewer), ownerTag: ownerTagPda(otherTag), member: viewerOwner.publicKey })
+        .accounts({ membership: membershipPda(cViewer), ownerTag: ownerTagPda(otherTag), member: viewerOwner.publicKey, payer: viewerOwner.publicKey })
         .signers([viewerOwner]).rpc(),
       "OwnerNotShielded"
     );
@@ -235,7 +236,7 @@ describe("ayni — per-element visibility (Epic 5)", () => {
     const zero = Buffer.alloc(32);
     await expectFail(
       program.methods.shieldMembership([...zero], anchor.web3.Keypair.generate().publicKey)
-        .accounts({ membership: membershipPda(cViewer), ownerTag: ownerTagPda(zero), member: viewerOwner.publicKey })
+        .accounts({ membership: membershipPda(cViewer), ownerTag: ownerTagPda(zero), member: viewerOwner.publicKey, payer: viewerOwner.publicKey })
         .signers([viewerOwner]).rpc(),
       "InvalidOwnerTag"
     );
@@ -245,7 +246,7 @@ describe("ayni — per-element visibility (Epic 5)", () => {
     const tag = sha256(Buffer.from("strand-attempt"));
     await expectFail(
       program.methods.shieldMembership([...tag], anchor.web3.PublicKey.default)
-        .accounts({ membership: membershipPda(cViewer), ownerTag: ownerTagPda(tag), member: viewerOwner.publicKey })
+        .accounts({ membership: membershipPda(cViewer), ownerTag: ownerTagPda(tag), member: viewerOwner.publicKey, payer: viewerOwner.publicKey })
         .signers([viewerOwner]).rpc(),
       "MembershipWouldBeUnusable"
     );
@@ -269,9 +270,15 @@ describe("ayni — per-element visibility (Epic 5)", () => {
         circle,
         memberMembership: membershipPda(cShielded),
         profile: profilePda(cShielded),
+        // The derived key AUTHORISES; the member's ordinary wallet PAYS. The
+        // derived key is never airdropped anywhere in this file — that is the
+        // assertion: a shielded membership must be usable by a key that has
+        // never held a lamport, because funding it from a known wallet would
+        // link the two harder than co-signing does.
         member: shieldedOwner.publicKey,
+        payer: shieldOwner.publicKey,
       })
-      .signers([shieldedOwner]).rpc();
+      .signers([shieldedOwner, shieldOwner]).rpc();
 
     // Anyone may READ the account. What they get is noise.
     const prof: any = await program.account.memberProfile.fetch(profilePda(cShielded));
@@ -318,6 +325,18 @@ describe("ayni — per-element visibility (Epic 5)", () => {
     assert.equal(Buffer.from(text.slice(2, 2 + len)).toString(), "one day at a time");
   });
 
+  it("never requires the shielded key to hold a lamport", async () => {
+    // Sentinel NRR-2026-08-12-f60-f61-maci, Regression 2 (CRITICAL): the profile
+    // write used `payer = member`, so the derived key had to be funded — and the
+    // only way to fund it is a single-hop transfer from a wallet the member is
+    // known by, which is a stronger deanonymisation link (the funding-source
+    // heuristic) than the co-signature the design already admits to. Authority
+    // and payer are now separate accounts. This asserts the key that authorised
+    // every write above still has a zero balance.
+    const bal = await provider.connection.getBalance(shieldedOwner.publicKey);
+    assert.equal(bal, 0, "the shielded key must never need funding");
+  });
+
   it("leaves an outsider with an address they cannot compute — hidden ≡ absent", async () => {
     // A third member of the same Circle, in the audience of nothing: their
     // derived drop address simply has no account at it. There is no "denied"
@@ -349,8 +368,8 @@ describe("ayni — per-element visibility (Epic 5)", () => {
     const newBio = Buffer.from(nacl.randomBytes(200));
     const ownerEnc = encKey(vkShield);
     await program.methods.upsertMemberProfile([...ownerEnc.publicKey], EPOCH + 1, [...newBio], [...Buffer.alloc(64)])
-      .accounts({ circle, memberMembership: membershipPda(cShielded), profile: profilePda(cShielded), member: shieldedOwner.publicKey })
-      .signers([shieldedOwner]).rpc();
+      .accounts({ circle, memberMembership: membershipPda(cShielded), profile: profilePda(cShielded), member: shieldedOwner.publicKey, payer: shieldOwner.publicKey })
+      .signers([shieldedOwner, shieldOwner]).rpc();
 
     const viewerEnc = encKey(vkViewer);
     const shared = nacl.scalarMult(viewerEnc.secretKey, ownerEnc.publicKey);
@@ -361,8 +380,8 @@ describe("ayni — per-element visibility (Epic 5)", () => {
     // And an epoch may not be rolled back to resurrect the stranded drops.
     await expectFail(
       program.methods.upsertMemberProfile([...ownerEnc.publicKey], EPOCH, [...newBio], [...Buffer.alloc(64)])
-        .accounts({ circle, memberMembership: membershipPda(cShielded), profile: profilePda(cShielded), member: shieldedOwner.publicKey })
-        .signers([shieldedOwner]).rpc(),
+        .accounts({ circle, memberMembership: membershipPda(cShielded), profile: profilePda(cShielded), member: shieldedOwner.publicKey, payer: shieldOwner.publicKey })
+        .signers([shieldedOwner, shieldOwner]).rpc(),
       "EpochWentBackwards"
     );
   });

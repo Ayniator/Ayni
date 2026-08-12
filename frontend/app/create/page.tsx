@@ -32,6 +32,7 @@ import { createPost } from "../../lib/posts";
 import { validCoord } from "../../lib/geo";
 import { COUNTRIES } from "../../lib/countries";
 import { setCircleCountry } from "../../lib/country";
+import { CreateEligibility, checkCreateEligibility, solOf } from "../../lib/createGate";
 
 function pk(s: string): PublicKey | null {
   try {
@@ -48,6 +49,9 @@ export default function Create() {
   const me = publicKey?.toBase58() ?? "";
 
   const [circles, setCircles] = useState<CircleInfo[]>([]);
+  // F92 — creation preconditions. `null` = not yet answered; the wizard is not
+  // rendered until both are known and open.
+  const [gate, setGate] = useState<CreateEligibility | null>(null);
   const [name, setName] = useState("");
   const [parent, setParent] = useState("");
   const [mySeat, setMySeat] = useState<number>(SECRETARY);
@@ -216,6 +220,48 @@ export default function Create() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // F92 — ask both gates once the wallet and the Circle list are in.
+  useEffect(() => {
+    if (!publicKey) { setGate(null); return; }
+    let live = true;
+    checkCreateEligibility(publicKey, circles)
+      .then((g) => live && setGate(g))
+      .catch(() => live && setGate(null));
+    return () => { live = false; };
+  }, [publicKey, circles]);
+
+  // The blocking popup: shown INSTEAD of the wizard, never over a usable form.
+  // Two distinct reasons, never conflated — one is about standing, the other is
+  // about lamports, and telling a member "you cannot" without saying which
+  // would be the worst of both.
+  const blocked = connected && gate && !gate.ok;
+  if (blocked) {
+    const sponsorGate = !gate.validated;
+    return (
+      <div className="gate-scrim">
+        <div className="card gate-modal" role="dialog" aria-modal="true">
+          <h2 style={{ marginTop: 0 }}>
+            {sponsorGate ? t("create.gate.sponsorTitle") : t("create.gate.fundsTitle")}
+          </h2>
+          <p style={{ marginBottom: 10 }}>
+            {sponsorGate ? t("create.gate.sponsorBody") : t("create.gate.fundsBody")}
+          </p>
+          {!sponsorGate && (
+            <p className="mono sm" style={{ margin: "0 0 10px" }}>
+              {t("create.gate.needLabel")} {solOf(gate.required)} SOL ·{" "}
+              {t("create.gate.haveLabel")} {solOf(gate.balance)} SOL
+            </p>
+          )}
+          <p style={{ margin: 0 }}>
+            <a href={sponsorGate ? "/me" : "/wallet"} className="btn btn-sm">
+              {sponsorGate ? t("create.gate.sponsorAction") : t("create.gate.fundsAction")}
+            </a>
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (done) {

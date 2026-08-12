@@ -133,6 +133,20 @@ shields today loses the ability to post from the UI until those call sites are
 updated. That is a deliberate, stated limitation of this round, not an oversight
 — see §4.
 
+**The derived key never needs a balance, and this is load-bearing.**
+`shield_membership` and `upsert_member_profile` both separate the **authority**
+account from the **rent payer** account: the derived key signs, and any funded
+wallet (or a relayer) pays. The first cut of this round got that wrong — it had
+`payer = member`, which meant the derived key had to hold SOL, and the only
+practical way to give it SOL is a single-hop transfer from a wallet the member is
+already known by. That transfer is the *funding-source heuristic*, one of the
+most reliable clustering techniques in real chain analysis, and it would have
+been a **stronger** link than the co-signature caveat below — silently undoing
+the property this whole mechanism exists to provide. Caught by Sentinel
+(`reports/sentinel/NRR-2026-08-12-f60-f61-maci.md`, Regression 2, CRITICAL) and
+fixed; `tests/epic5.ts` now asserts the shielded key's balance is still zero
+after it has authorised every write in the suite.
+
 ## 3. The encrypted read path (F60 Phase-2)
 
 Before this round, per-tier visibility was a rendering decision: `mayView()` in
@@ -241,7 +255,16 @@ heading, no gap, no lock and no placeholder.
 - **`recovery_keys` are still enumerable** by the same memcmp attack `owner`
   had. Same fix applies; not done.
 - **Fee payment is not relayed**, so the transaction graph still links a wallet
-  to the memberships it acts for.
+  to the memberships it acts for. The separate `payer` account added this round
+  is the seam a relayer slots into with no program change — but no relayer is
+  wired to it yet.
+- **`tag` and `drop_id` are unbound instruction arguments.** `OwnerTag` and
+  `VisibilityKeyDrop` are `init`-only (never overwritten), but nothing binds the
+  seed to the caller's own secret, so an observer who sees a pending
+  `shield_membership` or `grant_visibility_key` and front-runs it with the same
+  seed and junk data makes the legitimate `init` fail. That is griefing — a
+  forced retry at the next index or epoch — not a data or privacy compromise.
+  Untested and unfixed (Sentinel, same report).
 - **`/board`** now renders nothing to an unconnected visitor and issues no post
   query; other public surfaces have not been re-audited in this round.
 

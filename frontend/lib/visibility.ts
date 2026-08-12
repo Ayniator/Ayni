@@ -201,6 +201,10 @@ export async function shieldMembership(
       membership: membershipPda(circle, toBytes(memberHex)),
       ownerTag: ownerTagPda(tag),
       member: wallet.publicKey,
+      // The wallet pays the rent; the derived key never holds a lamport (see
+      // the account docs on `shield_membership` for why funding it is worse
+      // than co-signing).
+      payer: wallet.publicKey,
       systemProgram: SystemProgram.programId,
     })
     .rpc();
@@ -303,7 +307,11 @@ export async function publishProfile(
       circle,
       memberMembership: membershipPda(circle, commitment),
       profile: memberProfilePda(circle, commitment),
+      // Authority and rent payer are DIFFERENT accounts on purpose: a shielded
+      // membership's `owner` is the derived key, which has no balance and must
+      // never be funded from a wallet the member is known by.
       member: opts.signer ? opts.signer.publicKey : wallet.publicKey,
+      payer: wallet.publicKey,
       systemProgram: SystemProgram.programId,
     });
   return opts.signer ? b.signers([opts.signer]).rpc() : b.rpc();

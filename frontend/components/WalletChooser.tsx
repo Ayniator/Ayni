@@ -14,33 +14,12 @@
 
 import { useEffect, useState } from "react";
 import { useT } from "./SettingsProvider";
+import { Platform, detectPlatform } from "../lib/platform";
 // docs/wallets.json is the single source of truth, re-reviewed each equinox; a
 // copy is served at /wallets.json (frontend/public/) and fetched at runtime, so
 // the recommendation can follow reality without a code change.
 type Links = { ios?: string | null; android?: string | null; web?: string | null };
 type Wallet = { id: string; name: string; custody: string; note?: string; links: Links };
-
-/** Which of the three install routes this device can actually use. */
-type Platform = "ios" | "android" | "web";
-
-/**
- * Detect the device so the install link that WORKS here comes first.
- *
- * This reorders the three links INSIDE every wallet card identically, so it
- * cannot advantage one wallet over another — T6 (no endorsements) is untouched,
- * and the wallet order itself stays the uniform shuffle below. Nothing detected
- * here is stored, sent anywhere, or mixed into that shuffle: it is read from the
- * user agent at mount and used only to sort three buttons.
- */
-function detectPlatform(): Platform {
-  if (typeof navigator === "undefined") return "web";
-  const ua = navigator.userAgent || "";
-  if (/android/i.test(ua)) return "android";
-  if (/iphone|ipad|ipod/i.test(ua)) return "ios";
-  // iPadOS 13+ reports a desktop Mac user agent; the touch points give it away.
-  if (/macintosh|mac os x/i.test(ua) && (navigator.maxTouchPoints ?? 0) > 1) return "ios";
-  return "web";
-}
 
 /** Where each platform's own link goes first, and the rest keep a stable order
  *  so the card does not reshuffle its buttons on re-render. */
