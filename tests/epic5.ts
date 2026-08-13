@@ -120,7 +120,8 @@ describe("ayni — per-element visibility (Epic 5)", () => {
   // longer matches cannot find their own membership.
   const OWNER_TAG_DOMAIN = Buffer.from("aha-owner-tag-v1");
   const OWNER_KEY_DOMAIN = Buffer.from("aha-owner-key-v1");
-  const ENC_KEY_DOMAIN = Buffer.from("aha-vis-enc-v1");
+  const ENC_KEY_DOMAIN_V1 = Buffer.from("aha-vis-enc-v1"); // legacy, read-only
+  const ENC_KEY_DOMAIN = Buffer.from("aha-vis-enc-v2");
   const ELEMENT_DOMAIN = Buffer.from("aha-vis-elem-v1");
   const DROP_DOMAIN = Buffer.from("aha-vis-drop-v1");
   const WRAP_DOMAIN = Buffer.from("aha-vis-wrap-v1");
@@ -129,7 +130,12 @@ describe("ayni — per-element visibility (Epic 5)", () => {
   const ownerTagFor = (vk: Buffer, index = 0) => sha256(OWNER_TAG_DOMAIN, vk, circle.toBuffer(), u32le(index));
   const shieldedKey = (vk: Buffer, index = 0) =>
     anchor.web3.Keypair.fromSeed(sha256(OWNER_KEY_DOMAIN, vk, circle.toBuffer(), u32le(index)));
-  const encKey = (vk: Buffer) => nacl.box.keyPair.fromSecretKey(sha256(ENC_KEY_DOMAIN, vk));
+  // v2 folds the Circle in. v1 did not, which is the defect this pins: one
+  // member in three Circles published the SAME `enc_pub` in all three, so a
+  // memcmp on that field regrouped exactly what shielding had un-grouped.
+  const encKey = (vk: Buffer, c: anchor.web3.PublicKey = circle) =>
+    nacl.box.keyPair.fromSecretKey(sha256(ENC_KEY_DOMAIN, vk, c.toBuffer()));
+  const legacyEncKey = (vk: Buffer) => nacl.box.keyPair.fromSecretKey(sha256(ENC_KEY_DOMAIN_V1, vk));
   const elementKey = (vk: Buffer, commitment: Buffer, element: number, epoch: number) =>
     sha256(ELEMENT_DOMAIN, vk, circle.toBuffer(), commitment, Buffer.from([element]), u16le(epoch));
   const dropIdFor = (shared: Uint8Array, commitment: Buffer, epoch: number) =>
@@ -499,6 +505,45 @@ describe("ayni — per-element visibility (Epic 5)", () => {
         assert.isFalse(raw.includes(c), "a drop must not name a commitment either");
       }
     }
+  });
+
+  it("F61-R3: a member's profile key differs per Circle — enc_pub is not a cross-Circle handle", () => {
+    // THE DEFECT THIS PINS. `enc_pub` is published in the clear in every
+    // MemberProfile. Under v1 it derived from the viewing secret ALONE, so one
+    // member in three Circles wrote the SAME 32 bytes three times: a single
+    // memcmp on that field relinked the memberships `ownerTag` had just
+    // unlinked. Shielding moved the handle, it did not remove it.
+    const other = anchor.web3.Keypair.generate().publicKey; // a different Circle
+    const here = encKey(vkShield, circle).publicKey;
+    const there = encKey(vkShield, other).publicKey;
+
+    assert.notDeepEqual(
+      Buffer.from(here),
+      Buffer.from(there),
+      "same member, two Circles, identical enc_pub — the cross-Circle handle is back"
+    );
+
+    // And the legacy derivation is exactly the thing that must never come back
+    // as a WRITE path: it is Circle-blind by construction.
+    const legacy = legacyEncKey(vkShield).publicKey;
+    assert.deepEqual(
+      Buffer.from(legacy),
+      Buffer.from(legacyEncKey(vkShield).publicKey),
+      "sanity: legacy derivation is deterministic"
+    );
+    assert.notDeepEqual(
+      Buffer.from(legacy),
+      Buffer.from(here),
+      "v2 must not collapse back onto the Circle-blind v1 key"
+    );
+
+    // Distinct members stay distinct in the same Circle, so the binding did not
+    // accidentally make the key a function of the Circle alone.
+    assert.notDeepEqual(
+      Buffer.from(encKey(vkViewer, circle).publicKey),
+      Buffer.from(here),
+      "two members in one Circle must not share a profile key"
+    );
   });
 
   it("revokes by re-keying, not by naming anyone", async () => {

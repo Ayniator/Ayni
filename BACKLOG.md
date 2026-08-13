@@ -453,7 +453,20 @@ transaction history links that wallet↔membership permanently — only
 shield-at-issuance fixes it; with NO relayer configured the client falls back to
 wallet-paid and says so in the UI; shielded-ness and its count remain public;
 `recovery_keys` remain enumerable by the same attack. `docs/visibility.md`
-§3b/§4.) | Hidden ≡ absent: no lock icons, no "this is private" indicators, identical layout for a sparse newcomer and a private elder. Retrofit so nothing is readable by an unconnected visitor — today `/board` renders posts and author identicons with no wallet connected (posting is gated, reading is not), `Membership.owner` wallets are enumerable via memcmp, and shared material is served through a public IPFS gateway. |
+§3b/§4.
+**2026-08-12 (R3) — `enc_pub` bound to the Circle.** The round above left one
+pre-existing hole it had itself found: `MemberProfile.enc_pub` derived from the
+viewing secret alone, so a member publishing profiles in two Circles wrote the
+same 32 bytes in both — a memcmp handle regrouping exactly what `OwnerTag`
+un-grouped, undoing the fix through a different field. Now
+`SHA-256("aha-vis-enc-v2" ‖ viewing_secret ‖ circle)`, a NEW frozen domain, with
+`legacyProfileEncKey` retained for READING so no published profile or key drop
+is stranded — the earlier claim that fixing this would strand them was wrong,
+and element keys were already Circle-bound. Client-only: no program change, no
+account migration, no redeploy. **Still open**: the fix is in the write path, so
+an existing profile keeps its old global key on chain until the member
+re-publishes, and re-publishing moves every drop address derived from it, so
+earlier grants must be re-issued.) | Hidden ≡ absent: no lock icons, no "this is private" indicators, identical layout for a sparse newcomer and a private elder. Retrofit so nothing is readable by an unconnected visitor — today `/board` renders posts and author identicons with no wallet connected (posting is gated, reading is not), `Membership.owner` wallets are enumerable via memcmp, and shared material is served through a public IPFS gateway. |
 
 ### E6 — avatar / stone-mark
 | # | Epic | Item | Status | Notes |

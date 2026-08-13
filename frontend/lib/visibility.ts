@@ -57,8 +57,10 @@ import {
   openElementKeys,
   opaqueBio,
   ownerTagFor,
+  bytesEqual,
   packAvatarRef,
   profileEncKey,
+  legacyProfileEncKey,
   sealBio,
   sealElementKeys,
   sharedSecret,
@@ -347,7 +349,9 @@ export async function publishProfile(
   const vk = await deriveViewingSecret(master);
   const commitment = toBytes(memberHex);
   const epoch = opts.epoch ?? 1;
-  const enc = await profileEncKey(vk);
+  // Circle-bound (v2). Every write goes out under the new derivation, so a
+  // member still carrying a v1 `enc_pub` migrates the moment they next publish.
+  const enc = await profileEncKey(vk, circle.toBytes());
 
   const bioCt = opts.bio
     ? sealBio(opts.bio, await elementKey(vk, circle.toBytes(), commitment, ELEMENT_BIO, epoch))
@@ -403,7 +407,7 @@ export async function grantElementKeys(
 ): Promise<{ signature: string; relayed: boolean }> {
   const vk = await deriveViewingSecret(master);
   const commitment = toBytes(memberHex);
-  const enc = await profileEncKey(vk);
+  const enc = await profileEncKey(vk, circle.toBytes());
   const shared = sharedSecret(enc.secretKey, viewerEncPub);
   const dropId = await dropIdFor(shared, commitment, epoch);
   const sealed = await sealElementKeys(
@@ -472,24 +476,41 @@ export async function openMemberProfile(
   if (!vk) return {};
 
   const commitment = toBytes(memberHex);
-  const enc = await profileEncKey(vk);
+  // Circle-bound (v2) is the live derivation. The v1 key — the same 32 bytes in
+  // every Circle — is derived ONLY to read what was published before the fix:
+  // profiles still carrying a v1 `enc_pub`, and key drops addressed under a v1
+  // shared secret. Nothing is ever sealed under it. See `legacyProfileEncKey`.
+  const enc = await profileEncKey(vk, circle.toBytes());
+  const legacyEnc = await legacyProfileEncKey(vk);
 
   let bioKey: Uint8Array | null = null;
   let avatarKey: Uint8Array | null = null;
 
-  if (enc.publicKey.every((b, i) => b === sealedProfile.encPub[i])) {
-    // It is our own profile — derive both keys directly.
+  const mine =
+    bytesEqual(enc.publicKey, sealedProfile.encPub) ||
+    bytesEqual(legacyEnc.publicKey, sealedProfile.encPub);
+
+  if (mine) {
+    // It is our own profile — derive both keys directly. This path is unchanged
+    // by the fix: element keys were already Circle-bound, so a member whose
+    // profile predates v2 still opens their own bio and avatar.
     bioKey = await elementKey(vk, circle.toBytes(), commitment, ELEMENT_BIO, sealedProfile.epoch);
     avatarKey = await elementKey(vk, circle.toBytes(), commitment, ELEMENT_AVATAR, sealedProfile.epoch);
   } else {
-    const shared = sharedSecret(enc.secretKey, sealedProfile.encPub);
-    const dropId = await dropIdFor(shared, commitment, sealedProfile.epoch);
-    try {
-      const d: any = await (readOnlyProgram().account as any).visibilityKeyDrop.fetch(keyDropPda(dropId));
-      const keys = await openElementKeys(Uint8Array.from(d.sealed), shared);
-      if (keys) { bioKey = keys.bio; avatarKey = keys.avatar; }
-    } catch {
-      /* no drop for us — indistinguishable from no content */
+    // Someone else's profile: look for a drop addressed to us. The owner sealed
+    // it to whichever of OUR public keys we handed them, so try the current
+    // derivation first and fall back to the legacy one for drops granted before
+    // the fix. A miss on both is indistinguishable from no content.
+    for (const secret of [enc.secretKey, legacyEnc.secretKey]) {
+      const shared = sharedSecret(secret, sealedProfile.encPub);
+      const dropId = await dropIdFor(shared, commitment, sealedProfile.epoch);
+      try {
+        const d: any = await (readOnlyProgram().account as any).visibilityKeyDrop.fetch(keyDropPda(dropId));
+        const keys = await openElementKeys(Uint8Array.from(d.sealed), shared);
+        if (keys) { bioKey = keys.bio; avatarKey = keys.avatar; break; }
+      } catch {
+        /* no drop for us under this derivation — try the next, then give up */
+      }
     }
   }
 
@@ -511,8 +532,14 @@ export async function openMemberProfile(
   return out;
 }
 
-/** The viewer's own X25519 profile key — what a member hands (or publishes) so
- *  others can seal element keys to them. */
-export async function myEncPub(master: Uint8Array): Promise<Uint8Array> {
-  return (await profileEncKey(await deriveViewingSecret(master))).publicKey;
+/** The viewer's own X25519 profile key for ONE Circle — what a member hands (or
+ *  publishes) so others can seal element keys to them.
+ *
+ *  Circle-scoped, so the key a member shows in one Circle is not the key they
+ *  show in another. Handing the same 32 bytes to two Circles is exactly the
+ *  cross-Circle handle this fix removes, so the Circle is a required argument
+ *  rather than an optional one: there is no correct Circle-less answer. */
+export async function myEncPub(master: Uint8Array, circle: PublicKey): Promise<Uint8Array> {
+  const vk = await deriveViewingSecret(master);
+  return (await profileEncKey(vk, circle.toBytes())).publicKey;
 }

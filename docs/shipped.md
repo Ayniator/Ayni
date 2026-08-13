@@ -94,10 +94,35 @@ to that membership permanently (only shield-at-issuance fixes that); a shielded
 member's posts are groupable with each other and with their membership via the
 derived key, which names nobody; `recovery_keys` remain enumerable. **And one
 pre-existing defect found while auditing this round, not introduced by it:**
-`MemberProfile.enc_pub` is derived without the Circle, so a member who publishes
-a profile in two Circles publishes identical bytes in both — a memcmp handle
-that regroups what shielding un-grouped. Not fixed here (the fix strands every
-published profile and drop); see `docs/visibility.md` §4.
+`MemberProfile.enc_pub` was derived without the Circle, so a member who
+published a profile in two Circles published identical bytes in both — a memcmp
+handle that regroups what shielding un-grouped. **Fixed in F61-R3 below.**
+
+## F61-R3 — `enc_pub` bound to the Circle (2026-08-12)
+
+Closes the defect above. `profileEncKey` now derives under a new frozen domain,
+`SHA-256("aha-vis-enc-v2" ‖ viewing_secret ‖ circle)`, so a member shows an
+unrelated profile key in each Circle and `enc_pub` stops being a cross-Circle
+memcmp handle. Sibling derivations (`ownerTag`, `shieldedOwnerKey`,
+`elementKey`) already folded the Circle in; this one had been missed, silently,
+because nothing about a correct-looking public key says which inputs produced
+it.
+
+Nothing is stranded: `legacyProfileEncKey` still derives the v1 key for
+**reading**, so profiles and key drops published before this round still open
+(the reader tries v2, then v1). Element keys were already Circle-bound, so a
+member's own bio and avatar were never at risk.
+
+**Not automatic, and worth stating plainly:** the fix is in the write path. An
+existing profile keeps its old global `enc_pub` on chain until the member next
+publishes, so members who published before this round are not protected until
+they re-publish — and when they do, their `enc_pub` changes, which moves every
+drop address derived from it, so grants issued earlier must be re-issued. Same
+mechanic as an epoch bump, but a real cost.
+
+Covered by `tests/epic5.ts` — `F61-R3: a member's profile key differs per Circle`,
+which pins all three properties: two Circles give different keys, v2 never
+collapses onto v1, and two members in one Circle do not collide.
 
 ## F35 (Traditions fix) — anonymous faucet activation (2026-08-12f)
 

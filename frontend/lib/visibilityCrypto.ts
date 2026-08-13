@@ -42,7 +42,8 @@ const td = new TextDecoder();
 export const VIEW_DOMAIN = "aha-owner-view-v1"; // master  → viewing secret
 export const TAG_DOMAIN = "aha-owner-tag-v1"; //  viewing → owner tag (the index)
 export const OWNER_KEY_DOMAIN = "aha-owner-key-v1"; // viewing → shielded signing key
-export const ENC_KEY_DOMAIN = "aha-vis-enc-v1"; //   viewing → X25519 profile key
+export const ENC_KEY_DOMAIN = "aha-vis-enc-v1"; //   viewing → X25519 profile key (LEGACY, read-only)
+export const ENC_KEY_DOMAIN_V2 = "aha-vis-enc-v2"; // viewing + circle → X25519 profile key
 export const ELEMENT_DOMAIN = "aha-vis-elem-v1"; //  viewing → per-element content key
 export const DROP_DOMAIN = "aha-vis-drop-v1"; //     shared  → key-drop address
 export const WRAP_DOMAIN = "aha-vis-wrap-v1"; //     shared  → key-drop wrapping key
@@ -208,11 +209,43 @@ export async function shieldedOwnerKey(
 
 // --- the encrypted profile --------------------------------------------------
 
-/** The member's X25519 profile keypair, derived from the viewing secret. Its
- *  PUBLIC half goes on chain in `MemberProfile.enc_pub` — it is a public key by
- *  definition and links to no wallet and no commitment beyond the profile it
- *  sits in. */
-export async function profileEncKey(vk: Uint8Array): Promise<nacl.BoxKeyPair> {
+/** The member's X25519 profile keypair for ONE Circle. Its PUBLIC half goes on
+ *  chain in `MemberProfile.enc_pub`.
+ *
+ *  BOUND TO THE CIRCLE, and that binding is the whole point. v1 derived this
+ *  from the viewing secret alone, so a member who belonged to three Circles
+ *  published the SAME 32 bytes in all three `MemberProfile` accounts — one
+ *  memcmp on `enc_pub` regrouped the very memberships shielding had just
+ *  un-grouped, undoing `ownerTag`'s work through a different field. The sibling
+ *  derivations (`ownerTag`, `shieldedOwnerKey`, `elementKey`) all fold the
+ *  Circle in; this one did not, and the omission was silent because nothing
+ *  about a correct-looking public key says which inputs produced it.
+ *
+ *  Two tags of the same member are unlinkable for the same reason as everywhere
+ *  else here: distinct Circles hash to unrelated values.
+ *
+ *  The domain is v2 rather than v1-with-more-input because these tags are
+ *  FROZEN (see the header): reusing a tag with different inputs would silently
+ *  orphan every profile derived under the old rule instead of letting
+ *  `legacyProfileEncKey` still read them. */
+export async function profileEncKey(
+  vk: Uint8Array,
+  circle: Uint8Array
+): Promise<nacl.BoxKeyPair> {
+  if (circle.length !== 32) throw new Error("circle key must be 32 bytes");
+  const seed = await sha256(tag(ENC_KEY_DOMAIN_V2), vk, circle);
+  return nacl.box.keyPair.fromSecretKey(seed);
+}
+
+/** The v1 profile keypair — derived from the viewing secret ALONE, so it is the
+ *  same in every Circle. READ-ONLY and deliberately not exported for writing:
+ *  it exists so a profile published before the circle-binding fix, and a key
+ *  drop addressed under it, still open. Every write goes out under
+ *  `profileEncKey`, so a member's next `publishProfile` migrates them.
+ *
+ *  Do not reach for this to seal anything. Anything sealed under it is
+ *  cross-Circle linkable by construction. */
+export async function legacyProfileEncKey(vk: Uint8Array): Promise<nacl.BoxKeyPair> {
   const seed = await sha256(tag(ENC_KEY_DOMAIN), vk);
   return nacl.box.keyPair.fromSecretKey(seed);
 }

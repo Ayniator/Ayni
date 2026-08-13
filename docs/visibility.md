@@ -75,7 +75,7 @@ stored anywhere but a device-local cache, never shared, never in a shard.
 | --- | --- | --- |
 | List that wallet's memberships (`memcmp` on `owner`) | **yes** | no — the wallet is not in the account |
 | List all memberships, with circle + commitment + dates | yes | yes (unchanged; commitments are pseudonymous by design) |
-| Group memberships by owner (same `owner` value across Circles) | yes | no — each Circle gets an unrelated derived key… **but see `enc_pub`, §4** |
+| Group memberships by owner (same `owner` value across Circles) | yes | no — each Circle gets an unrelated derived key. `enc_pub` is now Circle-bound too (F61-R3), but a profile published before that round keeps its old global key until the member re-publishes — see §4 |
 | Tell that a membership has been shielded | n/a | **yes** — an `OwnerTag` exists pointing at it |
 | Count shielded memberships in the system | n/a | **yes** |
 | Learn which wallet a shielded membership belongs to, from account state | yes | no |
@@ -170,6 +170,8 @@ Now there is a serving layer, and it serves ciphertext.
 ```
 MemberProfile   PDA ["mprofile", circle, commitment]
   enc_pub    X25519 public key, derived from the member's viewing secret
+             AND the Circle (v2) — so the same member shows an unrelated key
+             in each Circle they belong to
   epoch      key generation
   bio_ct     ALWAYS 200 bytes: nonce(24) ‖ secretbox(160-byte padded bio)
   avatar_ref 64 bytes: padded pointer to the avatar ciphertext, or zeroes
@@ -326,21 +328,37 @@ recognise fails preflight and never lands, so it burns no rent.
   to the membership and group a member's posts. That was equally true before —
   with the member's *wallet* in both fields. What changed is that the value now
   names nobody. Unlinking a post from its membership is a different feature.
-- **`MemberProfile.enc_pub` is GLOBAL, and it regroups what `owner` stopped
-  grouping.** `profileEncKey(vk) = SHA-256("aha-vis-enc-v1" ‖ viewing_secret)`
-  takes no Circle, so a member who publishes a profile in two Circles publishes
+- **`MemberProfile.enc_pub` was GLOBAL, and it regrouped what `owner` stopped
+  grouping — FIXED in F61-R3, with one migration caveat that still bites.**
+  v1 derived `profileEncKey(vk) = SHA-256("aha-vis-enc-v1" ‖ viewing_secret)`
+  with no Circle, so a member who published a profile in two Circles published
   the *same* 32 bytes in both — at a fixed offset, memcmp-able, exactly the
-  handle `shield_membership` removed from `owner`. This is a **pre-existing F60
-  Phase-2 defect**, not a regression, but it materially qualifies the table in
-  §1: for any member who has published a profile in more than one Circle, their
-  memberships ARE groupable, and shielding does not stop it.
+  handle `shield_membership` removed from `owner`. It was a pre-existing F60
+  Phase-2 defect rather than a regression, and it materially qualified §1.
 
-  It is not fixed here deliberately — the fix is to domain-separate the key on
-  the Circle (`profileEncKey(vk, circle)`), which changes a derivation contract
-  the drop addressing depends on and would strand every profile and key drop
-  already published. It belongs in its own round, with a migration, not bolted
-  onto this one. Until then a member who wants the §1 property should publish a
-  profile in at most one Circle.
+  The key is now Circle-bound under a **new** domain:
+  `profileEncKey(vk, circle) = SHA-256("aha-vis-enc-v2" ‖ vk ‖ circle)`. The
+  domain is v2 rather than v1-with-more-input because these tags are frozen —
+  reusing a tag with different inputs would silently orphan everything derived
+  under the old rule.
+
+  **Nothing is stranded.** An earlier draft of this section claimed the fix
+  would strand every published profile and key drop; that was wrong, and it is
+  why the fix looked bigger than it was. `legacyProfileEncKey` still derives the
+  v1 key for READING: a profile that still carries a v1 `enc_pub` is recognised
+  as the member's own, and a key drop addressed under a v1 shared secret is
+  still found (the reader tries v2, then v1). Element keys were already
+  Circle-bound, so a member's own bio and avatar were never at risk.
+
+  **THE CAVEAT, which is the honest part.** The on-chain `enc_pub` of an
+  existing profile is *unchanged until the member next publishes*. Reading
+  keeps working, but the cross-Circle handle stays on chain for every profile
+  published before this round — the fix is in the write path, so a member is
+  only protected once they re-publish. And when they do, their `enc_pub`
+  changes, which moves every drop address derived from it: **grants issued
+  before the migration must be re-issued**, exactly as if the epoch had been
+  bumped. That is the same "revoke by re-keying" mechanic described above, not
+  a new failure mode, but it is a real cost and it is not automatic.
 - **`recovery_keys` are still enumerable** by the same memcmp attack `owner`
   had. Same fix applies; not done.
 - **The relayer sees IP and timing.** Batching/mixing to blunt that correlation
