@@ -218,3 +218,43 @@ so requiring it would deadlock the gate permanently.
   parents byte-for-byte; no divergence, no second file, nothing to review
   beyond confirming the duplication is harmless. Named here only so the push
   gate clears — no further effort spent on it, per the round's own brief.
+- 2f5a7c4 fix(governance): a single Council seat could pass any member proposal alone
+  Covered by NRR-2026-08-14-governance.md (PASS WITH WARNINGS). Independently
+  re-derived the pre-fix exploit against 7a10a48, confirmed all four cuts
+  (MIN_TURNOUT, voting_period bound, EPOCH_SETTLE_PERIOD, 4-of-7-gated
+  begin_member_epoch) actually close it, and tried every defeat route the
+  round brief named (colluding seats, 2/3-member circles, set_circle_config
+  quorum/pass tuning, proposing before a rebuild, a self-founded parent
+  Circle) -- none reopens the single-seat-alone exploit. Confirmed no
+  error-code renumbering and that ProposalAction::BeginMemberEpoch was
+  APPENDED (not inserted, no borsh tag shift for existing Proposal
+  accounts). Confirmed 2f5a7c4's content is byte-identical to the
+  concurrent session's unpushed 6cf0841 ("o") -- reword only, `git diff
+  2f5a7c4 6cf0841` empty. Reproduced BOTH `cargo test -p ayni --lib`
+  (24/24 at PROPTEST_CASES=2048, 320.78s) and a full `anchor build &&
+  anchor test` (161/0) from a genuinely clean, freshly-built binary after
+  clearing a stray non-exiting validator process left by a concurrent
+  session (whose own "161 passing" was plausible but not relied upon).
+  Devnet forensic check: zero MemberProposal accounts currently exist, so
+  MIN_TURNOUT's retroactive tightening has no live blast radius. Two
+  WARNING-severity residual (non-defeating) design findings recorded
+  (a set_circle_config pass-threshold foot-gun; a self-dealt parent Circle
+  for the MIN_ELECTORATE escape) plus a frontend UI gap and a doc-comment
+  inaccuracy -- see the report for detail. See Finding 1 for the round's
+  main WARNING: no docs/shipped.md or BACKLOG.md entry exists for this fix
+  itself, despite the paired commit's message claiming to reconcile the
+  registry.
+- 1dfefa1 test(governance): cover the ballot-integrity fix; reconcile the registry
+  Covered by the same report. tests/epic2.ts's begin_member_epoch test
+  verified to assert BOTH directions (3-of-7 refused, 4-of-7 succeeds) and
+  the drained one-shot (replay refused) -- reproduced green against a fresh
+  build, not merely read. tests/faucet.ts's and tests/maci.ts's
+  parentCircle/parentSeat wiring verified consistent with MIN_ELECTORATE
+  (faucet: circle A has one member and a genuinely distinct parent Council;
+  maci: three members, parentCircle/parentSeat explicitly null). BACKLOG.md/
+  docs/shipped.md changes verified to close the PRIOR round's (glossary)
+  carried-forward coverage-gap WARNING for F67/F68/F94 honestly (matches
+  those rounds' own independent findings) -- but do NOT cover 2f5a7c4
+  itself, which is this round's own new WARNING (see above). Nav.tsx change
+  verified inert beyond removing one menu link (tsc --noEmit clean, no
+  program/IDL import).

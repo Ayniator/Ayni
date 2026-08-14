@@ -1,1 +1,1 @@
-NRR-2026-08-14-glossary.md
+NRR-2026-08-14-governance.md

@@ -2938,3 +2938,295 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-nav-menu.md
       - cmd: bash tests/sentinel/privacy-sweep.sh
       - cmd: cd frontend && npx tsc --noEmit
       - cmd: git diff --exit-code 98e26c9 ba9b088 -- glossary/.gitkeep
+
+round: governance
+established: 2026-08-14
+baseline_report: reports/sentinel/NRR-2026-08-14-governance.md
+previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
+
+# Round governance (2026-08-14). Scope: TWO commits, briefed HEAD 1dfefa1
+# (HEAD drifted to 114f3af DURING this round -- a concurrent, unrelated
+# glossary-content commit, `git show 114f3af --stat`: frontend/public/
+# glossary.json, glossary/glossary_v1.xlsx, scripts/fix-glossary-tags.mjs
+# only -- confirmed out of scope, not reviewed here).
+#   1. 2f5a7c4 "fix(governance): a single Council seat could pass any member
+#      proposal alone" -- programs/ayni/src/{council,errors,proptests,state}.rs
+#      + instructions/{begin_member_epoch,create_member_proposal,
+#      execute_proposal,finalize_member_proposal,propose}.rs (9 files, 246
+#      insertions, 18 deletions).
+#   2. 1dfefa1 "test(governance): cover the ballot-integrity fix; reconcile
+#      the registry" -- tests/{epic2,faucet,maci}.ts, BACKLOG.md,
+#      docs/shipped.md, frontend/components/Nav.tsx.
+#
+# PROCESS DISCLOSURE VERIFIED: 2f5a7c4 was authored by a concurrent session
+# as commit 6cf0841 with message "o"; `git diff 2f5a7c4 6cf0841` is EMPTY
+# (0 lines) and `git show 6cf0841 --stat` is byte-identical to `git show
+# 2f5a7c4 --stat` (same 9 files, same 246/18) -- the reword claim is TRUE,
+# content unchanged, only the message differs.
+#
+# THE DEFECT, independently re-derived against 7a10a48 (pre-fix): confirmed
+# `begin_member_epoch` was `require_any_seat` (one of seven) and emptied
+# MemberTree + zeroed `member_count`; `reinsert_member` is permissionless
+# (Signer, no seat gate); `create_member_proposal` had NO require! on
+# `voting_period`; `quorum_threshold(1,..)` is `.max(1)` = 1, so one `yes`
+# from a manufactured one-leaf tree met quorum and passed, reaching
+# `refill_faucet` and every member-vote-gated action. All five steps of the
+# chain read and confirmed against the pre-fix source, not accepted on the
+# commit's own narrative.
+#
+# THE FOUR CUTS, each independently verified:
+#   a. MIN_TURNOUT=2 (state.rs) is a hardcoded floor in
+#      finalize_member_proposal::member_vote_outcome, NOT read from
+#      CircleConfig -- confirmed no single-seat-controlled path (including
+#      set_circle_config, still any-seat, unchanged) can lower it, because
+#      it isn't config-driven at all.
+#   b. voting_period bounded `> 0 && <= MAX_VOTING_PERIOD` (90d) in
+#      create_member_proposal, previously unchecked.
+#   c. EPOCH_SETTLE_PERIOD (30d) read via a seed-bound `UncheckedAccount`
+#      (`recent_roots`), not `Option<Account>` -- confirmed the seeds
+#      constraint (`seeds=[b"roots", circle]`) makes the address
+#      program-derived and non-substitutable, and that an account that has
+#      never been written (`data_is_empty()`) is treated as settled
+#      (skips the check entirely) rather than as a bypass -- correct,
+#      because a Circle that never rebuilt has no manufactured electorate
+#      to guard against.
+#   d. begin_member_epoch now requires `proposal.executed` on a
+#      `ProposalAction::BeginMemberEpoch` proposal bound to the same
+#      Circle via `has_one = circle`, and burns it via `drained` before
+#      touching state. Reproduced directly (see below): 3-of-7 refused,
+#      4-of-7 + elapsed contest window succeeds, replay of the same
+#      executed proposal is refused.
+#
+# DEFEAT ATTEMPTS (spec's own adversarial list), all checked:
+#   - Two colluding seats: still short of the 4-of-7 needed to authorise
+#     `begin_member_epoch`; no route found.
+#   - set_circle_config (still any-seat, UNCHANGED by this commit) lowering
+#     quorum/pass thresholds: quorum floor `.max(1)` was already the
+#     mechanism the exploit used and remains reachable by one seat, but
+#     MIN_TURNOUT=2 is NOT part of CircleConfig, so turnout<2 still refuses
+#     regardless of tuning -- confirmed by reading member_vote_outcome and
+#     by the `a_single_voice_never_passes_a_member_ballot` proptest, which
+#     varies qn/qd across the FULL 0..1000 range and still refuses a lone
+#     `yes`. RESIDUAL, NOT a defeat of this fix (see findings_this_round):
+#     `vote_passes` with `p_num=0, p_den>0` (reachable by one seat via
+#     set_circle_config) makes ANY turnout>=2 combination "pass" including
+#     0-yes/2-no, because `yes*p_den >= p_num*turnout` degenerates to
+#     `0 >= 0`. Still requires TWO distinct real voters, so it cannot
+#     reproduce the one-seat-alone exploit, but is a real, previously
+#     unexamined foot-gun in the pre-existing (unchanged) pass-rule
+#     arithmetic, worth its own fix.
+#   - Circle with exactly 2 or 3 members: 2 members triggers the
+#     MIN_ELECTORATE parent-co-sign gate at proposal CREATION; 3 does not,
+#     but MIN_TURNOUT=2 at FINALIZE still requires two distinct valid
+#     membership-commitment votes either way -- a single human needs TWO
+#     genuine memberships in the same Circle's tree to pass anything alone,
+#     which is a (harder, separate, pre-existing) admission/personhood
+#     concern, not something this commit introduces or worsens.
+#   - Proposing before a rebuild rather than after: confirmed the
+#     epoch-settle check is skipped entirely (`rr_ai.data_is_empty()`) for
+#     a Circle that has never called begin_member_epoch -- correct, not a
+#     bypass, since there is no manufactured electorate to guard against.
+#   - MIN_ELECTORATE=3 + parent co-sign, "Circle.parent is a PDA seed and
+#     immutable": VERIFIED TRUE -- grepped every write site of `.parent`
+#     in programs/ayni/src/instructions/*.rs; the ONLY assignment is
+#     `initialize_circle.rs:40`, at creation, never again. BUT:
+#     `initialize_circle`'s `parent` account is an `UncheckedAccount` (no
+#     constraint that it already exists or is owned by this program) --
+#     confirmed by reading the Accounts struct. So while a CAPTURED seat of
+#     an already-founded Circle can never redirect that Circle's parent
+#     (true as claimed), an attacker FOUNDING a new Circle can also found
+#     its "parent" and hold every seat of both, self-satisfying the
+#     supposedly-external co-sign. MIN_TURNOUT=2 still independently blocks
+#     a lone human even through this route (see above), so it does not
+#     reopen the original single-seat exploit, but the code comment's
+#     safety claim ("a captured seat cannot redirect its Circle at a
+#     parent it controls") is narrowly true and incompletely stated --
+#     it does not address self-dealing at founding time. Recorded as a
+#     residual design finding, not a defeat.
+#   - The stated MIN_ELECTORATE consequence ("a Circle with fewer than 3
+#     members whose parent is not a real Circle account cannot open member
+#     ballots at all") independently confirmed REACHABLE: `initialize_circle`
+#     accepts literally any pubkey as `parent` with no existence/type check.
+#
+# NO ERROR-CODE RENUMBERING: confirmed by reading the full AyniError enum --
+# every pre-existing variant keeps its original position; `InvalidVotingPeriod`
+# appears exactly once (grep -c == 1, the claimed duplicate-removal is
+# consistent with what's committed); the two new variants (EpochNotSettled,
+# ElectorateTooSmall) are appended at the very end, after MaciTallyUnverified.
+#
+# `ProposalAction::BeginMemberEpoch` APPENDED, NOT INSERTED: confirmed by
+# reading council.rs -- it is the LAST variant, after WithdrawTreasuryToken.
+# No borsh tag shift for any pre-existing variant or already-stored Proposal
+# account. `ProposalAction::MAX_SIZE` (1+32+8+32, sized for the still-largest
+# WithdrawTreasuryToken variant) and `Proposal::SPACE` are both unchanged by
+# this addition (a zero-payload unit variant cannot grow the max).
+#
+# PROPTESTS: `a_single_voice_never_passes_a_member_ballot` and
+# `two_voices_suffice_when_quorum_allows` read as non-vacuous (they assert
+# real, distinguishable pre/post conditions over the full quorum-tuning
+# range and over e<=6 respectively) and independently reproduced passing.
+# `quorum_boundary`'s correction (unconditional prop_assert! -> conditional
+# `prop_assert_eq!(outcome, q>=MIN_TURNOUT)`) verified correct: the prior
+# unconditional assertion was false whenever qn==0 forces q==1, exactly the
+# exploit's arithmetic -- a genuine latent flake, not a style change.
+#
+# FULL REGRESSION, REPRODUCED FROM SCRATCH (not accepted on the commit's
+# word, and NOT reused from a concurrent session's own run -- see below):
+#   - `PROPTEST_CASES=2048 cargo test -p ayni --lib`: 24 passed, 0 failed,
+#     320.78s, freshly compiled.
+#   - `anchor build && anchor test`: a genuinely fresh SBF binary was built
+#     (verified via `strings` on target/deploy/ayni.so for the new error
+#     text/instruction name before trusting it) and deployed to a clean
+#     local validator: 161 passing, 0 failing -- exact match to the
+#     commit's claimed count, and the `begin_member_epoch` test in
+#     tests/epic2.ts (3-of-7 refused / 4-of-7 succeeds / replay refused)
+#     passed against that freshly-built program.
+#   - `cd frontend && npx tsc --noEmit`: clean.
+#   - `npm audit` (root): 0 critical (26 total: 13 low/8 moderate/5 high,
+#     same shape as the prior baseline). frontend: 0 critical (28 total).
+#   - `tests/sentinel/privacy-sweep.sh`: 5/5 pass (no analytics/telemetry,
+#     no tracking pixels, no identity-material logging, no score/rank/
+#     karma/tier field).
+#   - devnet forensic check: `getProgramAccounts` filtered on the
+#     MemberProposal discriminator returns ZERO accounts -- MIN_TURNOUT's
+#     retroactive tightening (an in-flight one-voter ballot that would have
+#     passed before now cannot) has NO blast radius on current devnet
+#     state, because no MemberProposal exists there yet.
+#
+# PROCESS NOTE (not scored as a regression): a stray, already-completed but
+# non-exiting `anchor test --skip-build` process (from a concurrent session)
+# was found running at round start, using a `target/deploy/ayni.so` whose
+# mtime (12:35:20) misleadingly predated the source edits' mtime (13:53:22)
+# -- enough to warrant independent verification rather than trusting the
+# concurrent run's "161 passing" on its face. `strings` on that same binary
+# already showed the new error text and `Instruction: BeginMemberEpoch`, so
+# it was very likely genuine, but this round did not rely on it: the stray
+# was cleared with `pkill -f '[s]olana-test-validator'` (per CLAUDE.md's own
+# guidance) to reclaim the ~3.8GB box's memory, and both suites were
+# reproduced independently end to end on a freshly built binary (see above).
+# Both runs (the stray's and this round's own) share a repo-level flake:
+# mocha prints "NNN passing" and then does not exit on its own (a dangling
+# RPC/WS handle, not a test failure) -- new known_flaky entry recommended
+# below, not previously recorded.
+#
+# REGISTRY HONESTY (F67/F68/F94, not self-flattering): consistent with
+# prior rounds' OWN independent findings, not merely this round's say-so --
+# the nav-menu round independently confirmed F68 (`/onboarding`) existed
+# and was reachable BEFORE this round reconciled the registry to say so;
+# the f67/f67-r2 rounds independently confirmed the F67 component existed
+# with the hardcoded-wallet defect live. F94 correctly cites the glossary
+# round's own verification. No overclaiming found.
+#
+#   findings_this_round:
+#     - severity: "WARNING"
+#       what: "The commit that actually matters this round -- 2f5a7c4, the
+#         CRITICAL ballot-integrity fix itself -- has NO entry in
+#         docs/shipped.md or BACKLOG.md. BACKLOG.md's existing F54 row
+#         still describes begin_member_epoch as it was BEFORE this fix
+#         (no mention of the 4-of-7 gate, MIN_TURNOUT, EPOCH_SETTLE_PERIOD,
+#         or MIN_ELECTORATE). 1dfefa1's own commit message says 'reconcile
+#         the registry' and does add F67/F68/F94 rows -- but those are
+#         UNRELATED (nav-menu/glossary) rows carried over from the prior
+#         round's WARNING, not this round's fix. `grep -rn
+#         'ballot.integrity\\|BeginMemberEpoch' BACKLOG.md docs/shipped.md`
+#         returns nothing. CLAUDE.md requires docs/shipped.md and
+#         BACKLOG.md kept reconciled 'in the same commit as the change' --
+#         this is the most consequential change of the round and it is the
+#         one row that's missing."
+#       disposition: "Not scored CRITICAL: the code is sound, independently
+#         re-verified end to end, and the fix is exhaustively documented in
+#         the COMMIT MESSAGE itself. But it is a genuine process gap under
+#         CLAUDE.md's own mandate, and per this spec's coverage-gap rule
+#         (WARNING in round n, FAIL in round n+1) it must be closed before
+#         the next round touches programs/ayni or it becomes FAIL-eligible."
+#     - severity: "WARNING (residual, does not defeat this fix)"
+#       what: "`vote_passes(yes, no, p_num, p_den)` with `p_num=0, p_den>0`
+#         (reachable by ANY single any-seat-gated `set_circle_config` call,
+#         unchanged by this commit) makes every ballot with turnout>=2
+#         'pass' regardless of the actual yes/no split, including 0
+#         yes/2+ no, because `yes*p_den >= p_num*turnout` degenerates to
+#         `0 >= 0`. MIN_TURNOUT still requires two distinct real voters, so
+#         this cannot reproduce the single-seat-alone exploit this round
+#         fixes, but it is a real, previously unexamined foot-gun in
+#         config-tunable pass thresholds."
+#       disposition: "Out of this commit's stated scope (it did not touch
+#         set_circle_config or vote_passes' pass-rule arithmetic); recorded
+#         for a future round, not a regression introduced here."
+#     - severity: "WARNING (residual, does not defeat this fix)"
+#       what: "MIN_ELECTORATE's parent-co-sign gate assumes the parent is a
+#         genuinely external Circle. `initialize_circle` accepts ANY pubkey
+#         as `parent` with no check it is an already-initialized Circle
+#         account, so a founder can self-deal by also founding and
+#         controlling the 'parent'. Circle.parent's immutability (verified
+#         true) prevents a CAPTURED seat from redirecting an EXISTING
+#         Circle's parent, but does not prevent this at founding time. The
+#         code comment's safety claim is narrowly true and incompletely
+#         stated."
+#       disposition: "MIN_TURNOUT=2 independently blocks a lone human even
+#         through this route (a self-dealt parent still can't manufacture a
+#         second distinct child-circle voter), so this does not reopen the
+#         exploit. Recorded for awareness; a stricter `initialize_circle`
+#         parent check is a reasonable future hardening, not a blocker."
+#     - severity: "WARNING"
+#       what: "frontend/lib/admin.ts's and frontend/lib/faucet.ts's
+#         `createMemberProposal` callers pass no `parentCircle`/
+#         `parentSeat` accounts. For a Circle at or above MIN_ELECTORATE
+#         (the common case) Anchor's optional-account omission handles this
+#         fine, but there is NO UI path for a Circle below MIN_ELECTORATE
+#         to supply a parent co-signer -- such an admin would hit a bare
+#         `ElectorateTooSmall` on-chain error with no way to proceed from
+#         the app."
+#       disposition: "New coverage/UX gap introduced by this fix, not
+#         disclosed in the commit message. Not a regression (no existing
+#         flow broke), but should be wired up before a real Circle
+#         encounters it."
+#     - severity: "LOW (documentation only)"
+#       what: "errors.rs's updated `InvalidVotingPeriod` doc comment claims
+#         member proposals are bounded by 'MIN_VOTING_PERIOD..=
+#         MAX_VOTING_PERIOD, 3-30 days'. No `MIN_VOTING_PERIOD` constant
+#         exists anywhere in the codebase (grep: zero hits), and the actual
+#         enforced range is `voting_period > 0 && <= MAX_VOTING_PERIOD`
+#         (90 days) -- matching state.rs's OWN comment on MAX_VOTING_PERIOD
+#         ('90 days, matching the Council child proposals'), not '30'. The
+#         doc comment self-contradicts state.rs within the same commit."
+#       disposition: "Comment-only; does not affect behaviour, error codes,
+#         or any test. Should be corrected next round."
+#
+#   coverage_gaps:
+#     - "NEW (this round): no BACKLOG.md/docs/shipped.md entry for the
+#        ballot-integrity fix itself -- see findings_this_round above.
+#        WARNING this round; FAIL-eligible next round per the spec's own
+#        escalation rule if still missing."
+#     - "NEW (this round): no Playwright/e2e coverage of the 4-of-7
+#        begin_member_epoch flow or the parent-co-sign create_member_proposal
+#        path in a real browser -- same structural blocker as every round
+#        this month (no local Next 16 dev server available). Substituted
+#        with the anchor/cargo test reproduction above."
+#     - "STILL OPEN: no automated (repo-resident, executable) T6
+#        endorsement-check script exists (carried forward, first flagged
+#        f67 round 2026-08-14)."
+#     - "STILL OPEN: wallet-list shuffle fairness has no persisted automated
+#        test (carried forward unchanged from 2026-08-12)."
+#     - "STILL OPEN: /settings-security page-body localisation gap (carried
+#        forward unchanged from f67-r2 round)."
+#
+#   known_flaky:
+#     - id: "governance-anchor-test-teardown"
+#       what: "`anchor test` (both the concurrent session's stray run and
+#         this round's own from-scratch run) prints its final 'NNN passing'
+#         line and then does not exit on its own -- the mocha/ts-mocha
+#         process hangs on a dangling handle (most likely an un-closed
+#         @solana/web3.js Connection/WS subscription) after all tests have
+#         genuinely completed. Not a test failure (0 failing both times);
+#         a teardown-only flake. Worked around this round by killing the
+#         process tree after confirming the pass count in the log. Should
+#         be tracked and resolved within two rounds per spec 3."
+    checks:
+      - cmd: git diff --quiet 2f5a7c4 6cf0841
+      - cmd: PROPTEST_CASES=2048 cargo test -p ayni --lib
+      - cmd: anchor test
+      - cmd: cd frontend && npx tsc --noEmit
+      - cmd: grep -c "InvalidVotingPeriod," programs/ayni/src/errors.rs
+      - cmd: grep -q "BeginMemberEpoch," programs/ayni/src/council.rs
+      - cmd: bash tests/sentinel/privacy-sweep.sh
+      - cmd: npm audit --omit=dev --json
