@@ -122,13 +122,14 @@ function ResourcesMenu() {
         <Link href="/glossary" role="menuitem" onClick={() => setOpen(false)}>
           {t("nav.glossary")}
         </Link>
-        {/* Closes the reachability gap the nav-menu round found: hiding
-            "Start Here" for connected members left /onboarding with no in-app
-            link at all. It is reference material, so it belongs here — and a
-            member who wants to re-read the explainer can now find it. */}
-        <Link href="/onboarding" role="menuitem" onClick={() => setOpen(false)}>
-          {t("nav.start")}
-        </Link>
+        {/* NOTE: a "Start Here" entry sat here briefly, to close the
+            reachability gap NRR-2026-08-14-nav-menu found — hiding the
+            top-level "Start Here" for connected members leaves /onboarding with
+            no in-app link at all. Removed at the user's request (2026-08-14).
+            The gap is therefore OPEN again and deliberately so: /onboarding is
+            still reachable by direct URL, and still linked at top level for
+            visitors who have not connected — only a connected member has no
+            path back to it. Do not re-add it here without asking. */}
       </span>
     </span>
   );

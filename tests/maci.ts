@@ -152,7 +152,17 @@ describe("ayni — MACI processing & tally (F39)", () => {
 
     await program.methods
       .createMemberProposal(new anchor.BN(PROPOSAL_NONCE), [...Buffer.alloc(32, 39)], new anchor.BN(VOTING_PERIOD))
-      .accounts({ circle: circlePda, memberTree: memberTreePda, proposal: proposalPda, proposer: seats[0].publicKey })
+      // parentCircle/parentSeat are the small-electorate co-signature path and
+      // are unused here: this Circle has three members, which meets
+      // MIN_ELECTORATE, so it opens its own ballots unaided.
+      .accounts({
+        circle: circlePda,
+        memberTree: memberTreePda,
+        proposal: proposalPda,
+        proposer: seats[0].publicKey,
+        parentCircle: null,
+        parentSeat: null,
+      })
       .signers([seats[0]])
       .rpc();
   });

@@ -15,7 +15,14 @@ describe("ayni — gas faucet (Epic 0)", () => {
 
   const program = anchor.workspace.Ayni as Program<Ayni>;
   const payer = provider.wallet as anchor.Wallet;
-  const parent = anchor.web3.Keypair.generate().publicKey;
+  // The parent is a REAL Circle, not a bare pubkey. Circle A has one member,
+  // which is below MIN_ELECTORATE, so opening a member ballot there requires a
+  // seat of the parent Circle to co-sign — the outside party a captured seat
+  // cannot manufacture. Giving the parent its OWN distinct Council (below)
+  // keeps that genuinely external rather than the same wallets wearing two hats.
+  const grandparent = anchor.web3.Keypair.generate().publicKey;
+  const parentName = "faucet-parent";
+  const parentSeats = Array.from({ length: 7 }, () => anchor.web3.Keypair.generate());
 
   const nameA = "faucet-circle-a";
   const nameB = "faucet-circle-b";
@@ -77,6 +84,8 @@ describe("ayni — gas faucet (Epic 0)", () => {
 
   const pda = (...seeds: (Buffer | Uint8Array)[]) =>
     anchor.web3.PublicKey.findProgramAddressSync([...seeds] as Buffer[], program.programId)[0];
+
+  const parent = pda(Buffer.from("circle"), grandparent.toBuffer(), Buffer.from(parentName));
 
   const circleA = pda(Buffer.from("circle"), parent.toBuffer(), Buffer.from(nameA));
   const circleB = pda(Buffer.from("circle"), parent.toBuffer(), Buffer.from(nameB));
@@ -226,6 +235,7 @@ describe("ayni — gas faucet (Epic 0)", () => {
     // Everyone who signs pays their own rent/fees, so fund them.
     const funded = [
       ...seats,
+      ...parentSeats,
       stranger,
       parrainOwner,
       neo1Owner,
@@ -240,6 +250,14 @@ describe("ayni — gas faucet (Epic 0)", () => {
         await provider.connection.confirmTransaction(sig);
       })
     );
+
+    // The parent Circle itself, with its own Council — it exists so circle A
+    // (one member, below MIN_ELECTORATE) has an outside seat able to co-sign a
+    // member ballot.
+    await program.methods
+      .initializeCircle(grandparent, parentName, ONE_YEAR, new anchor.BN(0), parentSeats.map((s) => s.publicKey))
+      .accounts({ circle: parent, parent: grandparent, payer: payer.publicKey })
+      .rpc();
 
     // Two circles under the same parent — the isolation fixture.
     await program.methods
@@ -539,8 +557,14 @@ describe("ayni — gas faucet (Epic 0)", () => {
     // Even with the CORRECT canonical hash, an open (unfinalized) vote moves nothing.
     await program.methods
       .createMemberProposal(new anchor.BN(nonce), [...refillHash(circleA, amount)], new anchor.BN(3600))
-      .accounts({ circle: circleA, memberTree: memberTreeA, proposal, proposer: seats[0].publicKey })
-      .signers([seats[0]])
+      .accounts({
+        circle: circleA, memberTree: memberTreeA, proposal, proposer: seats[0].publicKey,
+        // Circle A has ONE member, below MIN_ELECTORATE, so a seat of the
+        // parent Circle co-signs. parentSeats are distinct wallets from
+        // seats, so this is a genuinely external second party.
+        parentCircle: parent, parentSeat: parentSeats[0].publicKey,
+      })
+      .signers([seats[0], parentSeats[0]])
       .rpc();
 
     const treasuryBefore = await balance(treasuryA);
@@ -570,8 +594,14 @@ describe("ayni — gas faucet (Epic 0)", () => {
     // A finalized proposal carrying an UNRELATED description hash.
     await program.methods
       .createMemberProposal(new anchor.BN(nonce), [...Buffer.alloc(32, 9)], new anchor.BN(1))
-      .accounts({ circle: circleA, memberTree: memberTreeA, proposal, proposer: seats[0].publicKey })
-      .signers([seats[0]])
+      .accounts({
+        circle: circleA, memberTree: memberTreeA, proposal, proposer: seats[0].publicKey,
+        // Circle A has ONE member, below MIN_ELECTORATE, so a seat of the
+        // parent Circle co-signs. parentSeats are distinct wallets from
+        // seats, so this is a genuinely external second party.
+        parentCircle: parent, parentSeat: parentSeats[0].publicKey,
+      })
+      .signers([seats[0], parentSeats[0]])
       .rpc();
     await sleep(2000);
     await program.methods

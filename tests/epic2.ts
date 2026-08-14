@@ -164,11 +164,82 @@ describe("ayni — F54 recent roots / epochs + F56 fellowship anchor", () => {
     // begin_member_epoch is conservatively excluded until the next epoch).
     await new Promise((r) => setTimeout(r, 1500));
 
+    // Emptying the votable set is 4-of-7 as of the 2026-08-14 ballot-integrity
+    // fix, not a single seat. One seat could otherwise wipe the electorate, let
+    // the permissionless reinsert crank re-enter only its own commitment, and
+    // carry an arbitrary member proposal alone. The rebuild now goes through the
+    // same Council proposal + contest window as a treasury withdrawal.
+    const epochNonce = 7001;
+    const epochProposal = pda(
+      Buffer.from("proposal"),
+      circle.toBuffer(),
+      new anchor.BN(epochNonce).toArrayLike(Buffer, "le", 8)
+    );
+    await program.methods
+      .propose(new anchor.BN(epochNonce), { beginMemberEpoch: {} })
+      .accounts({ circle, proposal: epochProposal, proposer: seats[0].publicKey })
+      .signers([seats[0]])
+      .rpc();
+    // `propose` records the proposer's OWN approval (propose.rs:61), so seat 0
+    // already counts as 1. Two more brings it to 3 — still below the 4-of-7
+    // threshold.
+    for (const i of [1, 2]) {
+      await program.methods
+        .approve()
+        .accounts({ circle, proposal: epochProposal, seat: seats[i].publicKey })
+        .signers([seats[i]])
+        .rpc();
+    }
+    let belowThreshold = false;
+    try {
+      await program.methods
+        .executeProposal()
+        .accounts({ circle, proposal: epochProposal, executor: payer.publicKey })
+        .rpc();
+    } catch {
+      belowThreshold = true;
+    }
+    assert.isTrue(belowThreshold, "3-of-7 must not authorise emptying the electorate");
+
+    // The fourth approval reaches threshold.
+    await program.methods
+      .approve()
+      .accounts({ circle, proposal: epochProposal, seat: seats[3].publicKey })
+      .signers([seats[3]])
+      .rpc();
+    await program.methods
+      .executeProposal()
+      .accounts({ circle, proposal: epochProposal, executor: payer.publicKey })
+      .rpc();
+
     await program.methods
       .beginMemberEpoch()
-      .accounts({ circle, memberTree: membersPda(circle), recentRoots: rootsPda(circle), seat: seats[1].publicKey })
-      .signers([seats[1]])
+      .accounts({
+        circle,
+        memberTree: membersPda(circle),
+        recentRoots: rootsPda(circle),
+        proposal: epochProposal,
+        payer: payer.publicKey,
+      })
       .rpc();
+
+    // One authorisation, one rebuild: the executed proposal is spent.
+    let replayed = false;
+    try {
+      await program.methods
+        .beginMemberEpoch()
+        .accounts({
+          circle,
+          memberTree: membersPda(circle),
+          recentRoots: rootsPda(circle),
+          proposal: epochProposal,
+          payer: payer.publicKey,
+        })
+        .rpc();
+    } catch {
+      replayed = true;
+    }
+    assert.isTrue(replayed, "an executed rebuild proposal must not be replayable");
 
     let c: any = await program.account.circle.fetch(circle);
     assert.equal(Number(c.memberCount), 0, "rebuild empties the votable set");

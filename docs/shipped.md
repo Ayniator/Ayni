@@ -18,6 +18,66 @@
 
 ---
 
+## F67 / F68 / Glossary — Resources menu, wallet chooser, glossary page (2026-08-14)
+
+Verification: `code` + `built` (frontend `tsc --noEmit`, `next build`), `exec`
+for the i18n gate and the glossary extractor; no e2e (structural gap, see below).
+
+**F67 — shuffled WalletChooser.** `frontend/components/WalletChooser.tsx` reads
+the five vetted self-custodial wallets from `docs/wallets.json` (mirrored to
+`frontend/public/wallets.json`, verified byte-identical) and orders them with a
+uniform Fisher–Yates drawing only on `Math.random()`. Round `f67` stress-tested
+the shuffle at 200,000 iterations: max deviation from a flat 20% was 1.00%, so
+no wallet is statistically favoured. The registry had this as not-built; the
+component existed but its stated defect did not: `/create` still named Solflare
+then Phantom as two hardcoded anchors in fixed order, and
+`/settings-security` said "alongside Phantom and Solflare" in body copy. Both
+removed (`b217a62`, `0717f6e`). The T6 sweep across `frontend/app` and
+`frontend/components` is now clean — every surviving wallet brand mention is a
+code comment, none is text a member reads.
+
+**F68 — `/onboarding`.** `frontend/app/onboarding/page.tsx` is the real
+three-step stepper (Wallet → Vouch → Face) and is reachable from the nav.
+Registry said not-built; it was built and wired. Round `nav-menu` verified this
+independently before the registry was reconciled to it.
+
+**Nav.** "Get AHA for Android/iOS" → **Mobile App** (one neutral label; the old
+platform detection could name a store the visitor cannot reach and shifted after
+hydration). My Circle / Documents / Board hide when no wallet is connected;
+Start Here hides once one is. `connected` is false on the server and on the
+first client render alike — verified by reading
+`@solana/wallet-adapter-react@0.15.39`'s `StandardWalletAdapter`, which zeroes
+its account in the constructor regardless of prior authorization — so the gating
+introduces no hydration mismatch.
+
+**Resources menu + Glossary.** "The 12" → **Resources**, holding Twelve Steps,
+Twelve Traditions, Glossary, and Start Here. `/glossary` renders the 342 terms of
+`glossary/glossary_v1.xlsx`: search over term/explanation/tags with in-place
+highlighting, facets by Step 1–12 and by tradition, an A–Z index, and the
+spreadsheet's "related to" column as live cross-references. `?q=` deep links.
+
+`scripts/build-glossary.mjs` extracts the workbook to
+`frontend/public/glossary.json` by parsing the OOXML zip by hand — no new
+dependency — and matches columns BY HEADER NAME so a column reorder cannot
+silently shift data. Round `glossary` verified this by writing an independent
+XML reader from scratch and confirming byte-identical regeneration, 342 entries,
+none dropped. The xlsx stays the source of record.
+
+Privacy: the page makes no chain call, touches no wallet or member data, and its
+only network request is one static fetch of `/glossary.json` — so which terms a
+member reads is not observable. 167 KB fetched at runtime, never bundled.
+
+**Known and NOT fixed here:** two content-quality defects in the spreadsheet,
+faithfully reproduced rather than silently corrected — the tags `Budhism` and
+`Buddhism` both exist (splitting those terms across two filter chips), and
+`Freemassonery` is misspelled. Fix at source and re-run the extractor.
+
+**Coverage:** `tests/sentinel/glossary-check.sh` (new, round `glossary`).
+Still no Playwright e2e for any of this — a repo-wide structural gap, not
+specific to these features.
+
+---
+
 ## F61 / F60 Phase-2 — shielded ownership + the encrypted read path (2026-08-12)
 
 The roster leak Sentinel flagged repeatedly: `Membership.owner` held a raw wallet
