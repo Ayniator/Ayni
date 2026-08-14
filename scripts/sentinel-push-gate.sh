@@ -163,12 +163,25 @@ if [ -n "${SENTINEL_OVERRIDE:-}" ]; then
     fi
     for c in $(pushed_commits "$local_sha" "${remote_sha:-}"); do
       is_bookkeeping_commit "$c" && continue
-      # Already covered by a round: an override is a record of what was NOT
-      # reviewed, so demanding an entry for reviewed work would force every
-      # override to re-list commits a round already cleared. That noise is not
-      # free — a log padded with entries that mean nothing is a log people stop
-      # reading, and it dilutes the entries that do mean something.
-      is_reviewed "$c" && continue
+      # DO NOT add an `is_reviewed "$c" && continue` here. It was added once, on
+      # the reasoning that an override records what was NOT reviewed and should
+      # not have to re-list cleared work. That reasoning is wrong, and the hole
+      # it opened was live on origin before a round caught it:
+      #
+      #   REVIEWED.md lives under reports/sentinel/, so a commit that only
+      #   appends a line to it is bookkeeping-exempt and needs no round behind
+      #   it. Anyone can therefore register their own commit as "reviewed". On
+      #   the normal path that self-forgery is pre-existing and equally bad; on
+      #   the override path it was NEW, because the override path had never
+      #   consulted REVIEWED.md at all. Skipping on it let a substantive commit
+      #   ship with its SHA appearing NOWHERE in OVERRIDES.md — which is the one
+      #   guarantee this whole block exists to provide.
+      #
+      # Reproduced end to end: forged REVIEWED.md line + an OVERRIDES.md entry
+      # naming an unrelated commit => pre-fix gate BLOCKED, post-fix gate exit 0.
+      # Covered by "forged REVIEWED.md cannot excuse an override" in
+      # tests/sentinel/gate-check.sh. Re-listing a reviewed commit in the
+      # override log is cheap; an unnamed commit in a push is not.
       c_short="$(git rev-parse --short "$c" 2>/dev/null || echo "$c")"
       grep -qE "\b($c|$c_short)\b" "$OVERRIDES" 2>/dev/null \
         || override_unnamed="$override_unnamed $c_short"

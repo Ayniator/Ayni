@@ -111,21 +111,32 @@ mk programs/ayni/src/c.rs "3"; git commit -qm "feat: C"; C=$(git rev-parse HEAD)
 check "override with no OVERRIDES.md touch -> BLOCKED" 1 \
   "$(SENTINEL_OVERRIDE=why run "r $C r $O2")"
 
-# An override is a record of what was NOT reviewed. A commit a round already
-# cleared must NOT need an entry, or every override re-lists reviewed work and
-# the log fills with padding. Here R is registered in REVIEWED.md and named
-# nowhere in OVERRIDES.md; only U is unreviewed and named.
-mk programs/ayni/src/r.rs "reviewed"; git commit -qm "feat: R"; R=$(git rev-parse HEAD)
-RS=$(git rev-parse --short $R)
-mk reports/sentinel/REVIEWED.md "- $RS covered by a round"
-git commit -qm "chore(sentinel): register R"
-REG=$(git rev-parse HEAD)
-mk programs/ayni/src/u.rs "unreviewed"; git commit -qm "feat: U"; U=$(git rev-parse HEAD)
-US=$(git rev-parse --short $U)
-mk reports/sentinel/OVERRIDES.md "override for $US: reason"
-git commit -qm "chore(sentinel): record override for U"
+# THE EXPLOIT. REVIEWED.md is under reports/sentinel/, so a commit that only
+# appends to it is bookkeeping-exempt — no round required. If the override path
+# honours that file, anyone can self-register a malicious commit as "reviewed"
+# and it then ships with its SHA in NO override entry at all. M below is the
+# malicious commit; the OVERRIDES.md entry deliberately names only the decoy.
+# The gate must still block, on the strength of M being unnamed.
+mk programs/ayni/src/evil.rs "quietly widen an admin key check"
+git commit -qm "feat: quietly widen an admin key check"; M=$(git rev-parse HEAD)
+MS=$(git rev-parse --short $M)
+mk reports/sentinel/REVIEWED.md "- $MS totally reviewed, trust me"
+git commit -qm "chore(sentinel): self-register the malicious commit"
+mk programs/ayni/src/decoy.rs "harmless"; git commit -qm "feat: decoy"; DEC=$(git rev-parse HEAD)
+DS=$(git rev-parse --short $DEC)
+mk reports/sentinel/OVERRIDES.md "override for $DS: a harmless typo fix"
+git commit -qm "chore(sentinel): record override naming only the decoy"
 O3=$(git rev-parse HEAD)
-check "override need not re-name an already-REVIEWED.md commit" 0 \
+check "forged REVIEWED.md cannot excuse an override" 1 \
+  "$(SENTINEL_OVERRIDE=why run "r $O3 r $C")"
+
+# …and once the override log DOES name it, the same push is allowed. Without
+# this pair the test above could pass for the wrong reason (e.g. a gate that
+# blocks every override unconditionally).
+mk reports/sentinel/OVERRIDES.md "override for $MS: named honestly"
+git commit -qm "chore(sentinel): name the real commit too"
+O3=$(git rev-parse HEAD)
+check "override naming every substantive commit is allowed" 0 \
   "$(SENTINEL_OVERRIDE=why run "r $O3 r $C")"
 
 echo "== regressions =="
