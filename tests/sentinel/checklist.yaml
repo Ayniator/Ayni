@@ -3473,3 +3473,118 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
       - cmd: "grep -nE 'fetch|XMLHttpRequest|sendBeacon|localStorage|sessionStorage|indexedDB|WebSocket|console\\.(log|info|warn|error)|analytics|gtag|mixpanel|posthog|segment' frontend/lib/mobileWallet.ts frontend/components/MobileWalletNotice.tsx"
       - cmd: "grep -rln 'mobileWallet' frontend --include='*.ts' --include='*.tsx'"
       - cmd: "docker exec frontend-frontend-1 sh -c \"grep -rl 'mw-notice' /app/.next\""
+
+  - id: T6-SHUFFLE-BANNER
+    name: "973d52d -- MobileWalletNotice reads frontend/public/wallets.json at
+      runtime and shuffles the wallets that carry a `browse` universal-link
+      field (Fisher-Yates, Math.random() only), closing the wallet-mobile
+      round's WARNING (hardcoded 'Solflare, Phantom', fixed order); e2e
+      twelve.spec.ts split its shared DESTINATIONS constant into
+      MENU_DESTINATIONS (3, nav dropdown, includes /glossary) and
+      TWELVE_PAGES (2, the /twelve doors and the '12 numbered items' loop)."
+    shipped_round: t6-shuffle (2026-08-14)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-14-t6-shuffle.md"
+      - "standalone Node stress test of the exact shuffle()/walletBrowserLinks()
+         logic (copied byte-for-byte from frontend/lib/mobileWallet.ts, since
+         it is TS with browser-only helpers) against the live
+         frontend/public/wallets.json: 200,000 iterations, 2 usable wallets
+         (phantom, solflare) -- 50.16%/49.84% first-position split, plus 5
+         independent 100,000-iteration repeats all landing within +/-0.07 pts
+         of 50/50 in both directions (49.975-50.069%), confirming no
+         directional bias. The commit's own claimed 50.32/49.68 over 100k is
+         plausible sampling variance (~2 sigma, expected roughly 1 run in 20)
+         and was NOT treated as self-certifying -- it was independently
+         re-derived from the real code path and real data file, not read and
+         accepted."
+      - "live device-emulated Playwright run (Pixel 7 UA) against the deployed
+         site: confirms shouldOfferWalletBrowser() gates the fetch (banner
+         does not even attempt to load on desktop UA -- the smoke suite's own
+         'no third-party requests' test runs desktop-only and so never
+         exercises this fetch at all; that gap is recorded below, not
+         silently patched over by over-reading the existing green test)."
+      - "npx tsc --noEmit (frontend) -- clean"
+      - "full npx playwright test -- 49/49, matching the commit message's claim"
+      - "tests/sentinel/e12-wallet-check.sh -- docs/wallets.json and
+         frontend/public/wallets.json byte-identical, confirmed independently
+         by `diff` as well"
+      - "docker exec frontend-frontend-1: confirmed the running container's
+         .next build (image sha256:e8e72582..., built/started
+         2026-08-14T20:49:22Z) contains the new banner copy string, the
+         wallets.json fetch call, and the updated public/wallets.json with
+         both `browse` fields -- deployed code matches the reviewed commit"
+    cases:
+      - "Shuffle draws ONLY on Math.random(): confirmed by reading
+         frontend/lib/mobileWallet.ts's shuffle() -- no seed argument, no
+         Date.now/performance.now, no navigator.*, no wallet address, no
+         commitment, no locale -- and confirmed by call-site read:
+         walletBrowserLinks() passes shuffle() only the filtered wallet-entry
+         array, never url/ref/any member-linkable value."
+      - "`browse` exists ONLY on phantom and solflare in both wallets.json
+         copies (confirmed: docs/wallets.json and frontend/public/wallets.json
+         are byte-identical, `diff` empty). glow/trust/jupiter correctly
+         EXCLUDED from the banner (live Pixel-7 render showed exactly 'Open in
+         Solflare' / 'Open in Phantom', shuffled order across runs), not
+         rendered as broken links -- walletBrowserLinks() filters on
+         `typeof w.browse === 'string'` before mapping, so an absent field
+         never reaches the href-building step."
+      - "Fetch is same-origin, static, and fails silent: live Pixel-7 run
+         recorded exactly one request during page load whose pathname is
+         /wallets.json, same host as baseURL, GET, no body, no custom
+         headers, no member data. A second run with `/wallets.json` routed to
+         abort() left `.mw-notice` absent from the DOM (banner visible:
+         false) -- confirmed there is NO hardcoded fallback list; on fetch
+         failure the component renders nothing, matching the code's own
+         `.catch(() => {})`."
+      - "e2e split is a genuine contract fix, not a weakened test: diffed
+         973d52d's frontend/e2e/twelve.spec.ts against its parent. Both
+         `toHaveCount` assertions remain exact-count assertions (now
+         parameterised by MENU_DESTINATIONS.length=3 /
+         TWELVE_PAGES.length=2, both still fixed-length literal arrays, not
+         open-ended); both `.toEqual([...X])` href comparisons remain full
+         exact-array equality, not a subset/contains check; the '12 numbered
+         items' loop (`for (const [i, route] of TWELVE_PAGES.entries())`)
+         still runs over exactly the two pages that actually have 12
+         numbered <li> each -- Glossary was correctly kept OUT of that loop
+         (it has no twelve of anything) rather than folded in and given a
+         weakened assertion to pass."
+      - "/twelve still offers exactly two doors (TWELVE_PAGES, confirmed by
+         the passing e2e test and independently by the live Pixel-7 run
+         landing on /twelve unmodified). The documented asymmetry -- Resources
+         menu offers 3 (incl. Glossary), /twelve's own page offers 2 -- is
+         real, reproducible, and correctly left as an open product question
+         in a code comment rather than silently resolved either direction."
+      - "OPEN, NOT NEW: this feature (frontend/lib/mobileWallet.ts +
+         MobileWalletNotice.tsx) still has no BACKLOG.md F-number and
+         docs/shipped.md still carries no entry for it or for this fix --
+         flagged in the wallet-mobile round, still true, not this round's to
+         fix, restated so it does not silently age out."
+      - "SUPERSEDED, not deleted: the MWA-NOTICE entry's own
+         `checks: grep -nE 'fetch|...'` line above now DOES match (one hit:
+         `fetch(\"/wallets.json\")`, line 51). That is expected and correct --
+         the grep proved absence-of-network-sink at wallet-mobile time; T6
+         intentionally adds one same-origin static fetch. Left as historical
+         evidence of the round it belonged to rather than edited to keep
+         passing; this entry is the current source of truth for that file's
+         network surface."
+      - "HONEST READ on the endorsement question, not a rubber stamp: the
+         copy change is real disclosure and the shuffle is real
+         anti-favouritism -- neither is cosmetic. But a 2-of-5 subset,
+         however honestly captioned and randomly ordered, still hands
+         Phantom and Solflare the ONLY two 'Open in X' buttons a mobile
+         visitor sees at that moment, every load, and the other three vetted
+         wallets never appear there regardless of caption. The gating
+         property (`browse` link exists) is genuine and non-arbitrary, so
+         this is not the T6 violation the wallet-mobile round flagged
+         (unshuffled, uncaptioned, arbitrary-looking) -- but 'not a
+         recommendation' in the footer does not fully erase that only two
+         brands get a one-tap button while three do not. Recorded as a
+         narrowed, disclosed, and shuffled residual tension, not a defect of
+         this commit and not CRITICAL."
+    checks:
+      - cmd: "diff docs/wallets.json frontend/public/wallets.json"
+      - cmd: "grep -c '\"browse\"' frontend/public/wallets.json"
+      - cmd: "cd frontend && npx tsc --noEmit"
+      - cmd: "cd frontend && npx playwright test"
+      - cmd: "grep -n 'MENU_DESTINATIONS\\|TWELVE_PAGES' frontend/e2e/twelve.spec.ts"
+      - cmd: "docker exec frontend-frontend-1 sh -c \"grep -o 'Listed in random order[^\\\"]*' /app/.next/server/chunks/446.js\""

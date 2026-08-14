@@ -376,3 +376,43 @@ so requiring it would deadlock the gate permanently.
   (WalletChooser's uniform shuffle across all five, "no wallet ever holds a
   permanent first position") and is not disclosed anywhere in this commit's
   comments. Full detail in the NRR.
+- 973d52d fix(wallet,e2e): shuffle the mobile banner's wallets; split the
+  menu contract. Reviewed in reports/sentinel/NRR-2026-08-14-t6-shuffle.md
+  (PASS WITH WARNINGS). Verified, not accepted on the author's word: the
+  Fisher-Yates shuffle in frontend/lib/mobileWallet.ts draws only on
+  Math.random(), with no member-linkable seed (confirmed by code read of the
+  one call site) and by an independent 600,000-iteration stress
+  reproduction (1x200k + 5x100k) landing within +/-0.07 points of 50/50 in
+  both directions -- the commit's own claimed 50.32/49.68 was NOT taken on
+  trust, it was re-derived. docs/wallets.json and frontend/public/wallets.json
+  confirmed byte-identical by diff AND sha256sum. Confirmed the `browse`
+  field gates the banner correctly (present only on phantom/solflare; its
+  absence on glow/trust/jupiter excludes them via a filter, not a broken
+  link -- confirmed live with a Pixel-7-emulated Playwright render). Confirmed
+  the new fetch("/wallets.json") is same-origin/static/sends nothing member-
+  linkable, and that failure renders nothing (no fallback list) -- via ad hoc
+  device-emulated Playwright probes, because the existing committed
+  "no third-party requests" test runs desktop-only and does not actually
+  exercise this fetch (recorded as a coverage-gap WARNING, not silently
+  assumed covered). Diffed frontend/e2e/twelve.spec.ts line-by-line against
+  its parent: the MENU_DESTINATIONS(3)/TWELVE_PAGES(2) split preserves exact
+  toHaveCount and exact array-equality assertions throughout -- confirmed a
+  genuine contract fix, not a weakened test. /twelve confirmed to still offer
+  exactly two doors; the nav-vs-/twelve asymmetry (3 vs 2, Glossary reachable
+  one way not the other) is real and left as an open product question, as
+  instructed, not silently resolved. `npx tsc --noEmit` clean; full
+  `npx playwright test` 49/49, matching the commit's claim. Confirmed
+  `programs/`/`circuits/` untouched (`git diff --stat fcca146 973d52d --
+  programs/ circuits/` empty) -- anchor test correctly skipped. Confirmed the
+  deployed container (docker exec frontend-frontend-1) serves this exact
+  commit's code, not a stale build. WARNINGS raised, not blockers: (1) the
+  honest read on the endorsement question -- the shuffle and disclosure are
+  real fixes, but a captioned, randomised 2-of-5 subset is still a narrower,
+  disclosed version of the same underlying tension, not a closed question;
+  (2) the "no third-party requests" e2e test does not exercise the new mobile
+  fetch at all (desktop-only Playwright project) -- the property is true,
+  proven ad hoc this round, but not proven by any committed repeatable test;
+  (3) tests/sentinel/e12-wallet-check.sh's link-liveness check does not cover
+  the new `browse` field; (4) this feature still has no BACKLOG.md F-number
+  and no docs/shipped.md entry (carried forward from the wallet-mobile
+  round, not new). Full detail in the NRR.

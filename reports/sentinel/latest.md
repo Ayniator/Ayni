@@ -1,1 +1,1 @@
-NRR-2026-08-14-wallet-mobile.md
+NRR-2026-08-14-t6-shuffle.md
