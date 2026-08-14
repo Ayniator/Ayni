@@ -2293,3 +2293,135 @@ features:
          this round"
       - "F65/F64 keystore.ts itself still has no unit test (see F65-F64 entry
          above) — carried forward"
+
+# ─────────────────────────────────────────────────────────────────────────
+round: f67
+established: 2026-08-14
+baseline_report: reports/sentinel/NRR-2026-08-14-f67.md
+previous_baseline_report: reports/sentinel/NRR-2026-08-14-f61-r3.md
+
+# Round f67 (2026-08-14) verdict: PASS. Scope: single commit b217a62
+# "fix(F67): remove the permanent first position from /create's wallet hint"
+# (frontend/app/create/page.tsx, frontend/lib/i18n.generated.ts only;
+# programs/circuits/tests/indexer untouched, devnet deployment unchanged).
+#
+# F67 (E9) — /create's wallet-connect hint
+#   what shipped: the "connect a wallet" card in frontend/app/create/page.tsx
+#   used to hardcode two anchors, Solflare then Phantom, in a fixed order —
+#   wrong count AND a permanent first position (T6 violation). b217a62
+#   replaces both anchors with the existing shared <WalletChooser/>, so
+#   /create and /onboarding now show the same five wallets, independently
+#   Fisher-Yates shuffled per mount. One new i18n key,
+#   create.connect.chooserIntro, added in all 19 locales.
+#   verified this round (independently, not cached from the commit message):
+#     - grep -rniE 'phantom|solflare|glow|trustwallet|jup\.ag' frontend/app
+#       frontend/components, excluding WalletChooser.tsx/docs/public wallets
+#       json: only comments survive (layout.tsx, WalletProviders.tsx,
+#       DevnetSignNote.tsx, solana.ts, i18n.ts, embeddedWalletStandard.ts,
+#       and this round's own explanatory comment in create/page.tsx) — see
+#       ONE pre-existing exception below, not introduced by this commit.
+#     - WalletChooser.tsx's shuffle() is the correct descending Fisher-Yates
+#       (i = len-1..1, j = Math.floor(Math.random()*(i+1))), draws only from
+#       Math.random(), no identifier correlation. Empirically re-verified
+#       with a throwaway 200,000-iteration harness over the 5 wallets: every
+#       wallet lands in every position within 1.00% of the flat 20% baseline
+#       (well inside a fair-shuffle bound).
+#     - docs/wallets.json and frontend/public/wallets.json: byte-identical,
+#       5 self-custodial wallets (phantom/solflare/glow/trust/jupiter); all
+#       15 store/web links resolve live (tests/sentinel/e12-wallet-check.sh,
+#       22/22).
+#     - i18n: tests/sentinel/i18n-key-check.sh PASS, 1035 keys; all 19
+#       locales (en fr es se th hi zh de sv nb da ar lo dz bo my vi tl qu)
+#       carry create.connect.chooserIntro exactly once each; hand-read each
+#       non-English value — correct script per locale, genuinely translated
+#       (not an English copy), dz and bo (both Tibetan-script) are distinct
+#       translations, not a copy-paste of each other.
+#     - create.connect.mid / create.connect.or: grep confirms no remaining
+#       call site anywhere in frontend/app or frontend/components; still
+#       resolvable per i18n-key-check.sh (dead but harmless, as the commit
+#       message claims).
+#     - F68 claim independently verified: frontend/app/onboarding/page.tsx
+#       exists, is a real 3-macro-step stepper (StepWallet/StepVouch/
+#       StepFace, position indicator, next/back), and is reachable via
+#       frontend/components/Nav.tsx's `nav.start` link. Both /create and
+#       /onboarding import and render the same <WalletChooser/>. F68's
+#       backlog claim is NOT false.
+#     - build health: npx tsc --noEmit (frontend/) clean; full mocha/anchor
+#       suite (tests/ayni.ts ... tests/maci.ts via `anchor test`) — 161
+#       passing / 0 failing, independently reproduced (not trusted from the
+#       commit message), matching the prior round's baseline exactly; e2e
+#       smoke suite 49/49 including a live "/create renders" check; Layer D
+#       forbidden-pattern sweep (tests/sentinel/privacy-sweep.sh) clean —
+#       no analytics/telemetry/tracking, no console.* of identity material,
+#       no score/rating/rank/karma/reputation field; npm audit root 0
+#       critical/37 total (byte-identical to tests/sentinel/baselines/
+#       npm-audit.json) and frontend 0 critical/28 total, both unchanged
+#       shape vs. the F61-R3 baseline (package.json/lockfiles untouched by
+#       this commit).
+#
+#   findings_this_round:
+#     - severity: "WARNING (pre-existing, NOT introduced by b217a62)"
+#       what: "frontend/app/settings-security/page.tsx (line ~273) renders,
+#         to the member, the sentence '...alongside Phantom and Solflare.'
+#         — a hardcoded, fixed-order pair naming exactly two of the five
+#         vetted wallets, in prose, unrelated to WalletChooser. This is a
+#         real hit under the brief's literal grep scope (frontend/app,
+#         outside WalletChooser.tsx/wallets.json)."
+#       pre_existing: "YES — from commit 713b2de (E12 Wave A, 'AHA app with
+#         embedded wallet'), well before F67. b217a62 does not touch this
+#         file. Distinguishable from the T6 defect F67 fixed: this sentence
+#         describes the wallet-adapter's own connect-button contents (which
+#         wallets the browser/OS actually has installed, not an app-curated
+#         list), not a download recommendation on the first screen. Still,
+#         naming exactly two of five wallets by name, always in the same
+#         order, in member-facing prose is the same shape of defect and
+#         should get the same fix (either genericize the sentence or drive
+#         it from wallets.json) in a future round."
+#       reproduction: "grep -n 'Phantom and Solflare' frontend/app/settings-security/page.tsx"
+#       disposition: "Not scored against b217a62 (out of diff, pre-existing,
+#         carried forward). Recorded here so it does not silently vanish —
+#         flag for a future F67-style cleanup pass."
+#     - severity: "WARNING — build-health, pre-existing, unrelated to T6"
+#       what: "Both files this commit touches already fail `npx prettier
+#         --check` (frontend/app/create/page.tsx, frontend/lib/
+#         i18n.generated.ts), as part of a repo-wide 361-file prettier
+#         drift (`npm run lint`)."
+#       pre_existing: "YES — confirmed by running prettier --check against
+#         the pre-commit (b217a62^) versions of both files: both already
+#         failed, byte-for-byte the same failure shape. b217a62 neither
+#         introduces nor fixes this drift."
+#       reproduction: "npx prettier --check frontend/app/create/page.tsx frontend/lib/i18n.generated.ts"
+#       disposition: "Long-standing repo-wide condition, carried forward
+#         unchanged; not scored as a regression of this commit."
+#
+#   coverage_gaps:
+#     - "CLOSED this round: 'no hardcoded wallet name/URL survives outside
+#        WalletChooser.tsx' now has a reproducible grep command recorded
+#        above; not yet promoted to an executable script in tests/sentinel/
+#        — should become one (e.g. extend e12-wallet-check.sh or a new
+#        f67-endorsement-check.sh) so it runs automatically every round
+#        instead of by hand. WARNING in this round, would be a FAIL to
+#        still be manual-only in the next round that touches wallet UI."
+#     - "STILL OPEN (carried forward from f60-f61-verify2's f12 section):
+#        wallet-list shuffle fairness (60-refresh position-frequency / no-
+#        identifier-correlation assertion from the spec) has no PERSISTED
+#        automated test in this repo. This round's 200,000-iteration
+#        uniformity check was a throwaway harness (not committed, not
+#        wired into `anchor test`/e2e); the flatness result is real but the
+#        coverage gap itself is not closed — would be a FAIL if still
+#        uncovered by an executable, repo-resident test two rounds from
+#        when it was first noted (f60-f61-verify2, 2026-08-12)."
+#     - "docs/shipped.md has no F67/F68/E9-onboarding/WalletChooser section
+#        at all (confirmed: grep 'F67\\|F68' docs/shipped.md — zero hits),
+#        even though BACKLOG.md's E9 epic row already claims 'mostly
+#        shipped' and the requesting brief says F67/F68 rows are about to
+#        be flipped to shipped. docs/shipped.md is Sentinel's own narrower
+#        ledger (created round 1, 2026-08-10) and is stale on this feature;
+#        it should gain an F67/F68 section the same round BACKLOG.md's
+#        rows flip, or the drift-check in Layer E has no teeth here."
+    checks:
+      - cmd: bash tests/sentinel/i18n-key-check.sh
+      - cmd: bash tests/sentinel/e12-wallet-check.sh
+      - cmd: grep -rniE '(phantom|solflare|\bglow\b|trustwallet|trust wallet|jup\.ag|jupiter mobile)' frontend/app frontend/components --include='*.tsx' --include='*.ts' | grep -v 'WalletChooser.tsx' | grep -v node_modules
+      - cmd: diff docs/wallets.json frontend/public/wallets.json
+      - cmd: cd frontend && npx tsc --noEmit

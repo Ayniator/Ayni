@@ -40,3 +40,23 @@ so requiring it would deadlock the gate permanently.
   test included and green), npm audit 0 critical (pre-existing 37
   non-critical), prettier warnings on the touched files confirmed
   pre-existing (identical before/after this commit).
+- b217a62 fix(F67): remove the permanent first position from /create's wallet hint
+  Covered by NRR-2026-08-14-f67.md (PASS). Verified beyond the commit's own
+  claims: the T6 grep is clean across frontend/app and frontend/components (no
+  wallet brand or URL survives outside WalletChooser.tsx and the two wallets.json
+  copies); the Fisher-Yates loop was not merely read but STRESS-TESTED at 200,000
+  iterations over the 5 wallets, max deviation from a flat 20% = 1.00%, so the
+  shuffle is empirically uniform and no wallet is statistically favoured;
+  docs/wallets.json and frontend/public/wallets.json are byte-identical (a drift
+  would have served an unreviewed list) with all 15 store links live; all 19
+  locales carry create.connect.chooserIntro exactly once and each was hand-checked
+  for correct script and for not being an English copy, dz and bo confirmed
+  genuinely distinct. F68's shipped-ness independently confirmed true before the
+  registry was reconciled to it. Regression reproduced rather than trusted: tsc
+  --noEmit clean, anchor test 161/0, Playwright smoke 49/49, privacy sweep 5/5,
+  npm audit 0 critical.
+  Two pre-existing WARNINGs, neither caused by this commit and both carried
+  forward: settings-security/page.tsx names "Phantom and Solflare" in fixed order
+  in user-visible copy (same T6 defect class, from commit 713b2de, fixed in the
+  round after this one), and repo-wide prettier drift that already affected both
+  changed files before this commit.
