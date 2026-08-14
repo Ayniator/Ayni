@@ -17,7 +17,23 @@ import { findRawKeys, watchForErrors, expectNoPageErrors, seedLang, gotoWithLang
  * than as an error.
  */
 
-const DESTINATIONS = ["/twelve-steps", "/twelve-traditions"] as const;
+// TWO lists, because the nav menu and the /twelve page no longer agree and the
+// difference is real rather than a bug in the test.
+//
+// MENU_DESTINATIONS is what the Resources dropdown offers (renamed from "The
+// 12"); Glossary joined it on 2026-08-14. TWELVE_PAGES is the pair that is
+// actually "the 12" — twelve numbered items each — and is what the /twelve
+// choice page still doors into. Glossary belongs in neither of those roles: it
+// has no twelve of anything.
+//
+// NOTE for whoever reconciles this: /twelve offers two doors while the menu
+// above it offers three, so the Glossary is reachable from the nav but not from
+// the page the nav's own label links to. That asymmetry is deliberate here only
+// in the sense that nobody has decided otherwise — it is a product call, not a
+// test detail, so it is written down rather than quietly patched by adding a
+// third door.
+const MENU_DESTINATIONS = ["/twelve-steps", "/twelve-traditions", "/glossary"] as const;
+const TWELVE_PAGES = ["/twelve-steps", "/twelve-traditions"] as const;
 
 test.describe("The 12 — nav menu", () => {
   test("the label links to /twelve and reveals both destinations", async ({ page }) => {
@@ -43,9 +59,9 @@ test.describe("The 12 — nav menu", () => {
     await expect(drop).toHaveClass(/is-open/);
 
     const items = drop.locator("a[role='menuitem']");
-    await expect(items, "the menu should offer exactly two destinations").toHaveCount(2);
+    await expect(items, "the menu should offer exactly the MENU_DESTINATIONS entries").toHaveCount(MENU_DESTINATIONS.length);
     const hrefs = await items.evaluateAll((els) => els.map((e) => e.getAttribute("href")));
-    expect(hrefs).toEqual([...DESTINATIONS]);
+    expect(hrefs).toEqual([...MENU_DESTINATIONS]);
 
     // ...and every item shows a translated label, not a raw key.
     const menuText = await drop.innerText();
@@ -96,9 +112,9 @@ test.describe("The 12 — the hub page", () => {
       .toBeGreaterThan(0);
 
     const doors = page.locator("a.twelve-door");
-    await expect(doors, "/twelve should offer exactly two doors").toHaveCount(2);
+    await expect(doors, "/twelve should offer exactly two doors").toHaveCount(TWELVE_PAGES.length);
     const hrefs = await doors.evaluateAll((els) => els.map((e) => e.getAttribute("href")));
-    expect(hrefs).toEqual([...DESTINATIONS]);
+    expect(hrefs).toEqual([...TWELVE_PAGES]);
 
     const body = await page.evaluate(() => document.body.innerText);
     expect(findRawKeys(body), "/twelve rendered raw i18n key(s)").toEqual([]);
@@ -108,7 +124,7 @@ test.describe("The 12 — the hub page", () => {
 });
 
 test.describe("The 12 — the Steps and the Traditions", () => {
-  for (const [i, route] of DESTINATIONS.entries()) {
+  for (const [i, route] of TWELVE_PAGES.entries()) {
     test(`reaching ${route} from the menu shows 12 numbered items`, async ({ page }) => {
       const diag = watchForErrors(page);
       await page.goto("/", { waitUntil: "networkidle" });

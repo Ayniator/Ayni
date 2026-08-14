@@ -11,7 +11,8 @@
         "ios": "https://apps.apple.com/app/phantom-crypto-wallet/id1598432977",
         "android": "https://play.google.com/store/apps/details?id=app.phantom",
         "web": "https://phantom.app/download"
-      }
+      },
+      "browse": "https://phantom.app/ul/browse/{url}?ref={ref}"
     },
     {
       "id": "solflare",
@@ -22,7 +23,8 @@
         "ios": "https://apps.apple.com/app/solflare/id1580902717",
         "android": "https://play.google.com/store/apps/details?id=com.solflare.mobile",
         "web": "https://solflare.com/download"
-      }
+      },
+      "browse": "https://solflare.com/ul/v1/browse/{url}?ref={ref}"
     },
     {
       "id": "glow",
@@ -57,5 +59,6 @@
         "web": "https://jup.ag/mobile"
       }
     }
-  ]
+  ],
+  "_browseComment": "A wallet carries `browse` ONLY if it publishes a documented universal link that opens an arbitrary URL inside its own in-app browser. That is a factual property of the wallet, not a judgement about it: MobileWalletNotice can only offer wallets it can actually deep-link into, and it shuffles the ones it can (T6 — no endorsements) so none holds a permanent first position. A wallet with no `browse` is absent from that banner and present everywhere else. Adding one later needs a data line here, not a code change — and the URL must contain {url} and {ref} placeholders, both percent-encoded at build time so a non-default port survives."
 }

@@ -42,11 +42,21 @@ export default function MobileWalletNotice() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    setState({
-      show: shouldOfferWalletBrowser(),
-      hang: mwaWillHang(),
-      links: walletBrowserLinks(),
-    });
+    if (!shouldOfferWalletBrowser()) return;
+    const hang = mwaWillHang();
+    // Read the same vetted list WalletChooser uses, so a wallet is added or
+    // dropped in one data file rather than in two places that can disagree.
+    // On failure we show nothing: a banner with no way out is worse than
+    // silence, and a hardcoded fallback list is the T6 problem all over again.
+    fetch("/wallets.json")
+      .then((r) => r.json())
+      .then((cfg) => {
+        const links = walletBrowserLinks((cfg?.wallets ?? []) as Parameters<
+          typeof walletBrowserLinks
+        >[0]);
+        setState({ show: links.length > 0, hang, links });
+      })
+      .catch(() => {});
   }, []);
 
   if (connected || dismissed || !state.show || state.links.length === 0) return null;
@@ -73,7 +83,7 @@ export default function MobileWalletNotice() {
           // Plain links, not window.open: a popup blocker eats the second form
           // on mobile, and a real href is what lets the OS offer the installed
           // app rather than the web page.
-          <a key={l.name} className="mw-notice-btn" href={l.href} rel="noreferrer">
+          <a key={l.id} className="mw-notice-btn" href={l.href} rel="noreferrer">
             Open in {l.name}
           </a>
         ))}
@@ -86,12 +96,15 @@ export default function MobileWalletNotice() {
           Not now
         </button>
       </div>
-      {state.hang && (
-        <div className="mw-notice-foot">
-          Chrome for Android connects normally, if you would rather stay in a
-          browser. Nothing here is stored or sent anywhere.
-        </div>
-      )}
+      {/* Says why the list is short, so a two-item list does not read as a
+          recommendation. The order is shuffled on every load; these are simply
+          the wallets that publish a link we can open. */}
+      <div className="mw-notice-foot">
+        Listed in random order — these are the wallets that publish a link we can
+        open, not a recommendation. Any wallet works once you are inside it.
+        {state.hang && " Chrome for Android also connects normally."} Nothing here
+        is stored or sent anywhere.
+      </div>
     </div>
   );
 }

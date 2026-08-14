@@ -101,20 +101,50 @@ function refOrigin(): string {
   return window.location.origin;
 }
 
-export type WalletBrowserLink = { name: string; href: string };
+export type WalletBrowserLink = { id: string; name: string; href: string };
 
-/** Universal links that open a URL in the wallet's own in-app browser.
+type WalletEntry = { id?: string; name?: string; browse?: string };
+
+/** Uniform Fisher–Yates, drawing only on Math.random().
  *
- *  Both wallets take a percent-encoded target plus a `ref` origin. Encoding is
- *  not optional: this site is served on a non-default port (…:8443) and an
- *  unencoded ":8443" is what makes these links silently drop the port and land
- *  on the wrong host. */
-export function walletBrowserLinks(url = here(), ref = refOrigin()): WalletBrowserLink[] {
+ *  Same discipline as WalletChooser (F67): never seeded by, correlated with, or
+ *  derived from anything member-linkable. Two people opening this banner see
+ *  independent orders. */
+function shuffle<T>(input: T[]): T[] {
+  const a = [...input];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/** Build the in-app-browser links from a wallets.json payload.
+ *
+ *  T6 (no endorsements): the order is SHUFFLED, so neither wallet holds a
+ *  permanent first position — the same reason WalletChooser shuffles. The set is
+ *  narrower than the full chooser only because a wallet can appear here at all
+ *  only if it publishes a documented universal link we can deep-link into; that
+ *  is a property of the wallet, not a ranking of it, and the banner says so.
+ *
+ *  Percent-encoding is not cosmetic: this site is served on a non-default port
+ *  (…:8443), and an unencoded ":8443" is exactly what makes these links drop the
+ *  port and land on the wrong host. */
+export function walletBrowserLinks(
+  wallets: WalletEntry[],
+  url = here(),
+  ref = refOrigin()
+): WalletBrowserLink[] {
   if (!url) return [];
   const u = encodeURIComponent(url);
   const r = encodeURIComponent(ref);
-  return [
-    { name: "Solflare", href: `https://solflare.com/ul/v1/browse/${u}?ref=${r}` },
-    { name: "Phantom", href: `https://phantom.app/ul/browse/${u}?ref=${r}` },
-  ];
+  const usable = wallets.filter(
+    (w): w is Required<Pick<WalletEntry, "id" | "name" | "browse">> =>
+      typeof w?.browse === "string" && !!w.id && !!w.name
+  );
+  return shuffle(usable).map((w) => ({
+    id: w.id,
+    name: w.name,
+    href: w.browse.replace("{url}", u).replace("{ref}", r),
+  }));
 }
