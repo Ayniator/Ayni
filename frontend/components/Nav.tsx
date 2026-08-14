@@ -37,7 +37,7 @@ export default function Nav() {
             newcomer's entry point, so it retires once a wallet is connected. */}
         {!connected && <Link href="/onboarding">{t("nav.start")}</Link>}
         <Link href="/reflections">{t("nav.reflections")}</Link>
-        <TwelveMenu />
+        <ResourcesMenu />
         {connected && <Link href="/me">{t("nav.me")}</Link>}
         <InboxNavLink />
         {connected && <Link href="/documents">{t("nav.documents")}</Link>}
@@ -69,9 +69,12 @@ function GetAppLink() {
   return <Link href="/get-app">{t("nav.mobileApp")}</Link>;
 }
 
-// "The 12" — the Steps and the Traditions. Opens on hover for pointers and on
+// "Resources" — the Steps and the Traditions today, and the natural home for
+// further reference material (the glossary) as it lands. Renamed from "The 12",
+// which named its current contents rather than its role; the /twelve route and
+// both destinations are unchanged. Opens on hover for pointers and on
 // focus/click for keyboard and touch, so it is reachable without a mouse.
-function TwelveMenu() {
+function ResourcesMenu() {
   const t = useT();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLSpanElement>(null);
@@ -107,7 +110,7 @@ function TwelveMenu() {
         onFocus={() => setOpen(true)}
         onClick={() => setOpen(false)}
       >
-        {t("nav.twelve")} <span className="nav-caret" aria-hidden="true">▾</span>
+        {t("nav.resources")} <span className="nav-caret" aria-hidden="true">▾</span>
       </Link>
       <span className={`nav-drop${open ? " is-open" : ""}`} role="menu">
         <Link href="/twelve-steps" role="menuitem" onClick={() => setOpen(false)}>
@@ -115,6 +118,16 @@ function TwelveMenu() {
         </Link>
         <Link href="/twelve-traditions" role="menuitem" onClick={() => setOpen(false)}>
           {t("nav.twelveTraditions")}
+        </Link>
+        <Link href="/glossary" role="menuitem" onClick={() => setOpen(false)}>
+          {t("nav.glossary")}
+        </Link>
+        {/* Closes the reachability gap the nav-menu round found: hiding
+            "Start Here" for connected members left /onboarding with no in-app
+            link at all. It is reference material, so it belongs here — and a
+            member who wants to re-read the explainer can now find it. */}
+        <Link href="/onboarding" role="menuitem" onClick={() => setOpen(false)}>
+          {t("nav.start")}
         </Link>
       </span>
     </span>

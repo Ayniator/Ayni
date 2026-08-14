@@ -78,6 +78,8 @@ const en: Record<string, string> = {
   "nav.getAppIos": "Get AHA for iOS",
   "getapp.title": "Get AHA on your phone",
   "nav.start": "Start Here",
+  "nav.resources": "Resources",
+  "nav.glossary": "Glossary",
   "nav.twelve": "The 12",
   "nav.twelveSteps": "The 12 Steps",
   "nav.twelveTraditions": "The 12 Traditions",
