@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 
+use crate::council::{Proposal, ProposalAction};
+use crate::errors::AyniError;
 use crate::merkle;
 use crate::state::{Circle, MemberTree, RecentRoots};
 
@@ -9,10 +11,20 @@ use crate::state::{Circle, MemberTree, RecentRoots};
 /// revoked commitments simply never come back, with no per-leaf deletion (the
 /// incremental tree cannot delete) and no new circuit.
 ///
-/// Service function, any-seat gated (like `set_meetings`): expiry cleanup is
-/// routine housekeeping, and the reset is recoverable by construction — every
-/// live member (or anyone on their behalf) re-inserts, and `member_count`
-/// grows back with them.
+/// **4-of-7 gated (changed 2026-08-14; was any-seat).** The old comment here
+/// called this a service function "like `set_meetings`" because "the reset is
+/// recoverable by construction". That reasoning holds for members and fails for
+/// governance: while the tree is empty, whoever called this decides who may
+/// vote. One seat could call it, let the permissionless `reinsert_member` crank
+/// re-enter only their own commitment, open a member proposal against that
+/// electorate of one, vote yes once, and pass it — `quorum_threshold(1, ..)` is
+/// `.max(1)` = 1. That reached `refill_faucet` and every other member-vote-gated
+/// action. Emptying the electorate is the most powerful act in the program, so
+/// it now costs the same 4-of-7 plus contest window as a treasury withdrawal.
+///
+/// Permissionless to trigger once the Council has approved and executed the
+/// proposal, exactly like `withdraw_treasury`; `drained` makes it one-shot, so
+/// one authorization cannot be replayed to re-empty the tree at will.
 ///
 /// Operational rules (documented, not enforceable on-chain):
 /// * Finalize open member proposals FIRST. Ballots verify against a proposal's
@@ -23,10 +35,18 @@ use crate::state::{Circle, MemberTree, RecentRoots};
 /// * Run the reinsert crank promptly: until re-insertion completes,
 ///   `member_count` (and therefore new proposals' quorum base) undercounts.
 pub fn begin_member_epoch(ctx: Context<BeginMemberEpoch>) -> Result<()> {
+    // 4-of-7, contest window elapsed, and not already spent. `execute_proposal`
+    // has already checked `require_executable`; `executed` is the record of it.
+    require!(ctx.accounts.proposal.executed, AyniError::ThresholdNotMet);
+    require!(!ctx.accounts.proposal.drained, AyniError::AlreadyExecuted);
+    require!(
+        matches!(ctx.accounts.proposal.action, ProposalAction::BeginMemberEpoch),
+        AyniError::WrongProposalAction
+    );
+    // Mark consumed before touching state — one authorization, one rebuild.
+    ctx.accounts.proposal.drained = true;
+
     let circle = &mut ctx.accounts.circle;
-    circle
-        .council
-        .require_any_seat(&ctx.accounts.seat.key())?;
 
     // Empty the tree.
     let mt: &mut MemberTree = &mut ctx.accounts.member_tree;
@@ -65,16 +85,22 @@ pub struct BeginMemberEpoch<'info> {
 
     #[account(
         init_if_needed,
-        payer = seat,
+        payer = payer,
         space = RecentRoots::SPACE,
         seeds = [b"roots", circle.key().as_ref()],
         bump
     )]
     pub recent_roots: Box<Account<'info, RecentRoots>>,
 
-    /// Any Council seat (signs; pays the ring-buffer rent if first use).
+    /// The executed 4-of-7 `BeginMemberEpoch` authorization. Marked `drained`
+    /// here so it authorizes exactly one rebuild.
+    #[account(mut, has_one = circle)]
+    pub proposal: Account<'info, Proposal>,
+
+    /// Whoever triggers the (permissionless) rebuild; pays the ring-buffer rent
+    /// on first use. Carries NO authority — the Council's approvals do.
     #[account(mut)]
-    pub seat: Signer<'info>,
+    pub payer: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }

@@ -927,6 +927,56 @@ pub const FAUCET_DEFAULT_GRANT_LAMPORTS: u64 = 1_500_000; // 0.0015 SOL
 /// How long grants pause after the Treasurer retunes the amount (24h), so a
 /// change applies to everyone alike instead of to one targeted neophyte.
 pub const FAUCET_AMOUNT_COOLDOWN: i64 = 24 * 60 * 60;
+/// --- Member-ballot integrity (governance-hole fix, 2026-08-14) ---
+///
+/// These three bounds exist because a single Council seat could otherwise pass
+/// an arbitrary member proposal alone. The chain was: `begin_member_epoch`
+/// (one seat) empties the MemberTree and zeroes `member_count`; the
+/// permissionless `reinsert_member` crank re-enters ONE commitment — the
+/// attacker's; `create_member_proposal` validated `voting_period` not at all,
+/// so a ballot could open and close in seconds against that manufactured
+/// electorate of one; and `quorum_threshold(1, ..)` is `.max(1)` = 1, so a
+/// single `yes` met quorum and passed. `refill_faucet` and every other
+/// member-vote-gated action then executed on one person's say-so.
+///
+/// Each constant below cuts that chain at a different point, so no single one
+/// of them is load-bearing.
+
+/// At least two distinct members must actually cast a ballot for a member
+/// proposal to pass. This is the direct fix for the arithmetic that made the
+/// attack work: quorum is `((eligible + 2) / 3).max(1)`, and the `.max(1)` floor
+/// — correct in itself, so quorum never rounds to zero — means an electorate of
+/// one has a quorum of one. A single `yes` was a passing group conscience.
+///
+/// Deliberately a TURNOUT floor rather than a minimum voting DURATION. A
+/// duration floor looks equivalent and is worse: it would make the passed-vote
+/// path untestable on a live validator (a test cannot wait out days), costing
+/// the only end-to-end coverage of the path that gates `refill_faucet`, while
+/// still not preventing one member from being the whole electorate.
+///
+/// Two is the floor, not a quorum: real quorum stays the configured
+/// one-third-of-eligible. This only says that one person alone is never a group
+/// conscience, which is Tradition 2 read literally.
+pub const MIN_TURNOUT: u64 = 2;
+/// Upper bound on a member ballot (90 days), matching the Council child
+/// proposals. A ballot parked open indefinitely votes against a snapshot of an
+/// electorate that has long since moved on.
+pub const MAX_VOTING_PERIOD: i64 = 90 * 24 * 60 * 60;
+/// How long after a member-epoch rebuild a new ballot must wait (30 days). The
+/// rebuild empties the votable set on purpose; until the live memberships have
+/// re-entered, `member_count` undercounts and quorum is computed against a set
+/// the caller of `begin_member_epoch` chose. `reinsert_member` is
+/// permissionless and anyone may crank it on anyone's behalf, so this window is
+/// long enough for the electorate to heal by itself.
+pub const EPOCH_SETTLE_PERIOD: i64 = 30 * 24 * 60 * 60;
+/// Fewest members for an anonymous ballot to be a group conscience at all.
+/// Below this a Circle is not blocked from governing itself — a seat of its
+/// PARENT Circle co-signs the proposal instead, supplying the second party a
+/// captured seat cannot manufacture. `Circle.parent` is a PDA seed and so is
+/// immutable for the Circle's life, which is what makes that escape safe: a
+/// captured seat cannot redirect its own Circle at a parent it controls.
+pub const MIN_ELECTORATE: u64 = 3;
+
 /// A single refill vote may move at most this many grants' worth into the jar.
 /// The jar is a second treasury outflow, guarded only by a member vote whose
 /// amount lives in an opaque hash — without a ceiling one ballot could commit

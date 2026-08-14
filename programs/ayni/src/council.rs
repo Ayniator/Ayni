@@ -107,6 +107,15 @@ pub enum ProposalAction {
     /// a `transfer_checked` with the treasury PDA. Without this, tokens sent via
     /// `donate_token` were unrecoverable (audit: permanent fund-lock).
     WithdrawTreasuryToken { mint: Pubkey, amount: u64, recipient: Pubkey },
+    /// Empty the MemberTree and start a new member epoch (F54b). Was any-seat
+    /// gated, on the reasoning that expiry cleanup is routine housekeeping and
+    /// "the reset is recoverable by construction". That is true for members and
+    /// false for governance: while the tree is empty the caller decides who may
+    /// vote, and one seat could ride that into passing an arbitrary member
+    /// proposal alone. Emptying the electorate is the most powerful act in the
+    /// program, so it now costs 4-of-7 plus the contest window every other
+    /// high-stakes action pays. Executed by `begin_member_epoch`.
+    BeginMemberEpoch,
 }
 
 impl ProposalAction {

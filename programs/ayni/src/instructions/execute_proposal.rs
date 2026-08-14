@@ -59,6 +59,12 @@ pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
             // Authorization only — the wallet is written in `set_treasury_wallet`,
             // gated on this executed proposal (which carries the new wallet).
         }
+        ProposalAction::BeginMemberEpoch => {
+            // Authorization only — the tree is emptied in `begin_member_epoch`,
+            // gated on this executed proposal and one-shot via `drained` so a
+            // single 4-of-7 vote cannot be replayed to re-empty the electorate
+            // whenever the holder of that proposal finds it convenient.
+        }
         ProposalAction::WithdrawTreasuryToken { .. } => {
             // Authorization only — the tokens move in `withdraw_treasury_token`,
             // gated on this executed proposal (so the treasury PDA can sign) with

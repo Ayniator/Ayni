@@ -62,7 +62,12 @@ pub enum AyniError {
     ProfileFieldTooLong,
     #[msg("Geographic coordinate out of range")]
     InvalidCoordinate,
-    #[msg("Voting period must be between 1 and 90 days")]
+    /// Shared by the Council child-circle proposals (1–90 days) and, since the
+    /// 2026-08-14 ballot-integrity fix, by member proposals (MIN_VOTING_PERIOD
+    /// ..=MAX_VOTING_PERIOD, 3–30 days). The message no longer names a single
+    /// range because the two are deliberately different: a member ballot must
+    /// close while its electorate snapshot is still meaningful.
+    #[msg("Voting period is outside the allowed range for this kind of proposal")]
     InvalidVotingPeriod,
     #[msg("Treasury steward wallet must be an initialized SPL multisig (m-of-n, m >= 2)")]
     TreasuryNotMultisig,
@@ -132,4 +137,8 @@ pub enum AyniError {
     EndorsementNotByWing,
     #[msg("MACI tallying is disabled: the chain cannot yet verify a tally, so its result must not decide seats or treasury")]
     MaciTallyUnverified,
+    #[msg("A member epoch was rebuilt too recently: let the good-standing set re-enter before opening a ballot against it")]
+    EpochNotSettled,
+    #[msg("Too few members for a group conscience — grow the circle, or have a seat of the parent Circle co-sign the ballot")]
+    ElectorateTooSmall,
 }

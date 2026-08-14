@@ -23,7 +23,7 @@ use crate::instructions::finalize_member_proposal::{
     member_vote_outcome, quorum_threshold, vote_passes,
 };
 use crate::merkle::{self, poseidon2, MAX_DEPTH};
-use crate::state::RecentRoots;
+use crate::state::{RecentRoots, MIN_TURNOUT};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -321,10 +321,44 @@ proptest! {
         qd in 0u16..=1000,
     ) {
         let q = quorum_threshold(e, qn as u64, qd as u64);
-        // exactly at quorum, all-yes, default pass rule (yes > no) ⇒ passes
-        prop_assert!(member_vote_outcome(q, 0, e, qn as u64, qd as u64, 0, 0));
+        // Exactly at quorum, all-yes, default pass rule (yes > no) ⇒ passes —
+        // but ONLY if that quorum is at least MIN_TURNOUT. Before the 2026-08-14
+        // ballot-integrity fix this was an unconditional `prop_assert!`, and it
+        // passed only because proptest never happened to draw `qn == 0` (which
+        // forces q == 1). A latent flake AND the exact case the exploit used, so
+        // the relationship is now asserted rather than assumed.
+        prop_assert_eq!(
+            member_vote_outcome(q, 0, e, qn as u64, qd as u64, 0, 0),
+            q >= MIN_TURNOUT
+        );
         // one below quorum (or zero turnout) ⇒ never passes, even unanimous
         prop_assert!(!member_vote_outcome(q - 1, 0, e, qn as u64, qd as u64, 0, 0));
+    }
+
+    /// One voice is never a group conscience, at any electorate size or tuning.
+    /// This pins the arithmetic the governance exploit relied on: an electorate
+    /// of one has `quorum_threshold(1, ..) == 1` (the `.max(1)` floor), so a
+    /// single `yes` used to satisfy quorum, turnout and majority all at once.
+    #[test]
+    fn a_single_voice_never_passes_a_member_ballot(
+        e in 0u64..=100_000,
+        qn in 0u16..=1000,
+        qd in 0u16..=1000,
+    ) {
+        // One yes, nobody else: refused however the Circle has tuned quorum.
+        prop_assert!(!member_vote_outcome(1, 0, e, qn as u64, qd as u64, 0, 0));
+        // And one yes + one no is turnout 2 but not a majority, so still no.
+        prop_assert!(!member_vote_outcome(1, 1, e, qn as u64, qd as u64, 0, 0));
+    }
+
+    /// Two voices CAN carry a ballot — the floor is a floor, not a new quorum.
+    /// Without this, raising MIN_TURNOUT to something large would silently
+    /// disenfranchise every small Circle and no test would notice.
+    #[test]
+    fn two_voices_suffice_when_quorum_allows(e in 0u64..=6) {
+        // Default tuning (qd = 0 ⇒ ceil(e/3) quorum). For e <= 6 quorum is <= 2,
+        // so two yes votes meet it.
+        prop_assert!(member_vote_outcome(2, 0, e, 0, 0, 0, 0));
     }
 
     /// Default pass rule (p_den = 0) is a strict simple majority: ties fail.

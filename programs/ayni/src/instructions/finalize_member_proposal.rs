@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::AyniError;
-use crate::state::{CircleConfig, MemberProposal};
+use crate::state::{CircleConfig, MemberProposal, MIN_TURNOUT};
 
 /// Close voting and record the outcome after the deadline. Group conscience:
 /// passes if turnout meets the quorum and the yes-share clears the pass
@@ -30,7 +30,17 @@ pub(crate) fn vote_passes(yes: u64, no: u64, p_num: u128, p_den: u128) -> bool {
     }
 }
 
-/// Group-conscience outcome: quorum met, non-zero turnout, pass threshold cleared.
+/// Group-conscience outcome: quorum met, at least `MIN_TURNOUT` members actually
+/// voted, and the pass threshold cleared.
+///
+/// The `turnout >= MIN_TURNOUT` term is the 2026-08-14 ballot-integrity fix. It
+/// used to be `turnout > 0`, which combined with `quorum_threshold`'s `.max(1)`
+/// meant a one-member electorate passed proposals on a single `yes`. That was
+/// reachable on purpose: `begin_member_epoch` emptied the tree, the
+/// permissionless `reinsert_member` crank re-entered one commitment, and the
+/// resulting ballot carried the whole Circle. Two is not a quorum — quorum is
+/// still the configured share of the eligible set — it is the statement that one
+/// person alone is never a group conscience.
 pub(crate) fn member_vote_outcome(
     yes: u64,
     no: u64,
@@ -42,7 +52,7 @@ pub(crate) fn member_vote_outcome(
 ) -> bool {
     let turnout = yes.saturating_add(no);
     let quorum = quorum_threshold(eligible_count, q_num, q_den);
-    turnout >= quorum && turnout > 0 && vote_passes(yes, no, p_num, p_den)
+    turnout >= quorum && turnout >= MIN_TURNOUT && vote_passes(yes, no, p_num, p_den)
 }
 
 pub fn finalize_member_proposal(ctx: Context<FinalizeMemberProposal>) -> Result<()> {
