@@ -415,3 +415,38 @@ commits, so nothing here alters the deployed program.
 
 **Attribution:** this session; unverifiable at the git level, per the user's
 accepted-risk waiver of 2026-08-12.
+
+---
+
+## b10bae9 — CRITICAL fix to a hole this session shipped (2026-08-14)
+
+**Override used:** yes, for this one commit.
+
+**What it is:** reverts the REVIEWED.md skip that `16bb15f` added to the
+override path. A focused round (`NRR-2026-08-14-gate-delta.md`, **FAIL**) built
+a working exploit: forge a bookkeeping-only REVIEWED.md line naming your own
+commit, touch OVERRIDES.md naming an unrelated decoy, and the substantive commit
+ships with its SHA in no override entry at all. Blocked pre-delta, allowed on
+`16bb15f`. That hole is live on origin until this lands.
+
+**Why the override rather than a round first:** the thing being pushed is the
+closure of a live hole in the gate itself, and the round that found it has
+already reported. Waiting for a second round to bless the revert leaves the hole
+open for the duration. The revert restores previously-reviewed behaviour rather
+than introducing new behaviour — `git diff 6b386d7 HEAD -- scripts/` is
+confined to comments plus the removed skip.
+
+**What was NOT reviewed:** the revert itself, and the two new test cases. No
+round has read them. The next round covers this commit together with the
+mobile-wallet change.
+
+**Still open, deliberately not fixed here:** REVIEWED.md is self-forgeable —
+appending to it is bookkeeping-exempt, so any session can register its own
+commit as reviewed and walk it past the NORMAL path too. The round confirmed
+this is pre-existing and identical on both gate versions, not a regression.
+Fixing it means deciding what backs a registry entry (a signature, a report file
+that must exist and name the SHA, or accepting the gate as a speed bump). That
+is the user's call and is recorded here rather than patched silently.
+
+**Attribution:** this session; unverifiable at the git level, per the user's
+accepted-risk waiver of 2026-08-12.
