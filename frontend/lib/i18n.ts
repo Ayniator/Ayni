@@ -73,6 +73,7 @@ const en: Record<string, string> = {
   "create.gate.needLabel": "Needed:",
   "create.gate.haveLabel": "You have:",
   "create.gate.fundsAction": "Open my wallet",
+  "nav.mobileApp": "Mobile App",
   "nav.getAppAndroid": "Get AHA for Android",
   "nav.getAppIos": "Get AHA for iOS",
   "getapp.title": "Get AHA on your phone",

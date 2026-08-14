@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useWallet } from "@solana/wallet-adapter-react";
 import BrandAyni from "./BrandAyni";
 import NotificationsBell from "./NotificationsBell";
 import WalletButton, { SolanaBadge } from "./WalletButton";
@@ -10,10 +11,15 @@ import InboxNavLink from "./InboxNavLink";
 import SettingsControls from "./SettingsControls";
 import NetworkSelector from "./NetworkSelector";
 import { useT } from "./SettingsProvider";
-import { Platform, detectPlatform } from "../lib/platform";
 
 export default function Nav() {
   const t = useT();
+  // My Circle, Documents and Board are member surfaces: with no wallet
+  // connected they can only render an empty or "connect first" state, so they
+  // are hidden rather than shown as dead ends. `connected` is false on the
+  // server AND on the first client render, so the two agree and there is no
+  // hydration mismatch — the links appear once the adapter reports a wallet.
+  const { connected } = useWallet();
   return (
     <header className="nav">
       <span className="brand-wrap">
@@ -27,13 +33,15 @@ export default function Nav() {
       </span>
       <nav>
         <Link href="/">{t("nav.find")}</Link>
-        <Link href="/onboarding">{t("nav.start")}</Link>
+        {/* The inverse of the member surfaces below: "Start Here" is the
+            newcomer's entry point, so it retires once a wallet is connected. */}
+        {!connected && <Link href="/onboarding">{t("nav.start")}</Link>}
         <Link href="/reflections">{t("nav.reflections")}</Link>
         <TwelveMenu />
-        <Link href="/me">{t("nav.me")}</Link>
+        {connected && <Link href="/me">{t("nav.me")}</Link>}
         <InboxNavLink />
-        <Link href="/documents">{t("nav.documents")}</Link>
-        <Link href="/board">{t("nav.board")}</Link>
+        {connected && <Link href="/documents">{t("nav.documents")}</Link>}
+        {connected && <Link href="/board">{t("nav.board")}</Link>}
         <Link href="/create">{t("nav.create")}</Link>
         <GetAppLink />
         <FoundationNavLink />
@@ -50,16 +58,15 @@ export default function Nav() {
   );
 }
 
-/** "Get AHA for Android/iOS" — named for the platform the visitor is actually
- *  on, so the label never promises a store they cannot use. Desktop visitors
- *  get the Android wording, which is the only installable build today. */
+/** "Mobile App". Previously this label named the visitor's platform
+ *  ("Get AHA for Android" / "…for iOS") via client-side detection. One neutral
+ *  label is better: it cannot promise a store the visitor cannot reach, it does
+ *  not shift after hydration, and the /get-app page is where the per-platform
+ *  truth belongs. The old nav.getAppAndroid / nav.getAppIos keys are left in the
+ *  dictionaries — still resolvable, no longer used here. */
 function GetAppLink() {
   const t = useT();
-  const [platform, setPlatform] = useState<Platform>("web");
-  useEffect(() => setPlatform(detectPlatform()), []);
-  return (
-    <Link href="/get-app">{platform === "ios" ? t("nav.getAppIos") : t("nav.getAppAndroid")}</Link>
-  );
+  return <Link href="/get-app">{t("nav.mobileApp")}</Link>;
 }
 
 // "The 12" — the Steps and the Traditions. Opens on hover for pointers and on
