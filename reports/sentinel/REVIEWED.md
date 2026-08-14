@@ -258,3 +258,48 @@ so requiring it would deadlock the gate permanently.
   itself, which is this round's own new WARNING (see above). Nav.tsx change
   verified inert beyond removing one menu link (tsc --noEmit clean, no
   program/IDL import).
+- ~~6b386d7~~ SUPERSEDED, NOT IN HISTORY -- DO NOT READ AS COVERAGE.
+  This SHA was amended into 16bb15f (which IS what shipped) after the round
+  below was launched and before it returned. The registry line is kept rather
+  than deleted so the record shows what was reviewed and when, but it covers a
+  commit no longer reachable from any branch, and 16bb15f is DELIBERATELY NOT
+  registered here on the strength of it. The delta 6b386d7..16bb15f adds an
+  is_reviewed() helper and a skip in the override loop -- a real semantic
+  relaxation ("name every substantive commit" became "name every substantive
+  commit not already in REVIEWED.md"), not a cosmetic edit -- so the PASS below
+  does not describe the gate now in the tree. A focused round over exactly that
+  delta is recorded separately; until it lands, treat 16bb15f as UNREVIEWED.
+  Rationale for keeping this visible: a registry entry that quietly acquires a
+  new hash is exactly how an unreviewed change gets laundered, and this project
+  has hit that once already (2439e81 -> 0717f6e).
+  Original entry follows, unaltered:
+  Reviewed in reports/sentinel/NRR-2026-08-14-gate-fix.md (PASS).
+  Read the full 310-line script, diffed the verdict-parsing and REVIEWED.md
+  matcher blocks against 95c7c83 (untouched), and adversarially probed for
+  path-traversal, prefix-collision-directory, and same-commit-smuggle bypasses
+  of the widened BOOKKEEPING pattern -- none found. Confirmed docs/ is NOT
+  exempt and no commit-subject matching exists anywhere in the executable
+  path. Ran tests/sentinel/gate-check.sh against the live gate (11/11 pass)
+  AND against the pre-fix gate at 95c7c83 (9/11 pass, 2/11 fail -- exactly the
+  two claimed defects), confirming the suite discriminates before/after
+  rather than being decorative.
+- 6b95d77 docs(f59): presence design of record, and the Epic 4 amendment it
+  needs. Reviewed in reports/sentinel/NRR-2026-08-14-gate-fix.md (PASS).
+  Confirmed `git diff 1e3c738 6b95d77` is empty (the split changed no
+  content). Read docs/presence.md adversarially: the Epic-4 "never summed"
+  amendment is explicitly scoped to F59 only, with the general rule
+  re-asserted in the same sentence ("Any other feature that introduces a
+  per-person counter is still a CRITICAL"). The waived residual is ledger
+  archaeology (an immutable-log property, not a live-state field); live
+  state is simultaneously made stricter (13-byte scalar, no Vec, no
+  timestamp, no witness identity). No F59 code exists yet in programs/
+  (confirmed by grep) -- design precedes implementation as the commit
+  message claims.
+- 114f3af fix(glossary): correct two tag spellings at source, regenerate.
+  Reviewed in reports/sentinel/NRR-2026-08-14-gate-fix.md (PASS). Verified
+  independently (not accepted from the commit message): fresh
+  `node scripts/build-glossary.mjs` regeneration is byte-identical to the
+  committed frontend/public/glossary.json; entry count unchanged at 342;
+  distinct tags 44 -> 43; zero remaining "Budhism"/"Freemassonery" tags;
+  Buddhism now carries 7 terms, Freemasonry 1 -- exact match to the claimed
+  numbers. tests/sentinel/glossary-check.sh re-run in full, 10/10 pass.

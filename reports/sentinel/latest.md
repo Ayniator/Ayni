@@ -1,1 +1,1 @@
-NRR-2026-08-14-governance.md
+NRR-2026-08-14-gate-fix.md

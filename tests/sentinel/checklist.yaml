@@ -3230,3 +3230,124 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
       - cmd: grep -q "BeginMemberEpoch," programs/ayni/src/council.rs
       - cmd: bash tests/sentinel/privacy-sweep.sh
       - cmd: npm audit --omit=dev --json
+
+# NOTE: 6b386d7 below is SUPERSEDED and not in history -- it was amended into
+# 16bb15f, which is what shipped. The delta is a real semantic change to the
+# override path, so the gate-fix round's PASS does not cover the gate now in
+# the tree. See the correction banner at the top of
+# reports/sentinel/NRR-2026-08-14-gate-fix.md and the entry in REVIEWED.md.
+# Round gate-fix (2026-08-14). Scope: 6b386d7 (sentinel-gate bookkeeping
+# exemption widen + override-must-name-all fix), 6b95d77 (docs/presence.md,
+# F59 design-of-record and its scoped Epic-4 amendment), 114f3af (glossary
+# tag-spelling fix at source + regeneration). Reviewed per
+# reports/sentinel/NRR-2026-08-14-gate-fix.md; programs/ and circuits/
+# untouched this round (git diff 1dfefa1 HEAD --stat -- programs/ circuits/
+# is empty) so anchor test was not re-run — see that report for why.
+
+  - id: SENTINEL-GATE
+    name: "scripts/sentinel-push-gate.sh — the pre-push mechanical gate
+      itself (bookkeeping exemption widened to a path prefix; override
+      must now name every substantive commit it carries, not just one)"
+    shipped_round: gate-fix (2026-08-14)
+    covered_by:
+      - tests/sentinel/gate-check.sh (NEW this round, 11 known-answer
+         scenarios against a synthetic throwaway repo — written by the
+         same round that changed the gate, so re-run independently by
+         Sentinel rather than trusted)
+    cases:
+      - "Re-run against the LIVE (post-fix) gate: 11/11 pass."
+      - "Re-run against the PRE-fix gate (git show 95c7c83:scripts/
+         sentinel-push-gate.sh): 9/11 pass, 2/11 fail — and the two
+         failures are exactly the two defects the commit message claims to
+         fix (bookkeeping exemption too narrow to admit a new
+         tests/sentinel/*.sh script; an override naming only one of two
+         substantive commits in the push was wrongly allowed through).
+         Confirms the suite is evidence, not theatre — it distinguishes
+         before/after."
+      - "Adversarial probes NOT in gate-check.sh, run by Sentinel directly:
+         git-level path traversal (tests/sentinel/../../programs/evil.rs)
+         normalises to programs/evil.rs before the gate ever sees it, so no
+         traversal is possible; prefix-collision directory names
+         (reports/sentinel-fake/, tests/sentinel-other/) do NOT match the
+         BOOKKEEPING regex (which requires the literal trailing slash) and
+         are correctly blocked; a single commit that mixes an OVERRIDES.md
+         append with a substantive programs/ file in the SAME commit is
+         correctly blocked (it cannot name its own SHA, and mixing does not
+         make it bookkeeping)."
+      - "Verdict-parsing block and the REVIEWED.md structured-line matcher
+         are byte-identical to the pre-fix script (diffed both ranges
+         directly); the only change in the per-commit exemption check is a
+         call to the new shared is_bookkeeping_commit() helper, not new
+         logic."
+      - "No commit-SUBJECT matching exists anywhere in the executable code
+         path (grep confirms 'chore(sentinel)' appears only in comments);
+         the exemption is decided purely by changed_files()/git
+         show --name-only paths."
+      - "docs/ confirmed NOT in the BOOKKEEPING regex
+         ('^(reports/sentinel/|tests/sentinel/)'); a synthetic commit
+         touching only docs/presence.md is blocked as expected."
+    checks:
+      - cmd: bash tests/sentinel/gate-check.sh
+      - cmd: "git show 95c7c83:scripts/sentinel-push-gate.sh > /tmp/gate-old.sh && chmod +x /tmp/gate-old.sh && bash tests/sentinel/gate-check.sh /tmp/gate-old.sh"
+      - cmd: grep -n "chore(sentinel)" scripts/sentinel-push-gate.sh
+
+  - id: F59-DOC
+    name: "docs/presence.md — F59 ZK presence attestation design of
+      record, and its scoped amendment to the Epic 4 'never summed' rule"
+    shipped_round: gate-fix (2026-08-14) — doc only, code not yet landed
+    covered_by:
+      - "adversarial read of docs/presence.md against the Epic 4 privacy
+         invariant (this round)"
+      - "git diff 1e3c738 6b95d77 confirmed EMPTY (identical tree) — the
+         commit split changed no content, only history shape"
+    cases:
+      - "The amendment text is explicitly scoped: 'this supersedes the
+         \"never summed\" reading for F59 only... Any other feature that
+         introduces a per-person counter is still a CRITICAL.' No general
+         licence for per-person counters is created."
+      - "The waived residual is ledger archaeology only (signature-count
+         via getSignaturesForAddress), attributed to an immutable-ledger
+         property no on-chain design can prevent — not a live-state
+         counter. Live state stays a single 13-byte scalar
+         (last_month: u32) with no Vec, no timestamp, no first_month, no
+         witness identity, no circle/member field — the document itself
+         lists why each is excluded."
+      - "Document records the counter-free alternative that was declined
+         (signed F60 credential, no PDA) so the trade-off is legible, and
+         an honest leak list including two easy-to-forget items (2-member
+         Circle anonymity-set collapse; QR handoff discloses raw
+         commitment to the witness)."
+      - "No code shipped yet (design of record precedes implementation by
+         design, per the commit message, 'so the amendment cannot be
+         discovered later in a diff'); nothing to run against a validator
+         this round."
+    checks:
+      - cmd: test -f docs/presence.md
+      - cmd: git diff --quiet 1e3c738 6b95d77
+      - cmd: grep -q "scoped to F59 only\|for F59 only" docs/presence.md
+
+  - id: GLOSSARY-TAG-FIX
+    name: "glossary/glossary_v1.xlsx tag-spelling fix at source
+      (Budhism->Buddhism, Freemassonery->Freemasonry) via
+      scripts/fix-glossary-tags.mjs, regenerated frontend/public/
+      glossary.json"
+    shipped_round: gate-fix (2026-08-14)
+    covered_by:
+      - tests/sentinel/glossary-check.sh (pre-existing, re-run this round —
+         10/10 pass)
+    cases:
+      - "Fresh `node scripts/build-glossary.mjs` regeneration is
+         byte-identical to the committed frontend/public/glossary.json
+         (git diff --quiet after regenerating)."
+      - "Entry count unchanged at 342."
+      - "Distinct tag count: 43 (down from a claimed 44 — the two Buddhism
+         spellings merged into one facet). Verified directly: 0 entries
+         tagged 'Budhism' or 'Freemassonery' remain; 7 entries now tagged
+         'Buddhism', 1 tagged 'Freemasonry' — matches the commit message
+         exactly."
+      - "glossary-check.sh's independent Python/xml re-derivation (not the
+         JS build script's own code path) agrees with the committed
+         glossary.json's count field."
+    checks:
+      - cmd: bash tests/sentinel/glossary-check.sh
+      - cmd: "node scripts/build-glossary.mjs && git diff --quiet -- frontend/public/glossary.json"
