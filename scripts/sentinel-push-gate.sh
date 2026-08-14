@@ -47,6 +47,34 @@ REPORTS="reports/sentinel"
 LATEST="$REPORTS/latest.md"
 REVIEWED="$REPORTS/REVIEWED.md"
 
+# Sentinel's own bookkeeping: the files a round writes ABOUT the code, never the
+# code itself. A commit confined to these carries no application change, so "was
+# this reviewed" is not a meaningful question about it — and a report can never
+# contain its own commit's SHA, so without an exemption the registry commit would
+# deadlock the gate forever.
+#
+# ONE definition. This pattern was previously spelled out twice — in the
+# whole-push check and again in the per-commit check — and the two copies were
+# free to drift apart. They are now the same string by construction.
+#
+# tests/sentinel/ is a PREFIX as of 2026-08-14, widened from the single exact
+# file tests/sentinel/checklist.yaml. A round that adds a new check script was
+# blocked from committing it: tests/sentinel/glossary-check.sh in 525aa7b did
+# exactly that, so the gate stopped the reviewer from doing the thing CLAUDE.md
+# mandates, and cost an override. Scripts under tests/sentinel/ are executable,
+# but they run only during a round — nothing there ships to programs/, circuits/,
+# frontend/ or indexer/.
+#
+# Deliberately NOT included: docs/. A design-of-record document can amend a
+# privacy invariant — docs/presence.md amends an Epic 4 rule — and that is
+# precisely the reviewer's business. Do not add it here.
+#
+# Also deliberately not a commit-SUBJECT match. "^chore(sentinel):" is trivially
+# spoofable, and worse: applied to 1e3c738 it would have exempted that commit
+# whole, laundering the Epic 4 amendment in docs/presence.md through as
+# bookkeeping. The exemption is decided by paths touched, never by wording.
+BOOKKEEPING='^(reports/sentinel/|tests/sentinel/)'
+
 say() { printf '%s\n' "$*" >&2; }
 
 # git streams the ref list on stdin ONCE. Three separate `while read` loops used
@@ -77,6 +105,26 @@ pushed_commits() {  # $1 = local sha, $2 = remote sha
   fi
 }
 
+# True when a single commit touches NOTHING outside Sentinel's bookkeeping.
+# Used by both the coverage check and the override check, so the two can never
+# disagree about what "bookkeeping" means. A commit touching no files at all is
+# vacuously bookkeeping — it carries no code either way.
+is_bookkeeping_commit() {  # $1 = sha
+  ! git show --pretty=format: --name-only "$1" 2>/dev/null \
+      | grep -vE '^[[:space:]]*$' \
+      | grep -qvE "$BOOKKEEPING"
+}
+
+# True when a commit is genuinely covered by a round: a structured registry line
+# in REVIEWED.md, "<sha>" or "- <sha> note". Prose in a report does not count —
+# a bare grep across the reports once counted a commit as reviewed when a report
+# named it only to say it was BAD.
+is_reviewed() {  # $1 = sha
+  local short
+  short="$(git rev-parse --short "$1" 2>/dev/null || echo "$1")"
+  grep -qE "^[[:space:]]*[-*]?[[:space:]]*($1|$short)\b" "$REVIEWED" 2>/dev/null
+}
+
 OVERRIDES="$REPORTS/OVERRIDES.md"
 
 if [ -n "${SENTINEL_OVERRIDE:-}" ]; then
@@ -87,39 +135,58 @@ if [ -n "${SENTINEL_OVERRIDE:-}" ]; then
   # at least one commit being pushed has to touch reports/sentinel/OVERRIDES.md.
   # That makes every override attributable to a commit, reviewable in the diff,
   # and impossible to use silently.
-  range_touches_log=0
+  # EVERY substantive commit must be named, not merely one of them.
+  #
+  # This check used to stop at the first match ("named=1; break") and then let
+  # the WHOLE push through. So an entry naming a one-line typo fix carried an
+  # arbitrary number of unreviewed programs/ commits with it, unnamed, in the
+  # same push — the override log would then describe a fraction of what actually
+  # shipped. With several sessions on one git identity that is unreconstructable
+  # afterwards, which is the precise thing this gate exists to prevent.
+  #
+  # Bookkeeping commits are skipped rather than required: the commit that appends
+  # the entry cannot contain its own future SHA, so demanding that every commit
+  # be named — without this skip — would deadlock the override path exactly the
+  # way the missing coverage exemption would have deadlocked the coverage path.
+  override_logged=0
+  override_unnamed=""
   while read -r _local_ref local_sha _remote_ref remote_sha; do
     [ -z "${local_sha:-}" ] && continue
     case "$local_sha" in *[!0]*) : ;; *) continue ;; esac   # skip deletions
-    if [ -z "${remote_sha:-}" ] || case "$remote_sha" in *[!0]*) false ;; *) true ;; esac; then
-      rng="$local_sha"                       # new branch: inspect the tip only
-    else
-      rng="$remote_sha..$local_sha"
+    # changed_files() rather than a bare `git diff "$rng"`: for a NEW branch the
+    # range is a single sha, and `git diff <sha>` compares the WORKING TREE to
+    # it — on a clean tree that is empty, so a new-branch override silently
+    # failed to find its own log entry.
+    if changed_files "$local_sha" "${remote_sha:-}" \
+         | grep -q '^reports/sentinel/OVERRIDES\.md$'; then
+      override_logged=1
     fi
-    # Touching the file was not enough — a blank-line append satisfied it. The
-    # log must actually NAME the tip being pushed, so the entry is about this
-    # push and not decoration.
-    if git diff --name-only "$rng" 2>/dev/null | grep -q '^reports/sentinel/OVERRIDES.md$'; then
-      # The entry must NAME a commit in this push — but not necessarily the tip:
-      # the commit that appends the entry cannot contain its own future SHA.
-      # Naming any commit in the range is enough to tie the entry to this push
-      # while keeping it writable.
-      named=0
-      for c in $(git rev-list "$rng" 2>/dev/null); do
-        c_short="$(git rev-parse --short "$c" 2>/dev/null || echo "$c")"
-        if grep -qE "\b($c|$c_short)\b" "$OVERRIDES" 2>/dev/null; then named=1; break; fi
-      done
-      if [ "$named" -eq 1 ]; then
-        range_touches_log=1
-      else
-        say "  OVERRIDES.md was touched but names no commit in this push."
-      fi
-    fi
+    for c in $(pushed_commits "$local_sha" "${remote_sha:-}"); do
+      is_bookkeeping_commit "$c" && continue
+      # Already covered by a round: an override is a record of what was NOT
+      # reviewed, so demanding an entry for reviewed work would force every
+      # override to re-list commits a round already cleared. That noise is not
+      # free — a log padded with entries that mean nothing is a log people stop
+      # reading, and it dilutes the entries that do mean something.
+      is_reviewed "$c" && continue
+      c_short="$(git rev-parse --short "$c" 2>/dev/null || echo "$c")"
+      grep -qE "\b($c|$c_short)\b" "$OVERRIDES" 2>/dev/null \
+        || override_unnamed="$override_unnamed $c_short"
+    done
   done <<< "$REFLINES"
 
-  if [ "$range_touches_log" -ne 1 ]; then
+  if [ "$override_logged" -ne 1 ] || [ -n "$override_unnamed" ]; then
     say ""
-    say "  BLOCKED: SENTINEL_OVERRIDE was set, but no commit in this push records it."
+    if [ "$override_logged" -ne 1 ]; then
+      say "  BLOCKED: SENTINEL_OVERRIDE was set, but no commit in this push records it."
+    else
+      say "  BLOCKED: SENTINEL_OVERRIDE was set, but $OVERRIDES does not name:"
+      for c_short in $override_unnamed; do
+        say "    $c_short $(git log -1 --format=%s "$c_short" 2>/dev/null | cut -c1-60)"
+      done
+      say ""
+      say "  An override must account for EVERY commit it carries, not just one."
+    fi
     say ""
     say "  An override must be auditable. Append an entry to:"
     say "    $OVERRIDES"
@@ -160,9 +227,7 @@ while read -r _lr lsha _rr rsha; do
   [ -z "${lsha:-}" ] && continue
   case "$lsha" in *[!0]*) : ;; *) continue ;; esac
   saw_any=1
-  if printf '%s' "${rsha:-}" | grep -qE '^0+$'; then rr="$lsha"; else rr="$rsha..$lsha"; fi
-  if changed_files "$lsha" "${rsha:-}" \
-       | grep -qvE '^(reports/sentinel/|tests/sentinel/checklist\.yaml$)'; then
+  if changed_files "$lsha" "${rsha:-}" | grep -qvE "$BOOKKEEPING"; then
     bookkeeping_only=0
   fi
 done <<< "$REFLINES"
@@ -231,11 +296,7 @@ while read -r _localref localsha _remoteref remotesha; do
     # own bookkeeping — reports, the registry, the override log, the checklist.
     # These carry no application change, so "was this reviewed" is not a
     # meaningful question about them; anything outside that set is still judged.
-    outside="$(git show --pretty=format: --name-only "$sha" 2>/dev/null \
-                | grep -vE '^[[:space:]]*$' \
-                | grep -vE '^(reports/sentinel/|tests/sentinel/checklist\.yaml$)' \
-                | head -1)"
-    if [ -z "$outside" ]; then
+    if is_bookkeeping_commit "$sha"; then
       continue
     fi
     # A bare grep across $REPORTS counted a commit as "reviewed" even when a
@@ -243,7 +304,7 @@ while read -r _localref localsha _remoteref remotesha; do
     # registry line: reports/sentinel/REVIEWED.md, one SHA per line (optionally
     # "- <sha> note"). Sentinel appends to it when a round genuinely covers a
     # commit, so mentioning a SHA in prose no longer launders it.
-    if ! grep -qE "^[[:space:]]*[-*]?[[:space:]]*($sha|$short)\b" "$REVIEWED" 2>/dev/null; then
+    if ! is_reviewed "$sha"; then
       say "  unreviewed commit: $short $(git log -1 --format=%s "$sha" | cut -c1-60)"
       unreviewed=$((unreviewed + 1))
     fi
