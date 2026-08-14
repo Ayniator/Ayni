@@ -539,3 +539,34 @@ mark {
   background: rgba(15, 174, 115, 0.22); color: inherit;
   border-radius: 3px; padding: 0 2px;
 }
+
+/* Mobile wallet notice (see components/MobileWalletNotice.tsx). Sits directly
+   under the nav, full-bleed, because the thing it warns about is the button in
+   the nav. Uses theme tokens only, so it follows light/dark like everything
+   else and needs no dark-mode block of its own. */
+.mw-notice {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  background: var(--bg-2); border-bottom: 1px solid var(--border);
+  font-size: 14px; line-height: 1.45;
+}
+/* The "this will not work" case earns a warmer ground than the merely helpful
+   one — the two messages carry different weight and should not look alike. */
+.mw-notice.is-warning {
+  background: rgba(224, 122, 30, 0.12);
+  border-bottom-color: rgba(224, 122, 30, 0.4);
+}
+.mw-notice-body { flex: 1 1 260px; min-width: 0; }
+.mw-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mw-notice-btn {
+  display: inline-block; padding: 7px 13px; border-radius: 8px;
+  background: var(--accent); color: #fff; text-decoration: none;
+  font-weight: 600; white-space: nowrap;
+}
+.mw-notice-btn:hover { background: var(--accent-ink); }
+.mw-notice-dismiss {
+  padding: 7px 11px; border-radius: 8px; cursor: pointer;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border-strong); font: inherit; white-space: nowrap;
+}
+.mw-notice-foot { flex: 1 1 100%; color: var(--muted); font-size: 13px; }

@@ -5,6 +5,7 @@ import WalletProviders from "../components/WalletProviders";
 import SettingsProvider from "../components/SettingsProvider";
 import SeatMessagingGate from "../components/SeatMessagingGate";
 import EmbeddedWalletBoot from "../components/EmbeddedWalletBoot";
+import MobileWalletNotice from "../components/MobileWalletNotice";
 import Footer from "../components/Footer";
 
 export const metadata: Metadata = {
@@ -45,6 +46,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 Standard so it appears in the connect modal like any other. */}
             <EmbeddedWalletBoot />
             <Nav />
+            {/* Mobile browsers that offer Mobile Wallet Adapter and cannot
+                finish it (Firefox for Android) — says so before the tap, not
+                after the spinner. Renders nothing on desktop. */}
+            <MobileWalletNotice />
             <SeatMessagingGate />
             <main className="container">{children}</main>
             <Footer />
