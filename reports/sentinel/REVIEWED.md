@@ -156,3 +156,65 @@ so requiring it would deadlock the gate permanently.
   since the commit isn't deployed and this repo can't run a local dev
   server) — both tracked to close, FAIL-eligible two rounds out if still
   open.
+- 7ac23f7 feat(glossary): searchable/browsable Glossary page under a renamed
+  Resources menu
+  Covered by NRR-2026-08-14-glossary.md (see verdict there). Extractor
+  fidelity independently re-derived (not accepted on the script's own claim):
+  a from-scratch Python xml.etree reader of glossary/glossary_v1.xlsx's raw
+  OOXML found 342 rows with a non-blank "words" cell, 0 blank spacer rows, 0
+  "explanation with no term" rows — matching scripts/build-glossary.mjs's own
+  342-entry output and frontend/public/glossary.json's `count` field exactly.
+  Regenerating glossary.json from the committed xlsx via the committed script
+  reproduces the committed file byte-for-byte (`git diff --quiet`, no drift).
+  Column-by-header-name matching confirmed by reading col()'s implementation
+  (header.indexOf, never a fixed index) and by the workbook genuinely having
+  3 sheets (Glossary, Index, Tag legend) with "Glossary" selected by name via
+  workbook.xml + rels, not position. Unescape order (`&amp;` undone LAST)
+  verified both by reading the code and by an isolated Node repro:
+  unescapeXml("&amp;lt;script&amp;gt;") -> "&lt;script&gt;", not "<script>".
+  Spot-checked real entries with curly quotes/apostrophes/em-dashes/accents
+  (Assumption, Contact Treatments, The Morrígan) against the raw sheet XML —
+  correct in every case. No duplicate `word` values (342 unique of 342, rules
+  out a React-key/anchor-id collision). Privacy: the page's only network call
+  in CODE (not its own explanatory comment, which was a false positive on
+  first grep) is one `fetch("/glossary.json")` on mount — no wallet/anchor/
+  web3 import, no per-term request, so no server-side signal of which term a
+  visitor read is possible. glossary.json's shape is exactly {_comment,
+  source, count, legend, entries[{word, explanation, tags, related}]} — no
+  member-linkable or score/rank/karma-shaped key anywhere. Reachability:
+  /glossary, /twelve (the Resources menu label link itself), and /onboarding
+  (closing the nav-menu round's WARNING) all present in Nav.tsx and NOT
+  gated behind connect state. i18n: all 17 new/changed keys (nav.resources,
+  nav.glossary, 14 glossary.* keys, and the tl nav.mobileApp fix) resolve in
+  all 19 locales via the actual translate() resolution chain read from
+  frontend/lib/i18n.ts, none byte-identical to English outside "en" itself;
+  tl's nav.mobileApp confirmed now "App sa Mobile" (was "Mobile App",
+  flagged by the nav-menu round). tsc --noEmit clean; `npm run build` (Node
+  20) succeeds with /glossary prerendered static and the 167 KB payload
+  confirmed absent from the JS bundle (grep for a known glossary string
+  across .next output: no hits). tests/sentinel/glossary-check.sh (new this
+  round) 10/10; i18n-key-check.sh PASS 1051; privacy-sweep.sh 5/5. Two
+  content-quality findings in the spreadsheet itself (a "Budhism"/"Buddhism"
+  tag-spelling split, a "Freemassonery" typo) are informational, not build
+  defects — the extractor's job is byte-faithful copying by header name, not
+  silent correction, and it does that correctly. anchor test deliberately
+  NOT run (commit touches no program/circuit/IDL file; programs/ayni/src/*
+  has 9 files of disclosed, unrelated, uncommitted governance WIP untouched
+  by this commit). Playwright NOT run against this commit for the same
+  structural reason as every round since nav-menu (playwright.config.ts
+  targets a deployed URL; this repo's node cannot run a local Next 16 dev
+  server) — substituted with the source/data-level checks above, disclosed
+  as a coverage gap, not silently passed off as e2e coverage.
+- 98e26c9 chore: add empty glossary/ directory
+  A LOCAL DUPLICATE of ba9b088 (already on origin/solana), created because
+  the branch was MERGED rather than rebased, deliberately, to avoid
+  rewriting 5386650 while a round was reviewing that SHA (see the nav-menu
+  round's process note and reports/sentinel/OVERRIDES.md's ba9b088 entry,
+  which named this exact follow-up as the next round's job). Confirmed
+  inert, not merely asserted: `git diff --exit-code 98e26c9 ba9b088 --
+  glossary/.gitkeep` is empty — both commits add the identical blob
+  (5af0946), same two-line placeholder comment, same author/timestamp. The
+  merged working tree contains exactly one glossary/.gitkeep matching both
+  parents byte-for-byte; no divergence, no second file, nothing to review
+  beyond confirming the duplication is harmless. Named here only so the push
+  gate clears — no further effort spent on it, per the round's own brief.

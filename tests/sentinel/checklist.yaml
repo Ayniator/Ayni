@@ -2710,3 +2710,231 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-f67-r2.md
       - cmd: bash tests/sentinel/i18n-key-check.sh
       - cmd: bash tests/sentinel/privacy-sweep.sh
       - cmd: cd frontend && npx tsc --noEmit
+
+round: glossary
+established: 2026-08-14
+baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
+previous_baseline_report: reports/sentinel/NRR-2026-08-14-nav-menu.md
+
+# Round glossary (2026-08-14). Scope: TWO commits.
+#   1. 7ac23f7 "feat(glossary): searchable/browsable Glossary page under a
+#      renamed Resources menu" (the real subject) -- frontend/app/glossary/
+#      page.tsx (new), scripts/build-glossary.mjs (new), frontend/public/
+#      glossary.json (new, generated), frontend/components/Nav.tsx,
+#      frontend/app/globals.css, frontend/lib/i18n.ts, frontend/lib/
+#      i18n.generated.ts.
+#   2. 98e26c9 "chore: add empty glossary/ directory" -- a LOCAL DUPLICATE of
+#      ba9b088 (already on origin, blob 5af0946, same two-line .gitkeep,
+#      same timestamp/author). Exists only because the branch was MERGED
+#      rather than rebased, deliberately, to avoid rewriting 5386650 while a
+#      round was reviewing that SHA. Confirmed inert: `git diff 98e26c9
+#      ba9b088 -- glossary/.gitkeep` is empty; the merged tree contains one
+#      glossary/.gitkeep, matching both parents byte-for-byte. Not reviewed
+#      further, named here only so the push gate clears.
+#
+# programs/ayni/src/* has 9 files of UNCOMMITTED governance WIP at round
+# start, disclosed, untouched by 7ac23f7 (`git show --stat 7ac23f7` touches
+# only the 7 files listed above), out of scope. anchor test deliberately NOT
+# run -- it would exercise that unreviewed WIP, not the committed state.
+#
+# glossary (E9/resources) -- searchable/browsable reference over the 342
+# glossary terms, reachable from a renamed "Resources" nav menu.
+#   what shipped: (1) nav "The 12" -> "Resources"; /twelve route and both
+#   existing destinations (/twelve-steps, /twelve-traditions) unchanged; the
+#   menu LABEL itself is a Link to /twelve, so it stays reachable without
+#   opening the dropdown. (2) New /glossary: full-text search (term +
+#   explanation + tags), facets by Step 1-12 and by tradition (each showing a
+#   count, disabled when empty), an A-Z index ("#" for the Sacred Numbers),
+#   "related to" cross-reference chips that re-search in place, ?q= deep
+#   links read once on mount. (3) scripts/build-glossary.mjs: hand-rolled
+#   OOXML zip+inflateRaw+XML-scan extractor (no new dependency), columns
+#   matched BY HEADER NAME. (4) 16 new keys (nav.resources, nav.glossary +
+#   14 glossary.*) across all 19 locales, plus the tl nav.mobileApp fix
+#   carried over from the nav-menu round's WARNING.
+#
+#   verified this round (independently, not accepted on the commit's word):
+#     - Extractor fidelity: re-derived the row count from glossary/
+#       glossary_v1.xlsx with an INDEPENDENT Python xml.etree reader (not
+#       scripts/build-glossary.mjs's own code) -- 342 rows with a non-blank
+#       "words" cell, 0 blank spacer rows, 0 "explanation with no term" rows
+#       (the case the script's own comment says it drops "loudly" -- there
+#       were none to drop). frontend/public/glossary.json's own `count`
+#       field and `entries.length` both equal 342, matching exactly.
+#       Re-ran `node scripts/build-glossary.mjs` against the committed
+#       frontend/public/glossary.json and confirmed `git diff --quiet` --
+#       byte-identical regeneration, no drift between source and artifact.
+#     - Column-by-header-name matching confirmed by reading the script
+#       (col() looks up header.indexOf(name), never a fixed index) and by
+#       the workbook actually having 3 sheets (Glossary, Index, Tag legend)
+#       -- the script correctly selects "Glossary" by NAME via workbook.xml
+#       + rels, not sheet order.
+#     - Unescape order verified BOTH by reading the code (the five entity
+#       replacements happen before `&amp;` is unescaped LAST, with a comment
+#       explaining exactly why) AND by an isolated Node repro:
+#       unescapeXml("&amp;lt;script&amp;gt;") -> "&lt;script&gt;" (NOT
+#       "<script>"), unescapeXml("R&amp;D — café ’twas") -> "R&D — café
+#       ’twas". Spot-checked real entries with curly quotes/apostrophes/em-
+#       dashes/accents (Assumption, Contact Treatments, The Morrígan,
+#       Sacred-Number entries with em-dashes) against the raw sheet XML --
+#       all render correctly in frontend/public/glossary.json. No literal
+#       `&` character exists anywhere in the source xlsx's shared strings
+#       (grep count 0), so the ordering fix is currently dead in practice on
+#       this dataset but is correct and load-bearing for future edits.
+#     - No duplicate `word` values (342 unique of 342) -- rules out a
+#       React-key/anchor-id collision from the `key={e.word}` /
+#       `id="t-${encodeURIComponent(e.word)}"` pattern in page.tsx.
+#     - Privacy: frontend/app/glossary/page.tsx's only network call (code,
+#       not its own comment) is one `fetch("/glossary.json")` on mount; grep
+#       for wallet/anchor/web3/@solana/useConnection/publicKey/keypair in
+#       the file's CODE (comment lines excluded) is empty. No per-term
+#       request exists -- the whole 342-entry payload is fetched once and
+#       filtered client-side, so no server-side signal of which term a
+#       visitor read is possible from this design. frontend/public/
+#       glossary.json's shape is exactly {_comment, source, count, legend,
+#       entries[{word, explanation, tags, related}]} -- no other top-level
+#       or per-entry key, and no key name matches wallet|address|pubkey|
+#       commitment|nullifier|sponsor|member_id|score|rank|karma|tier|badge.
+#       tests/sentinel/privacy-sweep.sh: 5/5 (unchanged).
+#     - Reachability: Nav.tsx has href="/glossary", href="/twelve" (the
+#       Resources menu label itself), and href="/onboarding" (closes the
+#       nav-menu round's WARNING) all present and NOT gated behind
+#       `connected`/`!connected` -- confirmed by reading the diff, the three
+#       new links sit in the always-rendered dropdown, unlike My Circle/
+#       Documents/Board/Start Here which stay conditionally gated exactly as
+#       before (this commit does not touch that gating).
+#     - i18n: all 17 new/changed keys (nav.resources, nav.glossary, the 14
+#       glossary.* keys, tl's nav.mobileApp fix) resolve in all 19 locales
+#       via the actual translate() resolution chain (DICT[lang] ??
+#       PAGE_STRINGS[lang] ?? DICT.en ?? PAGE_STRINGS.en ?? key, read from
+#       frontend/lib/i18n.ts itself, not assumed) -- 0 unresolved, 0
+#       non-English locale byte-identical to English for any of the 17.
+#       tl nav.mobileApp confirmed now "App sa Mobile" (was "Mobile App",
+#       byte-identical to English, flagged by the nav-menu round) -- de's
+#       nav.mobileApp ("Mobile App") is UNCHANGED, still plausibly-correct
+#       native German per that round's judgment, not touched by this commit.
+#       tests/sentinel/i18n-key-check.sh: PASS 1051 (matches the commit's
+#       own claim, reproduced independently).
+#     - Judgment calls on the four locales the author flagged low-confidence:
+#       se (Northern Sámi) -- all 17 strings genuinely distinct Latin-script
+#       Sámi text (á/š/đ diacritics), no English/Norwegian/Swedish leakage,
+#       plausible. dz (Dzongkha) / bo (Tibetan) -- the 16 glossary.*/nav.
+#       glossary/nav.resources strings are genuinely distinct between the
+#       two Tibetan-script locales EXCEPT nav.resources itself, which is
+#       byte-identical ("ཐོན་ཁུངས།") between dz and bo. Checked whether
+#       this is a copy-paste tell: compared the FULL pre-existing curated
+#       dz/bo overlap and found 6 of 14 already-shared short common-noun
+#       keys are ALSO already identical between dz/bo pre-existing in this
+#       round (nav.documents, nav.board, footer.line, ctl.language, both
+#       theme-toggle words) -- closely related Tibetic languages sharing a
+#       short common noun is the existing norm in this dictionary, not a
+#       new red flag; nav.resources fits that pre-existing pattern rather
+#       than standing out from it. Not a defect at the confidence this
+#       mechanical review can reach. qu (Quechua) "Yanapaqkuna"/"Simi
+#       qullqa" etc. -- grammatically parseable, consistent register with
+#       the rest of the qu dict. Sentinel is not a certified fluent speaker
+#       of Dzongkha, Tibetan, Quechua, or Northern Sámi; no structural red
+#       flag found in any of the four, native-speaker pass still
+#       recommended (carried forward, unchanged posture from the nav-menu
+#       round).
+#     - tsc --noEmit (frontend/): clean.
+#     - `PATH=.../node-v20.18.1.../bin:$PATH npm run build`: succeeds,
+#       reproduced. Route table shows `○ /glossary` (prerendered static),
+#       matching the commit's claim. Confirmed the 167 KB payload does NOT
+#       enter the JS bundle: grep for a known glossary string ("1 — One (the
+#       Monad)") across the entire .next build output returns nothing; the
+#       /glossary page chunk is ~6 KB. The `web-worker`/circomlibjs webpack
+#       warning is PRE-EXISTING (unrelated dependency chain via lib/zk-
+#       vote.ts -> app/me/page.tsx), not introduced by this commit.
+#     - No new dependency: `git show --stat 7ac23f7` touches no package.json
+#       or lockfile in either the repo root or frontend/; npm audit not
+#       re-run (nothing to re-run against).
+#     - Playwright: NOT run against this commit, for the same structural
+#       reason as every round since nav-menu -- playwright.config.ts targets
+#       a DEPLOYED URL and this repo's node (v18.20.5) cannot build/run Next
+#       16 locally for a fresh e2e target. This round's `npm run build`
+#       above (with Node 20 from the pinned local install) is new evidence
+#       the app itself builds cleanly, but is not a substitute for a real
+#       browser session against a running instance. Coverage gap, disclosed
+#       below, not silently substituted.
+#     - anchor test: deliberately NOT run (see scope note above).
+#
+#   findings_this_round:
+#     - severity: "INFORMATIONAL (spreadsheet content quality, not a build
+#         defect)"
+#       what: "The extractor faithfully reproduces two content-level
+#         inconsistencies already present in glossary_v1.xlsx: the tag
+#         'Budhism' (used once, on the 'Karma' entry) is a misspelling
+#         distinct from the 'Buddhism' tag used on six other entries, and
+#         'Freemassonery' (used as a tag) misspells 'Freemasonry'. Because
+#         the /glossary page facets are exact-string tag matches, this
+#         currently renders as two separate, near-duplicate tradition chips
+#         in the UI (e.g. 'Buddhism' and 'Budhism' both appear as distinct
+#         facets) rather than one merged tradition."
+#       reproduction: "node -e 'const d=require("./frontend/public/
+#         glossary.json"); console.log(d.entries.filter(e =>
+#         e.tags.includes("Budhism")).map(e => e.word))' -> ["Karma"]"
+#       disposition: "NOT a build-script bug -- the script's job is to
+#         faithfully copy the spreadsheet by header name, which it does; a
+#         column-reorder-proof, byte-faithful extractor should NOT silently
+#         'fix' spreadsheet typos on its own authority. This is the
+#         spreadsheet author's fix to make (correct the two tags in
+#         glossary_v1.xlsx and re-run the build script), not Sentinel's or
+#         the extractor's. Not privacy-relevant, not a Traditions violation
+#         -- purely cosmetic facet-splitting. Not scored as a regression."
+#     - severity: "INFORMATIONAL (content note, not a defect)"
+#       what: "The spreadsheet's 'Index' sheet (27 rows, not loaded by the
+#         build script) is a maintainer's note listing terms defined INSIDE
+#         another term's entry rather than as their own row (e.g. 'Nucleus'
+#         is explained inside 'Cell', not as a standalone glossary entry).
+#         26 of the Glossary sheet's own 'related to' values point at a
+#         word that has no entry of its own for the same reason (e.g. Cell
+#         -> Nucleus, Mind -> Objective Mind). The page's 'related to' chips
+#         do not break on this: clicking one calls the existing substring
+#         search (word/explanation/tag), which in every case checked still
+#         surfaces the parent entry because the sub-term is mentioned in
+#         its explanation text (e.g. searching 'Nucleus' finds 'Cell',
+#         whose explanation contains the word 'nucleus') -- graceful
+#         degradation, not a dead link, and not something the commit
+#         claimed to solve differently."
+#       disposition: "Not a regression. Noted for the author's awareness
+#         only."
+#
+#   coverage_gaps:
+#     - "NEW (this feature): no Playwright/e2e test exercises /glossary
+#        (search, facets, A-Z index, ?q= deep link, related-to chips) or the
+#        renamed Resources menu in a real browser. Same structural blocker
+#        as every prior round this month -- playwright.config.ts targets a
+#        deployed URL and this repo's node cannot run a local Next 16 dev
+#        server. tests/sentinel/glossary-check.sh (added this round)
+#        substitutes source/data-level verification; tracked to close once
+#        the commit is deployed and a real e2e run is possible."
+#     - "STILL OPEN, now spanning TWO rounds unresolved (first flagged
+#        nav-menu round, 2026-08-14, same day): no BACKLOG.md/docs/
+#        shipped.md F-number entry exists for EITHER the nav-menu commit
+#        (5386650: neutral Mobile App label + connect-gated nav links) or
+#        this round's glossary commit (7ac23f7). docs/shipped.md and
+#        BACKLOG.md are both still at their 2026-08-13 state (`git log -1
+#        --format=%cd -- docs/shipped.md BACKLOG.md` predates both commits).
+#        This is now at the edge of the spec's own 'WARNING in round n, FAIL
+#        in round n+1' rule for coverage gaps; read narrowly that rule is
+#        about SENTINEL TEST coverage (which this round DOES add, via
+#        glossary-check.sh) rather than docs/BACKLOG bookkeeping, and
+#        CLAUDE.md separately requires docs/shipped.md and BACKLOG.md kept
+#        reconciled 'in the same commit as the change' -- neither commit
+#        did that. Scored as a WARNING again this round on that narrower
+#        reading, but flagged explicitly: if docs/shipped.md and BACKLOG.md
+#        still lack entries for both features next round, that is FAIL-
+#        eligible under either reading of the rule."
+#     - "STILL OPEN: no automated (repo-resident, executable) T6
+#        endorsement-check script exists (carried forward, first flagged
+#        f67 round 2026-08-14)."
+#     - "STILL OPEN: wallet-list shuffle fairness has no persisted automated
+#        test (carried forward unchanged from 2026-08-12)."
+#     - "STILL OPEN: /settings-security page-body localisation gap (carried
+#        forward unchanged from f67-r2 round)."
+    checks:
+      - cmd: bash tests/sentinel/glossary-check.sh
+      - cmd: bash tests/sentinel/i18n-key-check.sh
+      - cmd: bash tests/sentinel/privacy-sweep.sh
+      - cmd: cd frontend && npx tsc --noEmit
+      - cmd: git diff --exit-code 98e26c9 ba9b088 -- glossary/.gitkeep

@@ -1,1 +1,1 @@
-NRR-2026-08-14-nav-menu.md
+NRR-2026-08-14-glossary.md
