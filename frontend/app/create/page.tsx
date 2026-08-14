@@ -11,6 +11,7 @@ import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import Identicon from "../../components/Identicon";
 import RoleIcon from "../../components/RoleIcon";
+import WalletChooser from "../../components/WalletChooser";
 import { useT } from "../../components/SettingsProvider";
 import {
   CircleInfo, explorerTx, foundationOf, listCircles,
@@ -318,11 +319,18 @@ export default function Create() {
 
       {!connected && (
         <div className="card">
+          {/* F67 (T6, no endorsements): this card used to name Solflare and then
+              Phantom, as two hardcoded anchors in a fixed order — the wrong count
+              AND a permanent first position, which is exactly the endorsement the
+              Tradition forbids. It now renders the shared WalletChooser, which
+              reads the vetted five from /wallets.json and shuffles them uniformly
+              on every mount. Do not re-add a named wallet here. */}
           <p className="muted" style={{ margin: 0 }}>
-            {t("create.connect.pre")} <b>{t("create.connect.selectWallet")}</b> {t("create.connect.mid")}{" "}
-            <a href="https://www.solflare.com/" target="_blank" rel="noreferrer">Solflare</a> {t("create.connect.or")}{" "}
-            <a href="https://phantom.com/" target="_blank" rel="noreferrer">Phantom</a>.
+            {t("create.connect.pre")} <b>{t("create.connect.selectWallet")}</b> {t("create.connect.chooserIntro")}
           </p>
+          <div style={{ marginTop: 12 }}>
+            <WalletChooser />
+          </div>
         </div>
       )}
 
