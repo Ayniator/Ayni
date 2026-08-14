@@ -2425,3 +2425,92 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-f61-r3.md
       - cmd: grep -rniE '(phantom|solflare|\bglow\b|trustwallet|trust wallet|jup\.ag|jupiter mobile)' frontend/app frontend/components --include='*.tsx' --include='*.ts' | grep -v 'WalletChooser.tsx' | grep -v node_modules
       - cmd: diff docs/wallets.json frontend/public/wallets.json
       - cmd: cd frontend && npx tsc --noEmit
+
+# ─────────────────────────────────────────────────────────────────────────
+round: f67-r2
+established: 2026-08-14
+baseline_report: reports/sentinel/NRR-2026-08-14-f67-r2.md
+previous_baseline_report: reports/sentinel/NRR-2026-08-14-f67.md
+
+# Round f67-r2 (2026-08-14) verdict: PASS. Scope: single commit 2439e81
+# "fix(F67): stop naming two wallets in /settings-security copy"
+# (frontend/app/settings-security/page.tsx only, +6/-1;
+# programs/circuits/tests/indexer untouched, devnet deployment unchanged).
+# Deliberately small round scaled to the diff: no local validator, no full
+# anchor test / Playwright re-run (rationale + memory note in the report;
+# `free -m` showed ~2.2GB available with concurrent agent sessions running,
+# nothing in this diff touches programs/circuits/RPC).
+#
+# F67-R2 (E9) — /settings-security's embedded-wallet copy
+#   what shipped: "...alongside Phantom and Solflare." -> "...alongside
+#   whichever other wallets you have installed." Resolves the WARNING
+#   carried forward from the f67 round (recorded above, "pre_existing: YES
+#   — from commit 713b2de"). Adds an explanatory JSX comment; no logic
+#   change.
+#   verified this round (independently, not cached from the commit message):
+#     - grep -rniE 'phantom|solflare|glow|trust wallet|jup\.ag|jupiter
+#       mobile|backpack|coinbase wallet|magic eden' frontend/app
+#       frontend/components: every hit is a code comment (layout.tsx,
+#       WalletProviders.tsx, DevnetSignNote.tsx, create/page.tsx's own F67
+#       comment, settings-security/page.tsx's new F67 comment). Zero
+#       member-visible copy names a wallet brand outside WalletChooser.tsx.
+#     - WIDENED this round per the brief: swept frontend/lib/i18n.ts and
+#       frontend/lib/i18n.generated.ts (all 19 locales) for the same brand
+#       list — not done in the f67 round. Only hit: WalletChooser.tsx's
+#       wallet.note.{phantom,solflare,glow,trust,jupiter} keys, translated
+#       in all 19 locales. Judged NOT a T6 violation: this is the actual
+#       wallet-selection UI (E9 spec requires the 5 vetted wallets shown,
+#       shuffled, with per-wallet notes), not narrative copy naming a
+#       favoured subset. One stray code comment at i18n.ts:95 (Devnet
+#       network-mismatch note), not member-facing.
+#     - tsc --noEmit (frontend/) clean.
+#     - tests/sentinel/i18n-key-check.sh: PASS, 1035/1035 keys resolve.
+#     - tests/sentinel/privacy-sweep.sh: 5/5 pass, unchanged.
+#     - prettier --check on the touched file fails, confirmed PRE-EXISTING
+#       by diffing against the pre-commit (ba3aff9) version of the same
+#       file, which fails identically. Not scored as a regression.
+#
+#   findings_this_round:
+#     - severity: "WARNING (coverage gap, NOT a regression of 2439e81 or
+#         of F81)"
+#       what: "frontend/app/settings-security/page.tsx has ZERO t()/useT
+#         calls anywhere — every one of its ~40 user-visible strings (h1,
+#         lede, 2 section titles, 3 MODE_LABEL values, 3 MODE_DETAIL
+#         paragraphs, ~15 button-label states, ~4 status templates, ~6 body
+#         paragraphs, ~6 notice/alert strings) is raw English, regardless
+#         of the member's chosen locale."
+#       pre_existing: "YES — the file's own comment says so: 'Strings are
+#         English inline on purpose — localisation happens later.' Predates
+#         F81 (shipped under F65/E8, commit history before 2026-08-12).
+#         F81's own page list (BACKLOG.md / docs/shipped.md) is 'me,
+#         foundation, admin, board, create, onboarding, inbox, reflections,
+#         documents, notifications, member' — settings-security was never
+#         in scope, despite both docs' loose framing as 'every page'."
+#       reproduction: "grep -c 't(' frontend/app/settings-security/page.tsx
+#         (all hits are useState/useCallback/useEffect, not useT); grep -n
+#         'localisation happens later' frontend/app/settings-security/page.tsx"
+#       disposition: "Not scored against 2439e81. Newly TRACKED as a gap
+#         starting this round (was not previously called out anywhere in
+#         this checklist's F81 entry) — should shrink per Sentinel spec §4;
+#         becomes a stronger finding if still untracked/unaddressed two
+#         rounds out."
+#
+#   coverage_gaps:
+#     - "STILL OPEN: no automated (repo-resident, executable) T6
+#        endorsement-check script exists; the sweep above was run by hand
+#        again, same gap the f67 round flagged. f67 was earlier the SAME
+#        day, so the two-round clock has barely started."
+#     - "STILL OPEN: wallet-list shuffle fairness has no persisted automated
+#        test (carried forward unchanged from 2026-08-12)."
+#     - "NEW: /settings-security page-body localisation — see finding
+#        above. Not covered by tests/sentinel/i18n-key-check.sh (that gate
+#        only checks that CALLED t() keys resolve; it cannot detect a page
+#        that never calls t() at all). No mechanical check for 'every page
+#        under frontend/app has at least one t() call' exists in this repo
+#        — would be a good addition to close this class of gap generally."
+    checks:
+      - cmd: grep -rniE '(phantom|solflare|\bglow\b|trustwallet|trust wallet|jup\.ag|jupiter mobile)' frontend/app frontend/components --include='*.tsx' --include='*.ts' | grep -v 'WalletChooser.tsx' | grep -v node_modules
+      - cmd: grep -rniE '(phantom|solflare|\bglow\b|trustwallet|trust wallet|jup\.ag|jupiter mobile)' frontend/lib/i18n.ts frontend/lib/i18n.generated.ts | grep -v 'wallet\.note\.'
+      - cmd: bash tests/sentinel/i18n-key-check.sh
+      - cmd: bash tests/sentinel/privacy-sweep.sh
+      - cmd: cd frontend && npx tsc --noEmit

@@ -60,3 +60,36 @@ so requiring it would deadlock the gate permanently.
   in user-visible copy (same T6 defect class, from commit 713b2de, fixed in the
   round after this one), and repo-wide prettier drift that already affected both
   changed files before this commit.
+- 0717f6e (reviewed as 2439e81, pre-rebase) fix(F67): stop naming two wallets in /settings-security copy
+  Covered by NRR-2026-08-14-f67-r2.md (PASS). Scope: single file,
+  frontend/app/settings-security/page.tsx (+6/-1), confirmed via
+  `git diff ba3aff9..0717f6e (reviewed as 2439e81, pre-rebase) --name-only` and `git diff HEAD~1..HEAD
+  --name-only`. Resolves the f67 round's carried-forward WARNING (the
+  "Phantom and Solflare" sentence). Re-verified independently rather than
+  trusted from the commit message: brand grep across frontend/app and
+  frontend/components shows only code comments survive (no member-visible
+  copy); sweep widened this round to the 19 locale dictionaries
+  (i18n.ts + i18n.generated.ts) — clean, the only wallet-name hits are
+  WalletChooser.tsx's wallet.note.* keys, which is the legitimate
+  wallet-selection UI (shuffled, not a T6 violation), not narrative copy.
+  New finding (non-blocking for this commit): /settings-security has zero
+  t() coverage at all (~40 raw English strings), self-documented in the
+  file's own comment ("localisation happens later") and outside F81's
+  explicitly enumerated page list, so not a regression of F81 or of this
+  commit — tracked as a coverage gap going forward. tsc --noEmit clean;
+  tests/sentinel/i18n-key-check.sh PASS (1035/1035); privacy-sweep.sh 5/5.
+  Prettier drift on the touched file confirmed pre-existing (same failure
+  on the pre-commit version). Full anchor/Playwright suites were not
+  re-run — no program/circuit/test file touched, small diff, same-day
+  baseline (NRR-2026-08-14-f67.md) already covers 161/0 and 49/49 on a
+  superset of this code; this was an explicit, stated scoping decision, not
+  an omission.
+
+  REBASE NOTE (2026-08-14): this commit was reviewed as `2439e81`, then rebased
+  onto 8190080 (a concurrent push from another session, unrelated: a mobile
+  typescript devDependency). The rebase changed the hash to `0717f6e` and
+  nothing else — the patch to frontend/app/settings-security/page.tsx was
+  verified byte-identical before this line was written, so the review above
+  applies unchanged. Recorded rather than silently re-pointed: a registry entry
+  that quietly acquires a new hash is exactly how an unreviewed change would
+  get laundered through the gate.
