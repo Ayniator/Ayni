@@ -3351,3 +3351,125 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
     checks:
       - cmd: bash tests/sentinel/glossary-check.sh
       - cmd: "node scripts/build-glossary.mjs && git diff --quiet -- frontend/public/glossary.json"
+
+  - id: SENTINEL-GATE-REVERT
+    name: "scripts/sentinel-push-gate.sh -- revert of the REVIEWED.md skip
+      in the override path (b10bae9), closing the CRITICAL hole opened by
+      16bb15f and reported FAIL in NRR-2026-08-14-gate-delta.md"
+    shipped_round: wallet-mobile (2026-08-14)
+    covered_by:
+      - tests/sentinel/gate-check.sh (13 cases as of this round, up from 12;
+         re-run against BOTH the live gate and a copy of 16bb15f's gate)
+      - independent live-exploit reconstruction (NOT the prior round's
+         fixture) via a disposable bare-repo remote and a real installed
+         `.git/hooks/pre-push`, this round
+    cases:
+      - "Rebuilt the exploit from scratch: a fresh malicious programs/
+         commit, a fresh bookkeeping-only commit self-registering it in
+         REVIEWED.md, a fresh bookkeeping-only OVERRIDES.md commit naming
+         only an unrelated decoy. Pushed for real (`git push`, hook fires)
+         with SENTINEL_OVERRIDE set, against BOTH gate versions on identical
+         commits. Current (post-revert) gate: BLOCKED, exit 1, `does not
+         name: <evil-sha> feat: quietly widen an admin key check`.
+         16bb15f's gate: ACCEPTED, exit 0, `Sentinel push gate OVERRIDDEN`
+         -- and the malicious commit's SHA is confirmed present in the
+         pushed OVERRIDES.md ZERO times (`grep -c` on the remote's own
+         copy)."
+      - "`is_reviewed()` occurs at exactly 3 places in the script: its own
+         definition, one comment explaining why it is deliberately NOT
+         called in the override loop, and its one real call site (the
+         coverage-check loop) -- confirmed by grep, not review-only."
+      - "`git diff 6b386d7 HEAD -- scripts/` is confined to the
+         `is_reviewed()` helper (a byte-for-byte semantic no-op at its one
+         call site vs. the old inline grep it replaced) and the removed
+         override-loop skip plus its replacement comment. The three things
+         16bb15f was SUPPOSED to keep -- the widened
+         `BOOKKEEPING='^(reports/sentinel/|tests/sentinel/)'` prefix, the
+         no-early-break every-substantive-commit override requirement, and
+         the new-branch `changed_files()` fix -- are all still present and
+         unmodified; diffed directly, not assumed."
+      - "gate-check.sh's matched pair genuinely discriminates: against
+         16bb15f, 'forged REVIEWED.md cannot excuse an override' FAILS
+         (12/13) while 'override naming every substantive commit is
+         allowed' still PASSES on both gate versions -- ruling out a gate
+         that just blocks every override unconditionally."
+      - "OPEN, DISCLOSED FINDING (not fixed by b10bae9, not hidden): the
+         NORMAL (non-override) path is still defeated by REVIEWED.md
+         self-forgery on the CURRENT gate, identically on both versions --
+         gate-check.sh's 'commit named in REVIEWED.md -> allowed' case
+         self-registers its own fixture commit and still passes. This is
+         pre-existing (present since 6b386d7 and before), was disclosed in
+         b10bae9's own commit message and in OVERRIDES.md's entry for it,
+         and is left for the user to weigh (what backs a registry entry --
+         signature, required companion report, or accept the gate as a
+         speed bump)."
+    checks:
+      - cmd: bash tests/sentinel/gate-check.sh
+      - cmd: "git show 16bb15f:scripts/sentinel-push-gate.sh > /tmp/gate-16bb15f.sh && chmod +x /tmp/gate-16bb15f.sh && bash tests/sentinel/gate-check.sh /tmp/gate-16bb15f.sh"
+      - cmd: "git diff 6b386d7 HEAD -- scripts/"
+      - cmd: "grep -n is_reviewed scripts/sentinel-push-gate.sh"
+
+  - id: MWA-NOTICE
+    name: "frontend/lib/mobileWallet.ts + frontend/components/
+      MobileWalletNotice.tsx -- escape hatch for mobile browsers (Firefox
+      for Android, confirmed) that Mobile Wallet Adapter offers itself to
+      but cannot complete; not yet assigned a BACKLOG.md F-number (docs
+      drift -- flagged, not this round's to fix)"
+    shipped_round: wallet-mobile (2026-08-14)
+    covered_by:
+      - "live Playwright runs against the deployed site (aha.a13z.org:8443),
+         this round -- device-emulated contexts with real UA strings and a
+         real injected window.phantom, not unit tests against a mock DOM"
+      - "npx tsc --noEmit"
+      - "docker exec into the running frontend container, confirming the
+         built .next output actually contains the new markup"
+      - "tests/sentinel/privacy-sweep.sh, tests/sentinel/i18n-key-check.sh,
+         tests/sentinel/e2e-smoke-check.sh (re-run, whole suite)"
+    cases:
+      - "Firefox/Android UA: banner renders, carries `is-warning`, states
+         plainly that connecting will not work, BEFORE any tap."
+      - "Chrome/Android UA (MWA actually completes there): softer
+         alternative-route hint renders, NOT the hang warning -- the two
+         messages are not conflated."
+      - "Desktop Firefox UA: nothing renders (`.mw-notice` count 0)."
+      - "iPhone Safari UA (mobile, no MWA concept, no injected wallet):
+         softer hint renders, correctly, since MWA is Android-only and iOS
+         has no native connect path at all."
+      - "Firefox/Android UA PLUS a real injected `window.phantom` (in-wallet
+         browser simulation): nothing renders, even though the UA alone
+         would trigger the warning -- injected-provider check wins over the
+         UA hint, as designed."
+      - "No hydration-mismatch console error observed on the
+         Firefox/Android path (decision is made in a useEffect after
+         mount, matching the server-rendered null on first paint)."
+      - "Universal links are plain `<a href>` (tag confirmed `A`, not a
+         click handler), resolve to
+         solflare.com/ul/v1/browse/... and phantom.app/ul/browse/..., and
+         percent-encode their target -- decoding the href recovers the
+         exact page URL, port included, both via a standalone node
+         round-trip and live in-browser against /onboarding."
+      - "Privacy: grep of both new files for fetch/XHR/sendBeacon/
+         WebSocket/localStorage/sessionStorage/indexedDB/analytics/
+         console.* -- zero hits. The two functions consuming
+         navigator.userAgent (mobileBrowser(), isInWalletBrowser()) are
+         used ONLY inside this feature's own files; nothing else in
+         frontend/ imports lib/mobileWallet.ts, so no shuffle, no
+         analytics, and no chain call is fed by this UA read."
+      - "WARNING, not a blocker: the banner hardcodes exactly two wallets
+         (Solflare, Phantom) by name, unshuffled, fixed order, with no
+         code-level rationale for omitting the other three vetted wallets
+         (Glow, Trust Wallet, Jupiter) in docs/wallets.json. This is in
+         tension with the project's own F67/T6 anti-endorsement pattern
+         (WalletChooser's uniform Fisher-Yates shuffle across all five,
+         explicitly reasoned in that file's own header comment). Not
+         CRITICAL -- no member data, no ranking, no sponsor -- but it is a
+         real Tradition-adjacent finding raised for a decision, not waved
+         through."
+      - "Confirmed correctly OUT of scope for anchor test: programs/ and
+         circuits/ are untouched by this commit (`git diff --stat
+         26b4b7c 04251ca -- programs/ circuits/` empty)."
+    checks:
+      - cmd: "cd frontend && npx tsc --noEmit"
+      - cmd: "grep -nE 'fetch|XMLHttpRequest|sendBeacon|localStorage|sessionStorage|indexedDB|WebSocket|console\\.(log|info|warn|error)|analytics|gtag|mixpanel|posthog|segment' frontend/lib/mobileWallet.ts frontend/components/MobileWalletNotice.tsx"
+      - cmd: "grep -rln 'mobileWallet' frontend --include='*.ts' --include='*.tsx'"
+      - cmd: "docker exec frontend-frontend-1 sh -c \"grep -rl 'mw-notice' /app/.next\""

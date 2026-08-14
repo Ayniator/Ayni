@@ -303,3 +303,76 @@ so requiring it would deadlock the gate permanently.
   distinct tags 44 -> 43; zero remaining "Budhism"/"Freemassonery" tags;
   Buddhism now carries 7 terms, Freemasonry 1 -- exact match to the claimed
   numbers. tests/sentinel/glossary-check.sh re-run in full, 10/10 pass.
+- 16bb15f fix(sentinel-gate): widen the bookkeeping exemption; overrides must
+  name all. Registered NOW, closing the gap this file's own note (above, at
+  the ~6b386d7~ entry) left open pending this round. Independently
+  re-confirmed CRITICAL/FAIL in reports/sentinel/NRR-2026-08-14-gate-delta.md
+  and again by this round's own from-scratch reconstruction (NOT the prior
+  round's fixture — a fresh malicious programs/ commit, a fresh forged
+  REVIEWED.md self-registration, a fresh decoy OVERRIDES.md entry, run
+  through a real `git push` via an installed .git/hooks/pre-push, against a
+  disposable bare-repo remote): the override path accepted the push with the
+  malicious commit's SHA appearing in ZERO occurrences anywhere in
+  OVERRIDES.md. Superseded by b10bae9 in the very next commit. Registered as
+  reviewed-and-rejected, not reviewed-and-approved — the structured registry
+  records that a round examined the commit, not that the commit passed;
+  16bb15f did not pass and must never be read as having passed.
+  See reports/sentinel/NRR-2026-08-14-wallet-mobile.md.
+- b10bae9 fix(sentinel-gate): revert the REVIEWED.md skip in the override
+  path — CRITICAL. Reviewed in
+  reports/sentinel/NRR-2026-08-14-wallet-mobile.md (PASS WITH WARNINGS,
+  overall round verdict; this commit's own change verified clean). Did not
+  accept the prior round's exploit report on its word: rebuilt the exploit
+  independently from a clean clone (new EVIL/FORGE/TIP commits, a disposable
+  bare-repo "origin", a real `git push` through an installed pre-push hook,
+  not just an invocation of the script with synthetic stdin) and ran it
+  against BOTH the current gate (BLOCKED, exit 1, as required) and 16bb15f's
+  gate (ACCEPTED, exit 0, confirming the hole was real). Confirmed
+  `is_reviewed()` appears at exactly one call site (the coverage-check loop)
+  plus its own definition and a comment explaining why it is deliberately NOT
+  called in the override loop -- grep, not review-only. Confirmed
+  `git diff 6b386d7 HEAD -- scripts/` is confined to the `is_reviewed()`
+  helper (used only at the pre-existing call site, semantically a no-op
+  there) plus the removed override-loop skip and its replacement comment --
+  no other logic changed; the widened BOOKKEEPING prefix, the
+  every-substantive-commit override requirement, and the new-branch
+  changed_files() fix from 16bb15f all remain intact and unmodified.
+  `tests/sentinel/gate-check.sh` re-run: 13/13 against the live (reverted)
+  gate; against 16bb15f's gate the "forged REVIEWED.md cannot excuse an
+  override" case fails as it must (12/13) while "override naming every
+  substantive commit is allowed" passes on BOTH versions, confirming the pair
+  discriminates rather than merely blocking every override. Confirmed the
+  pre-existing REVIEWED.md self-forgery on the NORMAL (non-override) path is
+  still open on the current gate (gate-check.sh's "commit named in
+  REVIEWED.md -> allowed" case still passes, by design/by forgery) -- this
+  was explicitly disclosed, not hidden, in both the commit message and
+  reports/sentinel/OVERRIDES.md's entry for this commit, and remains an open
+  finding for the user, not fixed here.
+- 04251ca fix(wallet): mobile browsers that offer Mobile Wallet Adapter and
+  cannot finish it. Reviewed in
+  reports/sentinel/NRR-2026-08-14-wallet-mobile.md (PASS WITH WARNINGS).
+  Confirmed the root-cause claim against the actual installed dependency
+  (frontend/node_modules/@solana/wallet-adapter-react/src/getEnvironment.ts:
+  the MWA-offer check is exactly "Android and not a WebView", engine-blind,
+  matching the commit's description). Confirmed the privacy claim in
+  frontend/lib/mobileWallet.ts by grep (no fetch/XHR/sendBeacon/WebSocket/
+  storage/analytics/console.* sink in either new file) and by exercise (a
+  live Playwright run against the deployed site with a real `window.phantom`
+  injection and real Firefox-Android/Chrome-Android/desktop-Firefox/
+  iPhone-Safari UA strings: renders only where the code claims it does,
+  never on desktop, never with an injected wallet, never before the mount
+  effect fires -- no hydration-mismatch console error observed). Confirmed
+  the universal-link percent-encoding round-trip preserves a non-default
+  port (`:8443`) both by hand (node -e) and live in-browser (an
+  onboarding-page href decoded back to the exact page URL including the
+  port). `npx tsc --noEmit`: clean. The deployed container's built
+  `.next` output was confirmed (via `docker exec`, not assumed) to contain
+  the new `mw-notice` markup, and the live site (aha.a13z.org:8443) served
+  it correctly. WARNING raised, not a blocker: the banner hardcodes exactly
+  two wallets (Solflare, Phantom) by name, in a fixed unshuffled order, with
+  no code-level justification for the omission of the other three vetted
+  wallets in docs/wallets.json (Glow, Trust Wallet, Jupiter) -- this sits in
+  tension with the project's own F67/T6 anti-endorsement discipline
+  (WalletChooser's uniform shuffle across all five, "no wallet ever holds a
+  permanent first position") and is not disclosed anywhere in this commit's
+  comments. Full detail in the NRR.
