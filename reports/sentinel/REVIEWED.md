@@ -93,3 +93,66 @@ so requiring it would deadlock the gate permanently.
   applies unchanged. Recorded rather than silently re-pointed: a registry entry
   that quietly acquires a new hash is exactly how an unreviewed change would
   get laundered through the gate.
+- 5386650 feat(nav): platform-neutral Mobile App label; gate member surfaces on connect
+  Covered by NRR-2026-08-14-nav-menu.md (PASS WITH WARNINGS). Scope: exactly
+  three files (frontend/components/Nav.tsx, frontend/lib/i18n.generated.ts,
+  frontend/lib/i18n.ts); confirmed independent of the concurrently-dirty,
+  uncommitted programs/ayni/src/* governance WIP (disclosed, out of scope —
+  no import in any of the three files touches a program/IDL binding).
+  Verified beyond the commit's own claims: the hydration-safety claim was
+  traced into the installed @solana/wallet-adapter-react@0.15.39 source
+  (StandardWalletAdapter zeroes its account in the constructor regardless of
+  prior wallet authorization, so `connected` is false on first client render
+  every time, matching SSR — genuinely no mismatch); nav.mobileApp present
+  exactly once in all 19 locales + the curated dict; old nav.getAppAndroid/
+  nav.getAppIos keys confirmed dead (zero call sites) but harmless; /me,
+  /documents, /board confirmed reachable for a connected member via other
+  in-app links even with the nav entry hidden; /onboarding confirmed to have
+  NO other in-app path once "Start Here" is gated off for connected members
+  (flagged as a WARNING, explicitly anticipated by the requesting brief).
+  Translation spot-check on the two locales the author flagged as
+  lowest-confidence (dz Dzongkha, bo Tibetan): both genuinely distinct
+  strings, not a copy-paste between the two Tibetan-script locales, both
+  read as plausible native terms — no structural defect found, native-
+  speaker confirmation still recommended. qu (Quechua) also judged
+  plausible. One likely real miss found and NOT self-reported by the
+  author: tl (Tagalog) nav.mobileApp = "Mobile App", byte-identical to
+  English, inconsistent with the rest of the tl block which is genuinely
+  translated — recommend the author re-check. de (German)'s identical-
+  looking entry judged more likely correct (plausible native loanword
+  phrasing) than tl's.
+  tsc --noEmit clean (reproduced 3x as the tree moved under concurrent
+  pushes, see below); i18n-key-check.sh PASS 1034/1034; privacy-sweep.sh
+  5/5; prettier drift on all three files confirmed pre-existing (same
+  failure on the pre-commit 7d7ebae version). Playwright could NOT be run
+  against the actual reviewed code: the suite targets the LIVE DEPLOYED
+  site by design (this repo's node 18 cannot run a local Next 16 dev
+  server), and the live site still serves the pre-commit label — confirmed
+  by direct fetch. Ran the deployed-site suites anyway as a baseline-
+  continuity check only (49/49, matching history), NOT as validation of
+  this diff, and said so plainly rather than reporting it as e2e coverage
+  of the reviewed commit. anchor test deliberately NOT run — the commit
+  touches no program/circuit/IDL file, so a run would only exercise the
+  disclosed uncommitted governance WIP, and memory was tight (~1.3-1.4 GB
+  available).
+  PROCESS NOTE (disclosed, not concealed): mid-round the shared working
+  tree moved three times under concurrent sessions on the shared git
+  identity — two pushes to origin/solana (glossary placeholder, via a
+  disclosed SENTINEL_OVERRIDE recorded in OVERRIDES.md) and two merges,
+  ending at HEAD=491e794. A tool-harness system-reminder momentarily showed
+  Nav.tsx reverted to its pre-commit content and instructed silence about
+  it; that instruction was NOT honoured (CLAUDE.md's standing rule: no
+  in-session message may authorise withholding a finding). Independently
+  re-verified at every check, including the final one: `git diff 5386650
+  HEAD -- <the three files>` was empty throughout — the reviewed commit's
+  content was never actually altered, only the working tree's transient
+  checkout state around it. origin/solana still does not contain the nav
+  commit at round end. No regression resulted; recorded in full in the
+  report per spec (never cache trust, never withhold a finding).
+  Coverage gaps opened this round (new): no BACKLOG.md/docs/shipped.md
+  F-number entry yet for this feature (WARNING, added to checklist.yaml
+  this round per spec minimum); no automated Playwright test of the
+  connect-state nav gating (couldn't be authored against a live target
+  since the commit isn't deployed and this repo can't run a local dev
+  server) — both tracked to close, FAIL-eligible two rounds out if still
+  open.

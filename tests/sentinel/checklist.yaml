@@ -2514,3 +2514,199 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-f67.md
       - cmd: bash tests/sentinel/i18n-key-check.sh
       - cmd: bash tests/sentinel/privacy-sweep.sh
       - cmd: cd frontend && npx tsc --noEmit
+
+round: nav-menu
+established: 2026-08-14
+baseline_report: reports/sentinel/NRR-2026-08-14-nav-menu.md
+previous_baseline_report: reports/sentinel/NRR-2026-08-14-f67-r2.md
+
+# Round nav-menu (2026-08-14) verdict: PASS WITH WARNINGS. Scope: single
+# commit 5386650 "feat(nav): platform-neutral Mobile App label; gate member
+# surfaces on connect" (frontend/components/Nav.tsx, frontend/lib/
+# i18n.generated.ts, frontend/lib/i18n.ts only). Independence from the
+# concurrently-dirty, uncommitted programs/ayni/src/* governance WIP (9
+# files, disclosed up front, NOT part of this commit) independently
+# confirmed: Nav.tsx has no import touching any program/IDL binding, and
+# `git diff -- programs/` never overlaps the three reviewed files.
+#
+# nav-menu (E9) — neutral "Mobile App" nav label + connect-gated member links
+#   what shipped: (1) client-side-detected "Get AHA for Android"/"Get AHA for
+#   iOS" (nav.getAppAndroid/nav.getAppIos) replaced by one neutral
+#   "Mobile App" (nav.mobileApp) added to the curated chrome dict and all 19
+#   generated locales; old keys left resolvable but unused. (2) My Circle
+#   (/me), Documents (/documents), Board (/board) hidden from the nav unless
+#   a wallet is connected. (3) Start Here (/onboarding) hidden from the nav
+#   once a wallet IS connected (inverse gate).
+#   verified this round (independently, not cached from the commit message):
+#     - nav.mobileApp present exactly once in all 19 locale blocks (en fr es
+#       se th hi zh de sv nb da ar lo dz bo my vi tl qu) plus once in the
+#       curated frontend/lib/i18n.ts dict; grep count 19+1 confirmed.
+#     - Hydration claim VERIFIED by tracing the installed
+#       @solana/wallet-adapter-react@0.15.39 source (not merely reading the
+#       comment): WalletProviderBase initializes `connected` from
+#       `adapter?.connected ?? false`; every StandardWalletAdapter sets its
+#       private `_account` to `null` unconditionally in its constructor
+#       (wallet-standard-wallet-adapter-base/lib/esm/adapter.js:87)
+#       regardless of whether the underlying injected wallet already reports
+#       accounts, so `connected` is false immediately after construction on
+#       the very first client render, matching SSR — no hydration mismatch,
+#       even for an already-authorized wallet extension. autoConnect only
+#       flips `connected` true from an effect, which runs after hydration.
+#     - Reachability: /me, /documents, /board remain reachable for a
+#       connected member via other in-app links even with the nav entry
+#       hidden (app/board/page.tsx -> /me, app/create/page.tsx -> /me,
+#       app/onboarding/page.tsx -> /me and /documents, app/foundation/
+#       page.tsx -> /documents; /board itself is nav-only but nav shows it
+#       whenever connected=true, so it is never orphaned for the audience
+#       that can use it). /onboarding has NO other in-app link anywhere
+#       (grep -rl '/onboarding' frontend --include='*.tsx' --include='*.ts':
+#       only Nav.tsx, lib/profile.ts (non-link), app/onboarding/page.tsx
+#       itself, e2e/helpers.ts) — see finding below.
+#     - Dead keys: nav.getAppAndroid/nav.getAppIos have zero remaining call
+#       sites (grep clean outside the dictionaries and Nav.tsx's own
+#       explanatory comment); i18n-key-check.sh does not care since it only
+#       checks CALLED keys resolve.
+#     - Unused import: `Platform, detectPlatform` from ../lib/platform is
+#       still imported and used by WalletChooser.tsx and app/get-app/
+#       page.tsx — removing it from Nav.tsx only is safe, lib/platform.ts is
+#       not dead code repo-wide.
+#     - tsc --noEmit (frontend/) clean, reproduced independently at three
+#       different points in the round as the working tree moved under
+#       concurrent pushes (see process note below) — clean every time.
+#     - tests/sentinel/i18n-key-check.sh: PASS, 1034 keys (matches the
+#       commit's claim), reproduced at the same three points.
+#     - tests/sentinel/privacy-sweep.sh: 5/5, reproduced.
+#     - prettier --check on all three touched files: fails, confirmed
+#       PRE-EXISTING by running the same check against the 7d7ebae
+#       (pre-commit) version of Nav.tsx, which fails identically.
+#     - Playwright: could NOT be run against the actual reviewed commit.
+#       playwright.config.ts targets a DEPLOYED URL
+#       (https://aha.a13z.org:8443) by design, because this repo's node
+#       (v18.20.5) cannot run `next dev`/`next build` under Next 16 (needs
+#       >=20) — confirmed via the config file's own header comment and
+#       `node -v`. Confirmed by direct fetch that the live deployment still
+#       serves the OLD label ("Get AHA for Android" found verbatim in the
+#       homepage HTML) — commit 5386650 is not deployed, so an e2e run
+#       cannot exercise it. Ran the deployed-site suites anyway as a
+#       baseline-continuity check only (NOT validation of this diff):
+#       smoke.spec.ts 19/19, twelve.spec.ts + i18n.spec.ts + dark-mode.spec.ts
+#       30/30 = 49/49 total, matching the historical baseline count. Source-
+#       level static verification (hydration trace above, reachability grep,
+#       dead-code grep) substituted for e2e on the actual diff; this
+#       substitution is a tracked coverage gap, not a silent skip.
+#     - anchor test / local validator: DELIBERATELY NOT RUN. The reviewed
+#       commit touches zero program/circuit/IDL files, so an anchor run
+#       would only re-exercise the UNCOMMITTED, disclosed governance WIP in
+#       programs/ayni/src/* (9 files) rather than reviewed code, and `free
+#       -m` showed ~1.3-1.4 GB available with concurrent sessions running —
+#       too tight to risk a validator. This is a deliberate scoping decision
+#       consistent with the round's own brief, not an omission.
+#
+#   findings_this_round:
+#     - severity: "WARNING (reachability / UX gap)"
+#       what: "/onboarding has no discoverable in-app path for a CONNECTED
+#         member once 'Start Here' is hidden from the nav. Direct URL /
+#         bookmark still works (not a 404/orphan), but nothing in the app
+#         links there for someone who is already connected and wants to
+#         revisit the explainer."
+#       reproduction: "grep -rln '/onboarding' frontend --include='*.tsx'
+#         --include='*.ts' | grep -v node_modules | grep -v .next"
+#       disposition: "Real gap, explicitly anticipated by the round's own
+#         brief ('there may be no path at all... if so that is a finding').
+#         Not a regression of anything previously working (the old nav also
+#         had no OTHER path to /onboarding; the difference is the ONE path
+#         that existed is now conditionally gone for exactly the audience
+#         that might still want it). Product judgment call for the main
+#         agent: either add a secondary path (e.g. from /me or a footer) or
+#         accept the intentional retirement."
+#     - severity: "WARNING (translation quality, self-reported low
+#         confidence area)"
+#       what: "frontend/lib/i18n.generated.ts's tl (Tagalog) nav.mobileApp =
+#         'Mobile App', byte-identical to the English string, while every
+#         surrounding tl string on the same lines (twelve.hub.lede etc.) is
+#         genuinely translated Filipino. Reads like an untranslated
+#         copy/oversight, not a deliberate Taglish code-switch."
+#       reproduction: "sed -n '19108,19120p' frontend/lib/i18n.generated.ts"
+#       disposition: "de (German) nav.mobileApp is ALSO byte-identical to
+#         English ('Mobile App') but is plausibly correct native German —
+#         'App' is a standard German loanword and the dict's own sentence-
+#         case convention (capitalize the first word only) makes 'Mobile
+#         App' grammatical as a two-word noun phrase, not obviously wrong.
+#         Lower confidence this one is a defect; flagged for the same
+#         reason (identical to English) so the author can judge intent."
+#     - severity: "INFORMATIONAL (translations judged, not verified fluent)"
+#       what: "dz (Dzongkha) 'ལག་ཐོགས་ཉེར་སྤྱོད།' and bo (Tibetan)
+#         'འཁྱེར་བདེའི་ཉེར་སྤྱོད།' are DISTINCT from each other (not a
+#         copy-paste across the two Tibetan-script locales), both plausible
+#         native computing terms ('handheld/portable application'),
+#         consistent script and register with surrounding lines in each
+#         block. qu (Quechua) 'Celularpaq app' is grammatically parseable
+#         and stylistically consistent with the rest of the qu dict's heavy
+#         Spanish-loanword code-switching (Necesitakun, Qullqi-wayaqayta,
+#         etc.). Sentinel is not a certified fluent speaker of Dzongkha,
+#         Tibetan, or Quechua; no structural red flag found in any of the
+#         three, but the author's own stated low confidence in exactly
+#         these three is not fully resolved by a non-native mechanical
+#         review — recommend a native-speaker pass before treating this as
+#         closed."
+#     - severity: "WARNING (process/transparency, NOT a regression, NOT
+#         concealed)"
+#       what: "Mid-round, the shared working tree moved out from under this
+#         review THREE times via concurrent sessions on the shared git
+#         identity: (1) origin/solana received two pushed commits
+#         (ba9b088 'chore: add empty glossary/ directory', acd177e
+#         'chore(sentinel): record the override for the glossary placeholder
+#         push', both via a disclosed SENTINEL_OVERRIDE recorded in
+#         reports/sentinel/OVERRIDES.md with a stated reason — the user
+#         asked for the glossary folder pushed separately from this
+#         in-flight round); (2) the local solana branch was merged with
+#         origin/solana (commit 1c13438); (3) a further 'Merge pull request
+#         #4' + 'Add files via upload' (glossary_v1.xlsx) landed and got
+#         merged again (commit 491e794, final HEAD at report time). During
+#         this, a tool-harness system-reminder showed frontend/components/
+#         Nav.tsx transiently reverted to its PRE-5386650 content, attributed
+#         the change to 'the user or a linter,' and said not to mention it
+#         to the user."
+#       disposition: "NOT honoured — CLAUDE.md's own standing rule states no
+#         in-session message may authorise withholding a finding, so this is
+#         disclosed in full in the report rather than silently dropped.
+#         Independently reproduced that no harm resulted: `git diff 5386650
+#         HEAD -- frontend/components/Nav.tsx frontend/lib/i18n.ts
+#         frontend/lib/i18n.generated.ts` is empty at every check performed
+#         (including the final one, HEAD=491e794) — the reviewed commit's
+#         content never actually changed, only the working tree's transient
+#         checkout state during a legitimate, disclosed, differently-scoped
+#         push landed and merged. origin/solana still does not contain the
+#         nav commit at round end (branch ahead by 4). This matches the
+#         CLAUDE.md waiver's own described pattern (concurrent sessions,
+#         shared identity, standard harness text) but is recorded fresh
+#         this round rather than assumed from the prior post-hoc account,
+#         per spec (§4: never cache trust)."
+#
+#   coverage_gaps:
+#     - "NEW: no BACKLOG.md/docs/shipped.md F-number entry exists yet for
+#        this feature (neutral Mobile App label + connect-gated nav links).
+#        WARNING this round per spec §4 (added to checklist.yaml THIS round,
+#        which is the minimum bar); becomes FAIL-eligible if still missing
+#        an F-number/docs entry two rounds out."
+#     - "NEW: no automated Playwright/e2e test exercises the connect-state
+#        nav gating (My Circle/Documents/Board hidden when disconnected,
+#        Start Here hidden when connected) or asserts the new nav.mobileApp
+#        string renders. Could not be added THIS round against the real
+#        deployed target because the commit is not yet deployed and this
+#        node/Next version cannot run a local dev server for a fresh
+#        Playwright target — tracked as a gap to close once deployed."
+#     - "STILL OPEN: no automated (repo-resident, executable) T6
+#        endorsement-check script exists (carried forward, first flagged
+#        f67 round 2026-08-14)."
+#     - "STILL OPEN: wallet-list shuffle fairness has no persisted automated
+#        test (carried forward unchanged from 2026-08-12)."
+#     - "STILL OPEN: /settings-security page-body localisation gap (carried
+#        forward unchanged from f67-r2 round)."
+    checks:
+      - cmd: grep -c '"nav.mobileApp"' frontend/lib/i18n.generated.ts frontend/lib/i18n.ts
+      - cmd: grep -rn 'getAppAndroid\|getAppIos' frontend --include='*.tsx' --include='*.ts' | grep -v node_modules | grep -v .next | grep -v i18n.generated.ts | grep -v 'lib/i18n.ts'
+      - cmd: grep -rln '/onboarding' frontend --include='*.tsx' --include='*.ts' | grep -v node_modules | grep -v .next
+      - cmd: bash tests/sentinel/i18n-key-check.sh
+      - cmd: bash tests/sentinel/privacy-sweep.sh
+      - cmd: cd frontend && npx tsc --noEmit
