@@ -62,7 +62,36 @@ export default defineConfig({
     navigationTimeout: 45_000,
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "chromium",
+      // The mobile spec is excluded here rather than allowed to run twice: on a
+      // desktop UA the banner it tests never renders, so it would pass by
+      // vacuum — asserting nothing while looking green.
+      testIgnore: /mobile-wallet\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      // F95. Added because a Sentinel round found that "no third-party requests
+      // on page load" ran ONLY on Desktop Chrome, where
+      // shouldOfferWalletBrowser() is false — so MobileWalletNotice's
+      // fetch("/wallets.json") was never exercised by any committed test. The
+      // property was true and unproven, which is the kind of coverage that
+      // looks present and is not.
+      //
+      // Pixel 7 viewport with the user agent Firefox for Android actually
+      // sends, because that specific UA is what makes the app conclude Mobile
+      // Wallet Adapter will hang. Engine is still Chromium — this emulates the
+      // DETECTION path, not Gecko itself; it cannot prove the MWA handshake
+      // fails, which is a real-device property no browser automation here
+      // establishes.
+      name: "mobile-firefox-android",
+      testMatch: /mobile-wallet\.spec\.ts/,
+      use: {
+        ...devices["Pixel 7"],
+        userAgent:
+          "Mozilla/5.0 (Android 13; Mobile; rv:109.0) Gecko/121.0 Firefox/121.0",
+      },
+    },
   ],
   // NO `webServer` block on purpose: the suite must not depend on `next dev`,
   // which cannot start under this repo's node 18. See docs/e2e.md.

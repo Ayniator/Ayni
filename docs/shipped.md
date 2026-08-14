@@ -993,7 +993,27 @@ Client libraries: `lib/zk-vote.ts` (browser prover), `lib/messaging.ts`,
 `lib/maci.ts`, `lib/member.ts`, `lib/admin.ts`, `lib/multisig.ts`,
 `lib/notifications.ts`, `lib/posts.ts`, `lib/meetings.ts`, `lib/profile.ts`,
 `lib/jazzicon.ts`, `lib/solana.ts`, `lib/ipfs.ts`, `lib/foundation.ts`,
-`lib/country.ts`, `lib/circleEmail.ts`.
+`lib/country.ts`, `lib/circleEmail.ts`., `lib/mobileWallet.ts`.
+
+**F95 — mobile wallet connect (2026-08-14).** `@solana/wallet-adapter-react`
+injects a `SolanaMobileWalletAdapter` by itself on any Android UA that is not a
+WebView, including browsers that cannot complete the association. On Firefox for
+Android the wallet opens cold and the tab spins forever — reproduced with both
+Solflare and Phantom, which is what identifies it as a browser problem rather
+than a wallet one. `components/MobileWalletNotice.tsx` says so before the tap and
+offers to reopen the site inside the wallet's own in-app browser, where Wallet
+Standard registration works normally. The offered wallets come from
+`wallets.json` and are shuffled (T6); a wallet qualifies only by publishing a
+documented `browse` universal link. Covered by the `mobile-firefox-android`
+Playwright project (`e2e/mobile-wallet.spec.ts`) — added because the existing
+"no third-party requests" test ran desktop-only and never mounted this component
+— and by `tests/sentinel/e12-wallet-check.sh` §8c.
+
+**Known gap in this section:** F93 and F94 shipped without rows here. The table
+above lists 13 routes and has not been reconciled since; `/get-app`, `/glossary`,
+`/onboarding`, `/twelve*`, `/settings-security` and `/wallet` are all live and
+absent from it. Recorded rather than quietly patched, because reconciling it
+properly means walking the whole route tree, not appending three lines.
 
 ---
 

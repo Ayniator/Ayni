@@ -278,6 +278,62 @@ else
   echo "! deep-link liveness check skipped — curl or python3 unavailable"
 fi
 
+# ---- 8c. the `browse` field (F95) ------------------------------------------
+# MobileWalletNotice offers a wallet only if it carries a documented universal
+# link that opens an arbitrary URL in that wallet's own in-app browser. Three
+# things can go wrong here, none of which the store-link check above would see:
+#
+#   * a malformed template — the placeholders are substituted by plain string
+#     replace, so a template missing {url} silently produces a link to the
+#     wallet's own homepage and the member never gets back here;
+#   * an http:// template, which would downgrade the hop;
+#   * drift between the two wallets.json copies, which would serve one list and
+#     review another.
+#
+# NOT checked: whether the universal link actually opens the app. That is a
+# device property — no HTTP probe from a server can establish it, and pretending
+# otherwise would be exactly the kind of coverage that reads as proof and is not.
+if command -v python3 >/dev/null 2>&1; then
+  if python3 - "$DOCS_WALLETS" "$FE/public/wallets.json" <<'PY'
+import json, sys
+docs, pub = sys.argv[1], sys.argv[2]
+a, b = open(docs, 'rb').read(), open(pub, 'rb').read()
+if a != b:
+    print("  docs/wallets.json and frontend/public/wallets.json differ")
+    sys.exit(1)
+bad = []
+seen = 0
+for w in json.loads(a)['wallets']:
+    br = w.get('browse')
+    if br is None:
+        continue
+    seen += 1
+    wid = w.get('id', '?')
+    if not isinstance(br, str) or not br.startswith('https://'):
+        bad.append(f"{wid}: browse is not an https:// string")
+        continue
+    for ph in ('{url}', '{ref}'):
+        if ph not in br:
+            bad.append(f"{wid}: browse template is missing {ph}")
+    if not w.get('name'):
+        bad.append(f"{wid}: has browse but no name to label the button with")
+for line in bad:
+    print("  " + line)
+if seen == 0:
+    print("  no wallet carries a browse field — the mobile banner will render nothing")
+    sys.exit(1)
+sys.exit(1 if bad else 0)
+PY
+  then
+    echo "✔ wallets.json browse templates are https, well-formed, and identical in both copies"
+  else
+    echo "✘ wallets.json browse field problem (see above) — the mobile wallet banner would emit a broken or unreviewed link"
+    fail=$((fail+1))
+  fi
+else
+  echo "! browse-field check skipped — python3 unavailable"
+fi
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "RESULT: E12 wallet regression gate holds (F86/F87/F88/F89, $((${#CUSTODY_SURFACE[@]})) custody-surface files)."
