@@ -352,3 +352,66 @@ presence.
 
 **Attribution:** this session; unverifiable at the git level, per the user's
 accepted-risk waiver of 2026-08-12.
+
+---
+
+## 16bb15f, 6b95d77, 114f3af — push at the user's explicit direction (2026-08-14)
+
+**Override used:** yes, `SENTINEL_OVERRIDE`, for the three substantive commits
+named above. `95c7c83` rode along as pure bookkeeping under the standing
+exemption, not under this override.
+
+**Why it was taken:** the user said "Push!!!" while the covering Sentinel round
+was still running. That is their call to make and it was made explicitly, after
+the session had already stated it intended to wait for the verdict. Recorded
+here rather than argued.
+
+**What was pushed, and what nobody has reviewed:**
+
+- **`16bb15f` — `scripts/sentinel-push-gate.sh`, the push gate itself, plus a
+  new `tests/sentinel/gate-check.sh`.** This is the uncomfortable one and it
+  should not be glossed. A change to the gate is a change to the only mechanical
+  control between unreviewed work and devnet, and it is going out *unreviewed,
+  by way of the very override the gate exists to make expensive*. It also widens
+  the exemption to all of `tests/sentinel/` and then, in the same push, adds a
+  new script there — which is precisely the residual the `525aa7b` entry above
+  warned about in writing: "a hostile or careless change to a CHECK SCRIPT — the
+  thing that decides whether future rounds pass — would itself be ungated."
+  The user approved the widening (options A+B+C, 2026-08-14). The warning is
+  repeated here because approving a policy and reviewing a specific diff are not
+  the same act, and only the first has happened.
+
+- **`6b95d77` — `docs/presence.md`.** Amends an Epic 4 privacy rule ("never
+  summed") for F59. Split out of the original `1e3c738` specifically so it would
+  be reviewed on its own merits; the split preserved content byte-for-byte
+  (`git diff 1e3c738 <split pair>` empty) but the review it was split out to
+  receive has not landed.
+
+- **`114f3af` — glossary spelling fix at source.** Rewrites
+  `glossary/glossary_v1.xlsx` and regenerates `frontend/public/glossary.json`.
+  Changes content members actually read. The regeneration was not independently
+  re-derived by a reviewer.
+
+**A specific defect in the covering round — read this before trusting it.** A
+Sentinel round was launched over `6b386d7`, `6b95d77`, `114f3af` and is still
+running as this is written. `6b386d7` was then **amended into `16bb15f`** to fix
+an over-strictness bug found in the new override logic (it demanded override
+entries for commits already cleared in `REVIEWED.md`). So the round's report,
+when it arrives, will name a SHA that is not in this history, and its findings
+about the gate will describe the *pre-fix* version of that file. Its verdict must
+NOT be read as coverage of `16bb15f`. Whoever reconciles this should either
+re-run the round against `16bb15f` or diff `6b386d7..16bb15f` and satisfy
+themselves the delta is confined to `is_reviewed()` and its test. This is the
+same failure mode recorded earlier in this project as "a registry entry that
+quietly acquires a new hash is exactly how an unreviewed change would get
+laundered" — recorded here rather than left to be discovered.
+
+**What WAS verified, by the session, not by a reviewer:** `tests/sentinel/gate-check.sh`
+passes 12/12 against the new gate, and against the pre-change gate it fails
+exactly the two scenarios the change targets and passes the other ten — so the
+change is isolated, with no movement in verdict parsing, registry coverage, or
+the FAIL-recording path. `programs/` and `circuits/` are untouched by all three
+commits, so nothing here alters the deployed program.
+
+**Attribution:** this session; unverifiable at the git level, per the user's
+accepted-risk waiver of 2026-08-12.
