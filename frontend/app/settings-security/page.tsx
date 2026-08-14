@@ -270,7 +270,12 @@ function EmbeddedWalletSection({ keystoreReady }: { keystoreReady: boolean }) {
         the device keystore above, and never sent anywhere — no extension, no
         seed phrase to type on a website, no custodian. Once it exists it shows
         up as <strong>AHA Wallet</strong> in the connect button at the top of
-        every page, alongside Phantom and Solflare.
+        every page, alongside whichever other wallets you have installed.
+        {/* F67 / T6 (no endorsements): this sentence used to name Phantom and
+            Solflare, in that fixed order — the same permanent-first-position
+            defect F67 removed from /create, just on a quieter page. The vetted
+            five live in docs/wallets.json and are shuffled by WalletChooser;
+            no wallet gets named here. */}
       </p>
 
       {ready && !address && (
