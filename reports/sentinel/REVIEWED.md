@@ -416,3 +416,63 @@ so requiring it would deadlock the gate permanently.
   the new `browse` field; (4) this feature still has no BACKLOG.md F-number
   and no docs/shipped.md entry (carried forward from the wallet-mobile
   round, not new). Full detail in the NRR.
+- 7c29605 test(F95): cover the mobile wallet path that no committed test
+  exercised. Reviewed in reports/sentinel/NRR-2026-08-14-f95-coverage.md
+  (PASS WITH WARNINGS). Author's own report on their own work, verified
+  independently rather than accepted: confirmed no file under frontend/app,
+  frontend/components, frontend/lib, programs/ or circuits/ is touched
+  (diff --stat against 973d52d is scoped to tests/config/docs/reports only),
+  so the deployed container needed no rebuild -- confirmed unchanged
+  (same image sha256:e8e72582..., created 2026-08-14T20:49:22Z, as the prior
+  round). MUTATION-TESTED all three of mobile-wallet.spec.ts's discriminating
+  assertions against a throwaway node:20 `next dev --webpack` container
+  (production docker image untouched throughout): injecting a foreign fetch
+  turned "contacts no third-party host" red; removing the `browse` filter in
+  mobileWallet.ts's walletBrowserLinks() (offering all 5 wallets instead of
+  the 2 that publish a link) turned "offers every wallet ... and only those"
+  red; dropping encodeURIComponent() turned the deep-link percent-encoding
+  test red. All three mutations reverted (git checkout --), confirmed clean
+  (git status --porcelain empty) and re-verified green against the real
+  deployed site afterward (54/54). Noted for the record: mutating
+  wallets.json's DATA alone (removing a `browse` field) does not fail that
+  second test by design, since the test derives its own expectation from the
+  same file -- it is the CODE path that must regress to trip it, and that was
+  the case exercised. Confirmed mwaWillHang() is genuinely true on the
+  mobile-firefox-android project's exact UA string (isAndroid=true,
+  mobileBrowser='firefox', no stray "chrome" substring), by running the
+  detection logic standalone in node, not merely by reading the assertion.
+  Confirmed chromium's project genuinely excludes mobile-wallet.spec.ts and
+  runs the other 49 (playwright --list, 4 files) while mobile-firefox-android
+  runs exactly the 5 mobile cases and nothing else -- no pre-existing spec
+  silently dropped. Independently NEGATIVE-TESTED e12-wallet-check.sh's new
+  8c section rather than trusting the commit's claim: stripped-placeholder
+  and drifted-copy cases both fail the gate (confirmed fresh, not re-run of
+  the author's own test); additionally probed cases the commit did not claim
+  to have tested -- malformed JSON and an absent wallets.json both fail
+  closed (though via an unhandled Python traceback rather than a clean
+  message -- correct result, poor diagnostic, recorded as a WARNING); a
+  `browse: null` entry correctly holds the gate green, matching the app-side
+  filter's identical treatment of null and absent. All negative-testing
+  reverted; git status clean throughout and at the end. Confirmed
+  docs/wallets.json and frontend/public/wallets.json remain byte-identical
+  and untouched by this commit. Confirmed BACKLOG.md's and docs/shipped.md's
+  F95 rows both disclose the 2-of-5 endorsement residual and the
+  Chromium-not-Gecko detection-vs-proof limitation rather than overclaiming;
+  docs/shipped.md's own honest disclosure of its stale 13-route table (6 live
+  routes missing) was independently confirmed accurate and is carried forward
+  as a WARNING, pre-existing and not caused by this commit. Re-ran: tsc
+  --noEmit clean; full playwright 54/54 (49+5, matching the commit's claim);
+  gate-check.sh 13/13; glossary-check.sh 10/10; privacy-sweep.sh 5/5.
+  programs/ and circuits/ confirmed untouched; anchor test correctly skipped.
+  One incidental, out-of-scope finding surfaced by this review's own tooling
+  (a throwaway npm install), unrelated to 7c29605's diff and reverted before
+  proceeding: frontend/package-lock.json was pinned to version 0.7.7 against
+  package.json's 0.8.1 -- pre-existing drift, not this commit's doing.
+  WARNINGS, not blockers: (1) e12-wallet-check.sh 8c's malformed-input
+  handling fails closed but with a raw traceback and a misattributed
+  co-failure message rather than a clean diagnostic; (2) docs/shipped.md's
+  route table remains stale (pre-existing, honestly disclosed by the author,
+  not this commit's mandate to fix, must shrink in a coming round); (3) the
+  underlying T6 2-of-5 endorsement tension carried from the prior round
+  remains an open, disclosed product question, not a defect. Full detail in
+  the NRR.

@@ -195,7 +195,37 @@ fi
 # ---- 8. wallets.json <-> i18n / doc consistency ------------------------------
 DOCS_WALLETS="docs/wallets.json"
 PUB_WALLETS="$FE/public/wallets.json"
-if [ -f "$DOCS_WALLETS" ] && [ -f "$PUB_WALLETS" ]; then
+
+# Parse ONCE, up front, and fail closed with a sentence.
+#
+# Several checks below shell out to python3 to walk this file. Each did so
+# unguarded, so a missing or hand-broken wallets.json produced a stack trace per
+# check instead of one legible failure — and a gate whose output is a traceback
+# trains the reader to skim past it. Validating here means the sections below can
+# assume a well-formed file, and the operator gets one clear line.
+WALLETS_OK=1
+if ! python3 - "$DOCS_WALLETS" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], 'rb') as fh:
+        d = json.load(fh)
+except OSError as e:
+    print(f"  cannot read {sys.argv[1]}: {e.strerror}")
+    sys.exit(1)
+except json.JSONDecodeError as e:
+    print(f"  {sys.argv[1]} is not valid JSON: {e}")
+    sys.exit(1)
+if not isinstance(d.get('wallets'), list) or not d['wallets']:
+    print(f"  {sys.argv[1]} has no non-empty 'wallets' list")
+    sys.exit(1)
+PY
+then
+  echo "✘ wallets.json is unusable (see above) — every wallet check below is skipped, which is NOT a pass"
+  WALLETS_OK=0
+  fail=$((fail+1))
+fi
+
+if [ "$WALLETS_OK" -eq 1 ] && [ -f "$DOCS_WALLETS" ] && [ -f "$PUB_WALLETS" ]; then
   if diff -q "$DOCS_WALLETS" "$PUB_WALLETS" >/dev/null; then
     echo "✔ docs/wallets.json and frontend/public/wallets.json are byte-identical"
   else
@@ -245,7 +275,9 @@ fi
 # best-effort: if the network is unreachable in this environment it WARNS
 # rather than fails the whole gate, but a confirmed dead link (matching store's
 # own "not found" response) is reported as a functional regression finding.
-if command -v curl >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+if [ "$WALLETS_OK" -ne 1 ]; then
+  echo "! deep-link liveness check skipped — wallets.json is unusable (reported above)"
+elif command -v curl >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
   link_fail=0
   net_reachable=0
   while IFS=$'\t' read -r wid platform url; do
@@ -293,17 +325,35 @@ fi
 # NOT checked: whether the universal link actually opens the app. That is a
 # device property — no HTTP probe from a server can establish it, and pretending
 # otherwise would be exactly the kind of coverage that reads as proof and is not.
-if command -v python3 >/dev/null 2>&1; then
+if [ "$WALLETS_OK" -ne 1 ]; then
+  echo "! browse-field check skipped — wallets.json is unusable (reported above)"
+elif command -v python3 >/dev/null 2>&1; then
   if python3 - "$DOCS_WALLETS" "$FE/public/wallets.json" <<'PY'
 import json, sys
 docs, pub = sys.argv[1], sys.argv[2]
-a, b = open(docs, 'rb').read(), open(pub, 'rb').read()
+# Fail closed with a SENTENCE, not a traceback. A gate whose failure output is a
+# stack trace trains the reader to skim past it, and the two cases that land here
+# — the file is gone, or someone hand-edited it into invalid JSON — are precisely
+# the ones where the message has to be legible at a glance.
+try:
+    a, b = open(docs, 'rb').read(), open(pub, 'rb').read()
+except OSError as e:
+    print(f"  cannot read a wallets.json copy: {e}")
+    sys.exit(1)
 if a != b:
     print("  docs/wallets.json and frontend/public/wallets.json differ")
     sys.exit(1)
+try:
+    parsed = json.loads(a)
+    wallets = parsed['wallets']
+    if not isinstance(wallets, list):
+        raise TypeError("'wallets' is not a list")
+except (json.JSONDecodeError, KeyError, TypeError) as e:
+    print(f"  wallets.json is not valid or has no usable 'wallets' list: {e}")
+    sys.exit(1)
 bad = []
 seen = 0
-for w in json.loads(a)['wallets']:
+for w in wallets:
     br = w.get('browse')
     if br is None:
         continue

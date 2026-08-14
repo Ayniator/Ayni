@@ -3588,3 +3588,123 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
       - cmd: "cd frontend && npx playwright test"
       - cmd: "grep -n 'MENU_DESTINATIONS\\|TWELVE_PAGES' frontend/e2e/twelve.spec.ts"
       - cmd: "docker exec frontend-frontend-1 sh -c \"grep -o 'Listed in random order[^\\\"]*' /app/.next/server/chunks/446.js\""
+
+  - id: F95-COVERAGE-VERIFIED
+    name: "7c29605 -- test(F95): closes the three WARNINGs from
+      NRR-2026-08-14-t6-shuffle.md by adding a mobile-firefox-android
+      Playwright project + frontend/e2e/mobile-wallet.spec.ts (5 cases),
+      e12-wallet-check.sh section 8c (browse-field validation), and BACKLOG/
+      docs/shipped.md F95 rows. Test/config/docs only -- no file under
+      frontend/app, frontend/components, frontend/lib, programs/ or circuits/
+      is touched (confirmed by diff against 973d52d)."
+    shipped_round: f95-coverage (2026-08-14)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-14-f95-coverage.md"
+      - "MUTATION TESTING, not read off the commit's word. Each of the three
+         discriminating assertions in mobile-wallet.spec.ts was independently
+         broken and confirmed red, then reverted (git checkout --), against a
+         throwaway node:20 `next dev --webpack` container (local node is 18;
+         production docker image is unaffected/untouched throughout):
+           1. injected an extra `fetch(\"https://example.com/...\")` into
+              MobileWalletNotice.tsx -> 'contacts no third-party host' failed
+              red, reporting 'example.com (fetch)' -> reverted, confirmed
+              green again against the real deployed site.
+           2. changed walletBrowserLinks()'s filter in mobileWallet.ts to stop
+              gating on `browse` (offering all 5 wallets, not just the ones
+              that publish a link) -> 'offers every wallet that publishes a
+              browse link, and only those' failed red (expected 2 buttons,
+              got 5) -> reverted. NOTE: mutating wallets.json's data ALONE
+              (removing phantom's `browse`) does NOT fail this test, by
+              design -- the test derives its own expectation from the same
+              file, so it correctly tracks a legitimate data change; it is
+              the CODE path (the filter) that must be mutated to exercise the
+              assertion, and that is what was done here.
+           3. dropped encodeURIComponent() on url/ref in
+              walletBrowserLinks() -> 'the deep links keep the port and point
+              back at this site' failed red (received an unencoded href) ->
+              reverted.
+         All three reverts confirmed via `git status --porcelain` (clean) and
+         a full production-build re-run (54/54, deployed site) afterward."
+      - "mwaWillHang() TRUE on the mobile-firefox-android project's exact UA
+         string, confirmed by extracting and running the isAndroid()/
+         mobileBrowser() logic standalone in node against
+         'Mozilla/5.0 (Android 13; Mobile; rv:109.0) Gecko/121.0
+         Firefox/121.0' -- isAndroid=true, mobileBrowser='firefox', no
+         'chrome' substring anywhere in the string to trip the wrong branch.
+         Confirmed live too: the 'warns before the tap' case asserts the
+         is-warning class AND 'will not work' text, which is specifically the
+         hang=true branch, not the generic-mobile softer-hint branch."
+      - "chromium project genuinely excludes the mobile spec and vice versa:
+         `npx playwright test --list --project=chromium` -> 49 tests in 4
+         files (dark-mode, i18n, smoke, twelve.spec.ts -- mobile-wallet.spec.ts
+         correctly absent); `--project=mobile-firefox-android` -> 5 tests in
+         mobile-wallet.spec.ts only. 49+5=54 matches the commit's claim and
+         the full un-filtered run (54 passed). No pre-existing spec file was
+         dropped: `ls frontend/e2e/*.spec.ts` lists exactly the 5 files
+         accounted for above."
+      - "e12-wallet-check.sh 8c NEGATIVE-TESTED FRESH, not trusted from the
+         commit message, each case applied then reverted
+         (git checkout -- docs/wallets.json frontend/public/wallets.json,
+         confirmed clean after every case):
+           - {url} placeholder stripped from phantom's browse in BOTH copies
+             -> gate FAILED, exit 1, 'phantom: browse template is missing
+             {url}'.
+           - one copy drifted (appended a query param to solflare's browse in
+             frontend/public/wallets.json only) -> gate FAILED, exit 1, caught
+             both by the pre-existing byte-identical check and by 8c's own
+             diff.
+           - malformed JSON (both copies replaced with '{not valid json') ->
+             gate FAILED, exit 1 (fails closed), though the failure surfaces
+             as an unhandled Python traceback dumped to stdout rather than a
+             clean message, and mislabels itself against the unrelated
+             'Glow entry missing android link' check -- correct result, poor
+             diagnostic; recorded as a WARNING, not a correctness gap.
+           - docs/wallets.json removed entirely -> gate FAILED, exit 1 (fails
+             closed), same traceback-quality caveat.
+           - browse:null on phantom (both copies) -> gate HOLDS (exit 0).
+             Confirmed this is correct, not a gap: the script's `if br is
+             None: continue` treats null identically to absent, and the
+             app-side filter (`typeof w?.browse === \"string\"`) does too --
+             both sides agree null renders no button, so there is no broken-
+             link path being missed."
+      - "docs/wallets.json and frontend/public/wallets.json confirmed
+         untouched by 7c29605 (absent from `git diff --stat 973d52d
+         7c29605`) and still byte-identical (diff empty)."
+      - "BACKLOG.md F95 row and docs/shipped.md F95 entry both read: neither
+         overclaims. Both explicitly disclose (a) the 2-of-5 endorsement
+         residual ('a captioned randomised 2-of-5 subset still means only
+         Phantom and Solflare ever get a one-tap button') and (b) the
+         Chromium-not-Gecko limitation ('the e2e project emulates the
+         DETECTION path on Chromium; it cannot prove the Gecko handshake
+         fails'). docs/shipped.md separately, honestly, flags its own route
+         table as stale (13 listed, 6 live routes missing) -- a real,
+         disclosed Layer E docs-drift finding, pre-existing and not caused by
+         this commit, carried forward as a WARNING."
+      - "npx tsc --noEmit: clean. Full npx playwright test against the
+         deployed site: 54/54 (49 chromium + 5 mobile), matching the commit's
+         claim exactly. tests/sentinel/gate-check.sh: 13/13.
+         tests/sentinel/glossary-check.sh: 10/10.
+         tests/sentinel/privacy-sweep.sh: 5/5."
+      - "Confirmed programs/ and circuits/ untouched by 7c29605 (git diff
+         --stat empty against 973d52d) -- anchor test correctly skipped, no
+         redeploy required since no file under frontend/app,
+         frontend/components or frontend/lib changed either (confirmed by the
+         same diff)."
+      - "Incidental, out-of-scope finding, unrelated to 7c29605's own diff:
+         frontend/package.json declares version 0.8.1 but
+         frontend/package-lock.json's lockfileVersion-3 root/packages entries
+         were still pinned at 0.7.7 -- surfaced only because npm install
+         inside a throwaway node:20 container silently corrected it; reverted
+         (git checkout -- package-lock.json) before proceeding. Pre-existing
+         drift, not introduced by this commit, noted for completeness."
+    checks:
+      - cmd: "git diff --stat 973d52d 7c29605 -- frontend/app frontend/components frontend/lib programs circuits"
+      - cmd: "cd frontend && npx tsc --noEmit"
+      - cmd: "cd frontend && npx playwright test --list --project=chromium"
+      - cmd: "cd frontend && npx playwright test --list --project=mobile-firefox-android"
+      - cmd: "cd frontend && npx playwright test"
+      - cmd: "bash tests/sentinel/e12-wallet-check.sh"
+      - cmd: "bash tests/sentinel/gate-check.sh"
+      - cmd: "bash tests/sentinel/glossary-check.sh"
+      - cmd: "bash tests/sentinel/privacy-sweep.sh"
+      - cmd: "diff docs/wallets.json frontend/public/wallets.json"
