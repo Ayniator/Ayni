@@ -149,4 +149,6 @@ pub enum AyniError {
     WitnessIsSubject,
     #[msg("The on-chain clock is unusable for calendar arithmetic")]
     ClockUnavailable,
+    #[msg("The sponsor's share must be between 0 and 10000 basis points (0-100%)")]
+    InvalidKarmaRatio,
 }

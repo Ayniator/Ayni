@@ -70,6 +70,10 @@ pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
             // gated on this executed proposal (so the treasury PDA can sign) with
             // the same one-shot `drained` guard as WithdrawTreasury.
         }
+        ProposalAction::SetKarmaParams { .. } => {
+            // Authorization only — the numbers are written in `set_karma_params`,
+            // gated on this executed proposal and one-shot via `drained`.
+        }
     }
 
     proposal.executed = true;

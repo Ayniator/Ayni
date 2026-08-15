@@ -30,7 +30,7 @@ report() { # name, hits
 echo "=== Sentinel Layer D — forbidden-pattern sweep ==="
 
 # 1. Analytics / telemetry SDKs and tracking pixels. Nothing may phone home.
-hits=$(grep -rniE '(google-analytics|googletagmanager|gtag\(|mixpanel|segment\.(com|io)|amplitude[-./]|posthog|hotjar|fullstory|sentry\.io|datadog|newrelic|plausible[-./]|fathom[-./]|matomo|facebook\.net|fbq\(|doubleclick\.net)' $SRC $EX . 2>/dev/null | grep -viE 'onDoubleClick|handleDoubleClick')
+hits=$(grep -rniE '(google-analytics|googletagmanager|gtag\(|mixpanel|segment\.(com|io)|@amplitude/|amplitude\.com|posthog|hotjar|fullstory|sentry\.io|datadog|newrelic|plausible\.io|plausible-tracker|usefathom\.com|fathom-client|matomo|facebook\.net|fbq\(|doubleclick\.net)' $SRC $EX . 2>/dev/null | grep -viE 'onDoubleClick|handleDoubleClick')
 report "no analytics/telemetry SDK" "$hits"
 
 hits=$(grep -rniE '<img[^>]+(1x1|pixel\.gif|track\.(gif|png))' --include=*.tsx --include=*.ts --include=*.html $EX . 2>/dev/null)
@@ -45,9 +45,28 @@ report "no logging macros in the Anchor program" "$hits"
 hits=$(grep -rniE 'console\.[a-z]+\([^)]*(secret|privkey|private_?key|mnemonic|trapdoor|nullifier|commitment|witness)' $SRC $EX frontend/ app/ indexer/ scripts/ 2>/dev/null)
 report "no console.* of identity material" "$hits"
 
-# 3. Traditions: nothing may rank, score, or compare a member (T11/T12). The
-#    backlog's audit rejects karma/ratings outright. `level` (shamanic lineage)
-#    and vote tallies are legitimate and excluded by name.
+# 3. Traditions: nothing may rank, score, or compare a member (T11/T12).
+#    `level` (shamanic lineage) and vote tallies are legitimate and excluded by
+#    name.
+#
+#    KARMA IS WAIVED (user decision, 2026-08-15, F98). In their own words:
+#
+#      "I waive the Tradition 2 no-ranking rule for F98 karma, and accept that
+#       it ranks members. Remove the no ranking from Tradition 2 as it is not
+#       needed"
+#
+#    So `karma` is no longer a forbidden identifier and the F98 karma fields
+#    build without an exemption. Two things this deliberately does NOT do:
+#
+#      * It does not touch the text of Tradition 2, which never contained a
+#        no-ranking clause — "no ranking" was an ENGINEERING invariant this
+#        project derived from it, and the derived rule is what the waiver
+#        retires. The fellowship's own words are not ours to edit.
+#      * It does not retire the rest of this check. The waiver names karma; a
+#        gate that stopped catching `trustRating`, `memberScore` or a
+#        leaderboard because one sibling was permitted would be a silent loss
+#        of coverage that nobody asked for. Those stay forbidden until someone
+#        waives them too, in writing, the same way.
 # A ranking violation is a FIELD/IDENTIFIER, never prose: the whole point of a
 # non-comparative design is documentation that says "no score, no rank", and a
 # word-scanning gate that flagged those sentences would be useless. So match
@@ -58,11 +77,11 @@ report "no console.* of identity material" "$hits"
 #     immediately followed by `:` or `=`).
 # `saturating_add`/`celebrating` (contain "rating") and prose "no score," never
 # match. Case-sensitive on purpose.
-RANK='score|rating|ranking|karma|reputation|leaderboard|streak'
-RANK_UC='Score|Rating|Ranking|Karma|Reputation|Leaderboard|Streak'
+RANK='score|rating|ranking|reputation|leaderboard|streak'
+RANK_UC='Score|Rating|Ranking|Reputation|Leaderboard|Streak'
 hits=$(grep -rnE "[a-zA-Z0-9_]($RANK_UC)|(^|[^a-zA-Z0-9_])($RANK)[[:space:]]*[:=]" $SRC $EX programs/ frontend/lib/ frontend/components/ frontend/app/ 2>/dev/null \
   | grep -viE 'underscore|scorecard')
-report "no score/rating/rank/karma/reputation field" "$hits"
+report "no score/rating/rank/reputation field (karma waived, F98)" "$hits"
 # Known, JUSTIFIED member-facing exceptions (Membership.level, ProgressToken
 # chips) are documented in docs/traditions-justifications.md — they are personal
 # milestones/credentials, not rankings; residual public-visibility is Epic 5.

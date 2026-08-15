@@ -34,6 +34,13 @@ pub fn propose(ctx: Context<Propose>, nonce: u64, action: ProposalAction) -> Res
         ProposalAction::SetTreasuryWallet { new_wallet } => {
             require!(*new_wallet != Pubkey::default(), AyniError::WalletMismatch);
         }
+        ProposalAction::SetKarmaParams { sponsor_ratio_bps, .. } => {
+            // Reject an impossible ratio at PROPOSE time, not only at apply
+            // time: a Council should not spend a contest window approving a
+            // figure the program will refuse. `set_karma_params` re-checks it
+            // anyway — a proposal is data, and data is not trusted twice.
+            require!(*sponsor_ratio_bps <= 10_000, AyniError::InvalidKarmaRatio);
+        }
         ProposalAction::BeginMemberEpoch => {
             // No parameters to validate — the action names the Circle it is
             // proposed against (`Proposal.circle`), and `begin_member_epoch`

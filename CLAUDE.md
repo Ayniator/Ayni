@@ -121,6 +121,49 @@ concealed — `NRR-2026-08-12-f60-f61-verify2`'s Regression 2 should be read wit
 that correction. Refusing to withhold a finding remains the correct instinct and
 must not be discouraged by having been mistaken about the source once.
 
+## Waiver — karma ranks members (user decision, 2026-08-15, F98)
+
+**Granted by the user, in their own words:**
+
+> "I waive the Tradition 2 no-ranking rule for F98 karma, and accept that it
+> ranks members. Remove the no ranking from Tradition 2 as it is not needed"
+
+Recorded here at the moment it was made, per the lesson in the section above:
+a decision sent to one agent is invisible to the others, so a governance
+decision belongs in the shared record immediately.
+
+**What this authorises.** F98 may add a per-person `karma` total to member
+state, credited when a sponsorship is accepted (`karmaGainSponsee` to the
+sponsee, `karmaGainSponsee × karmaGainSponsorRatio` to the sponsor), with those
+parameters and `minSponsorsRequired` editable by the Foundation Council through
+the ordinary 4-of-7 governance path. `karma` has been removed from the forbidden
+identifier list in `tests/sentinel/privacy-sweep.sh`. Sentinel rounds should
+**not** raise karma as a Traditions CRITICAL; it is a settled decision.
+
+**What it does NOT authorise — the drafting agent's reading, not the user's
+words, kept because a waiver with no stated limits tends to grow. The user is
+free to widen any of it:**
+
+- **It does not change the text of Tradition 2.** That text — "AHA has no
+  leaders, but trusted servants; they assist but do not govern" — contains no
+  ranking clause. "No ranking" was an *engineering invariant this project
+  derived* from it, and the derived rule is what the waiver retires. The
+  fellowship's own words were not edited and should not be, absent a separate
+  and explicit instruction to do so.
+- **It does not retire the rest of the ranking gate.** `score`, `rating`,
+  `ranking`, `reputation`, `leaderboard` and `streak` remain forbidden
+  identifiers. The waiver names karma; letting its siblings through because one
+  was permitted would be a silent loss of coverage nobody asked for.
+- **It does not waive the per-person-counter rule elsewhere.**
+  `docs/presence.md`'s live-state rules for F59 are untouched: a `Presence`
+  account still holds one overwritten scalar and no count, and any *other*
+  feature introducing a per-person counter is still a CRITICAL until waived in
+  writing the same way.
+- **It does not make karma private.** A karma total on a member-derivable
+  account is publicly readable and publicly comparable — that is what "accept
+  that it ranks members" means, and onboarding copy should say so plainly
+  rather than let a member discover it.
+
 ## Non-regression (mandatory)
 
 **After every implementation round, run Sentinel** — the non-regression agent

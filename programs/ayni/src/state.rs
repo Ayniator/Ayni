@@ -1363,3 +1363,171 @@ pub struct Presence {
 impl Presence {
     pub const SPACE: usize = 8 + 4 + 1;
 }
+
+// ---------------------------------------------------------------------------
+// F98 — sponsorship karma.
+//
+// TRADITIONS NOTE, WRITTEN HERE SO IT IS NOT DISCOVERED LATER IN A DIFF. Every
+// other per-person counter in this program is forbidden: `docs/presence.md`
+// states that any feature introducing one is a CRITICAL, and Sentinel's Layer-D
+// sweep failed the build on the word `karma` until 2026-08-15. This account
+// exists because the user waived that rule explicitly, in their own words:
+//
+//   "I waive the Tradition 2 no-ranking rule for F98 karma, and accept that it
+//    ranks members. Remove the no ranking from Tradition 2 as it is not needed"
+//
+// The waiver is recorded in CLAUDE.md. What it costs, stated plainly rather than
+// implied: a `Karma` PDA is derivable from a membership commitment, and
+// commitments are already enumerable, so ANY observer can build a complete
+// ranked table of a Circle with no special access. That is not a leak in this
+// design — it is the design, and it is what "accept that it ranks members"
+// means. Onboarding copy must say so before a member earns their first point.
+//
+// The waiver is scoped to karma. It does not license a second counter.
+#[account]
+pub struct Karma {
+    /// Total points. Saturating — a member's karma never wraps or goes negative.
+    pub points: u64,
+    pub bump: u8,
+}
+
+impl Karma {
+    pub const SPACE: usize = 8 + 8 + 1;
+}
+
+/// Per-Circle karma policy, editable only by an executed 4-of-7
+/// `SetKarmaParams` proposal (group conscience, Tradition 2's "trusted
+/// servants" acting for the group rather than an owner key).
+///
+/// Absent for a Circle that has never voted on it, in which case the DEFAULTS
+/// below apply — so karma works from day one without a governance step, and a
+/// Circle that wants different numbers votes for them.
+#[account]
+pub struct KarmaParams {
+    /// Points credited to the sponsee when a sponsorship Link is accepted.
+    pub gain_sponsee: u64,
+    /// The sponsor's share, in basis points of `gain_sponsee` (1000 = 10%).
+    /// Basis points rather than a float: there are no floats on chain, and a
+    /// ratio expressed as an integer cannot round differently on two machines.
+    pub sponsor_ratio_bps: u16,
+    /// The community-recommended minimum number of sponsors. ADVISORY ONLY —
+    /// nothing in this program refuses an action for falling below it, and
+    /// nothing should start to without a separate decision. It exists so the
+    /// UI's hint has a governed source rather than a hardcoded constant.
+    pub min_sponsors: u8,
+    pub bump: u8,
+}
+
+impl KarmaParams {
+    pub const SPACE: usize = 8 + 8 + 2 + 1 + 1;
+
+    /// Defaults, used when a Circle has no `KarmaParams` account. These are the
+    /// figures from the F98 request: 100 to the sponsee, 10% of that to the
+    /// sponsor, two sponsors recommended.
+    pub const DEFAULT_GAIN_SPONSEE: u64 = 100;
+    pub const DEFAULT_SPONSOR_RATIO_BPS: u16 = 1_000; // 10.00%
+    pub const DEFAULT_MIN_SPONSORS: u8 = 2;
+
+    /// The sponsor's credit for a given sponsee gain. Integer maths throughout:
+    /// `gain * bps / 10_000`, which truncates rather than rounding — a member
+    /// can never be credited a point the arithmetic did not earn.
+    pub fn sponsor_gain(gain_sponsee: u64, sponsor_ratio_bps: u16) -> u64 {
+        (gain_sponsee as u128)
+            .saturating_mul(sponsor_ratio_bps as u128)
+            .saturating_div(10_000) as u64
+    }
+}
+
+/// F98 — proof that a given (sponsee, sponsor) pair has ALREADY been credited.
+///
+/// WHY THIS EXISTS, because without it the feature is a faucet.
+/// `establish_wing_peer` is `init_if_needed` and `end_wing_peer` only flips a
+/// flag, so a pair can link, release and re-link as often as they like. If karma
+/// were credited on every establish, two members could sit in a loop and mint
+/// each other an unbounded total — and since karma now ranks members, that is
+/// not a cosmetic bug, it is the ranking being meaningless.
+///
+/// So the credit is once per pair, FOREVER: keyed by both commitments, and a
+/// released-then-restored Link pays nothing the second time. Re-establishing is
+/// still allowed — it simply is not paid for again.
+///
+/// The account is thirteen bytes and its mere existence is the record; `credited`
+/// is stored anyway rather than relying on existence alone, so that a future
+/// change which creates this PDA for some other reason cannot silently be read
+/// as "already paid".
+#[account]
+pub struct KarmaAward {
+    pub credited: bool,
+    pub bump: u8,
+}
+
+impl KarmaAward {
+    pub const SPACE: usize = 8 + 1 + 1;
+}
+
+#[cfg(test)]
+mod karma_tests {
+    use super::*;
+
+    /// The request's own figures: 100 to the sponsee, 10% of that to the sponsor.
+    #[test]
+    fn the_requested_defaults_produce_the_requested_numbers() {
+        let gain = KarmaParams::DEFAULT_GAIN_SPONSEE;
+        assert_eq!(gain, 100);
+        assert_eq!(
+            KarmaParams::sponsor_gain(gain, KarmaParams::DEFAULT_SPONSOR_RATIO_BPS),
+            10
+        );
+    }
+
+    /// Basis points, not floats — and truncating, so nobody is credited a point
+    /// the arithmetic did not earn.
+    #[test]
+    fn the_sponsor_share_truncates_rather_than_rounding_up() {
+        // 9 * 10% = 0.9 -> 0, not 1.
+        assert_eq!(KarmaParams::sponsor_gain(9, 1_000), 0);
+        // 15 * 10% = 1.5 -> 1, not 2.
+        assert_eq!(KarmaParams::sponsor_gain(15, 1_000), 1);
+        // An exact multiple is exact.
+        assert_eq!(KarmaParams::sponsor_gain(250, 1_000), 25);
+    }
+
+    #[test]
+    fn the_extremes_behave() {
+        assert_eq!(KarmaParams::sponsor_gain(100, 0), 0, "0% credits nothing");
+        assert_eq!(
+            KarmaParams::sponsor_gain(100, 10_000),
+            100,
+            "100% credits the same as the sponsee"
+        );
+    }
+
+    /// The intermediate multiply is done in u128, so a large gain and a large
+    /// ratio cannot overflow into a small, plausible-looking number — which for
+    /// a ranking would be worse than an obviously wrong one.
+    #[test]
+    fn a_huge_gain_does_not_wrap() {
+        let huge = u64::MAX;
+        assert_eq!(KarmaParams::sponsor_gain(huge, 10_000), huge);
+        // Half of u64::MAX, computed without wrapping.
+        assert_eq!(KarmaParams::sponsor_gain(huge, 5_000), huge / 2);
+    }
+
+    /// Totals saturate rather than wrapping. Mirrors what establish_wing_peer
+    /// does with `saturating_add`.
+    #[test]
+    fn a_total_saturates_instead_of_wrapping_to_a_small_number() {
+        let mut points: u64 = u64::MAX - 5;
+        points = points.saturating_add(100);
+        assert_eq!(points, u64::MAX, "a saturated total stays at the maximum");
+    }
+
+    /// Thirteen and eighteen bytes. Pinned so a field cannot be added without
+    /// the size change being deliberate — the same discipline `Presence` uses.
+    #[test]
+    fn the_accounts_are_the_size_they_claim() {
+        assert_eq!(Karma::SPACE, 8 + 8 + 1);
+        assert_eq!(KarmaAward::SPACE, 8 + 1 + 1);
+        assert_eq!(KarmaParams::SPACE, 8 + 8 + 2 + 1 + 1);
+    }
+}

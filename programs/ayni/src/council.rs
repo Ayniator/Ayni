@@ -116,6 +116,19 @@ pub enum ProposalAction {
     /// program, so it now costs 4-of-7 plus the contest window every other
     /// high-stakes action pays. Executed by `begin_member_epoch`.
     BeginMemberEpoch,
+    /// F98 — set the Circle's karma policy: points credited to a sponsee when a
+    /// sponsorship Link is accepted, the sponsor's share in basis points, and
+    /// the advisory recommended-minimum number of sponsors. Group conscience
+    /// over the numbers, rather than a constant one developer chose. Executed by
+    /// `set_karma_params`.
+    ///
+    /// Karma ranks members. That is a waived Tradition 2 rule, not an oversight
+    /// — see CLAUDE.md and `state::Karma`.
+    SetKarmaParams {
+        gain_sponsee: u64,
+        sponsor_ratio_bps: u16,
+        min_sponsors: u8,
+    },
 }
 
 impl ProposalAction {

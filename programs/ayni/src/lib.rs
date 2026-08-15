@@ -250,6 +250,18 @@ pub mod ayni {
         instructions::set_treasury_wallet(ctx)
     }
 
+    /// F98 — write the Circle's karma policy (points to a sponsee on accepting a
+    /// Link, the sponsor's share in basis points, and the ADVISORY recommended
+    /// minimum number of sponsors), authorized by an executed 4-of-7
+    /// `SetKarmaParams` proposal.
+    ///
+    /// Karma ranks members. That is a Tradition 2 rule the user waived
+    /// explicitly on 2026-08-15 (see CLAUDE.md and `state::Karma`), not an
+    /// oversight — and the waiver is scoped to karma alone.
+    pub fn set_karma_params(ctx: Context<SetKarmaParams>) -> Result<()> {
+        instructions::set_karma_params(ctx)
+    }
+
     /// Publish/replace a Circle's meeting calendar (recurring + sessions JSON).
     pub fn set_meetings(ctx: Context<SetMeetings>, data: String) -> Result<()> {
         instructions::set_meetings(ctx, data)
