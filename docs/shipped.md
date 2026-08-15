@@ -18,6 +18,65 @@
 
 ---
 
+## F59 — ZK presence attestation, on chain (2026-08-15)
+
+Verification: `code` + `built` (`cargo build-sbf`, clean) + `exec` — 36/36
+in-crate Rust tests and 12/12 real Groth16 proof tests
+(`node tests/presence-zk.test.mjs`, offline, no validator).
+
+Design of record: `docs/presence.md`, written before the code because F59
+required an explicit amendment to an Epic 4 rule. The amendment and its cost
+(ledger archaeology — `getSignaturesForAddress` on a derivable PDA yields a
+per-person count no on-chain design can retract) are recorded there as accepted
+risk by user decision, and Sentinel should not re-raise them as CRITICAL each
+round.
+
+**Two instructions, both wired into `lib.rs` this round.**
+
+- `attest_presence_zk` — two anonymous Groth16 proofs under the **same**
+  external nullifier `E = SHA-256("AHA-presence-month" ‖ circle ‖ commitment ‖
+  month_le32)`, masked into the BN254 field. The subject consents by proving
+  against `merkle::single_leaf_root(commitment)`, computed **in the program** so
+  the caller cannot substitute a tree they control; a fellow member vouches by
+  proving against `member_tree.root` or an F54 `RecentRoots` entry. Requiring the
+  two nullifiers to differ is what proves two different people acted — strictly
+  stronger than `confirm_admission`, which concedes the distinct-persons rule
+  downgrades to circle-visible for anonymous attestations.
+- `clear_presence` — the subject erases their own record under
+  `"AHA-presence-clear"`, closing the account so that erased and never-claimed
+  are identical **in live state**. One proof, not two: requiring a witness to
+  erase would let a member be held to a record because no fellow member would sit
+  with them. The month erased is read from the account, never from an argument,
+  so a proof cannot be aimed at a record it did not authorise.
+
+**State.** `Presence { last_month: u32, bump: u8 }`, `SPACE = 13`, PDA
+`["presence", circle, subject_commitment]`, `init_if_needed` so a first
+attestation and a later one are indistinguishable in cost and shape. No
+timestamp, no count, no `first_month`, no `Vec`, no witness identity — each
+absence justified in `docs/presence.md` §3.
+
+**Months.** `programs/ayni/src/month.rs` coarsens `Clock` to a month index on
+chain (Howard Hinnant's `civil_from_days`, UTC, no per-Circle timezone because a
+timezone is a coarse location). Only a **closed** month may be attested and each
+write must strictly advance. Six unit tests including a day-by-day walk over 40
+years asserting the index never goes backwards or jumps.
+
+**What the tests establish, beyond "it compiles".** `tests/presence-zk.test.mjs`
+generates real proofs and demonstrates the attack each rule prevents rather than
+asserting the rule holds: self-attestation collapses to one nullifier under the
+shared `E`; two proofs under *different* `E`s would let one member fake two,
+which is why `E` is computed once and shared; a March proof does not verify as
+April; an attestation proof does not verify as an erasure; a fellow member who
+knows the subject's commitment still cannot forge consent. Both the Rust and the
+JS implementations of the external nullifier are pinned to the same frozen
+vectors, so they cannot drift apart silently. Mutation-tested by collapsing the
+two domain tags: two Rust tests and two JS tests went red, then green on revert.
+
+**Not yet built:** the browser prover, the QR handoff, and the `/member` presence
+line. Nothing in the UI reads a `Presence` account yet.
+
+---
+
 ## F67 / F68 / Glossary — Resources menu, wallet chooser, glossary page (2026-08-14)
 
 Verification: `code` + `built` (frontend `tsc --noEmit`, `next build`), `exec`

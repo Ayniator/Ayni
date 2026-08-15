@@ -13,6 +13,7 @@ pub mod council;
 pub mod errors;
 pub mod instructions;
 pub mod merkle;
+pub mod month;
 pub mod state;
 pub mod verifying_key;
 pub mod verifying_key_ack;
@@ -86,6 +87,63 @@ pub mod ayni {
         proof_c: [u8; 64],
     ) -> Result<()> {
         instructions::attest_admission_zk(ctx, newcomer_commitment, root, nullifier, proof_a, proof_b, proof_c)
+    }
+
+    /// F59 — "last stood in circle: March 2026", vouched by a fellow member.
+    ///
+    /// Two anonymous Groth16 proofs under the SAME external nullifier: the
+    /// subject consents (proving against `single_leaf_root(commitment)`) and a
+    /// fellow member vouches (proving against the member tree). Requiring the
+    /// two nullifiers to differ is what proves two different people acted.
+    ///
+    /// Reuses the shipped `member_vote` key — no new circuit, no new ceremony.
+    /// Two verifications do NOT fit the 200k default compute budget; the client
+    /// must prepend a `SetComputeUnitLimit`. See `docs/presence.md`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn attest_presence_zk(
+        ctx: Context<AttestPresenceZk>,
+        subject_commitment: [u8; 32],
+        month_index: u32,
+        witness_root: [u8; 32],
+        subject_nullifier: [u8; 32],
+        witness_nullifier: [u8; 32],
+        subject_proof_a: [u8; 64],
+        subject_proof_b: [u8; 128],
+        subject_proof_c: [u8; 64],
+        witness_proof_a: [u8; 64],
+        witness_proof_b: [u8; 128],
+        witness_proof_c: [u8; 64],
+    ) -> Result<()> {
+        instructions::attest_presence_zk(
+            ctx,
+            subject_commitment,
+            month_index,
+            witness_root,
+            subject_nullifier,
+            witness_nullifier,
+            subject_proof_a,
+            subject_proof_b,
+            subject_proof_c,
+            witness_proof_a,
+            witness_proof_b,
+            witness_proof_c,
+        )
+    }
+
+    /// F59 — the subject erases their own presence record, closing the account
+    /// so that erased and never-claimed are identical in live state. One proof,
+    /// not two: erasing is a claim about nothing, and requiring a witness would
+    /// let a member be held to a record because no fellow member would sit with
+    /// them. The month erased is read from the account, never from an argument.
+    pub fn clear_presence(
+        ctx: Context<ClearPresence>,
+        subject_commitment: [u8; 32],
+        nullifier: [u8; 32],
+        proof_a: [u8; 64],
+        proof_b: [u8; 128],
+        proof_c: [u8; 64],
+    ) -> Result<()> {
+        instructions::clear_presence(ctx, subject_commitment, nullifier, proof_a, proof_b, proof_c)
     }
 
     /// F54a — record the current member root into the recent-roots ring buffer

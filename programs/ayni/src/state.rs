@@ -1329,3 +1329,37 @@ pub struct MaciSignup {
 impl MaciSignup {
     pub const SPACE: usize = 8 + 32 + 32 + 8 + 8 + 1;
 }
+
+/// F59 — "last stood in circle: March 2026". ONE account, THIRTEEN bytes.
+///
+/// The design of record is `docs/presence.md`; read it before changing this
+/// struct, because most of the design is in what the struct REFUSES to hold.
+///
+/// | Not stored | Why |
+/// |---|---|
+/// | any timestamp | a written-at time is finer-grained than the month promised |
+/// | any count / total / streak | the thing Epic 4 forbids — there must be no field to increment |
+/// | `first_month` | two scalars make a span, and a span is a duration to compare |
+/// | any `Vec` | a list is a history, and a history can be summed |
+/// | the witness | anonymous by construction; storing them recreates a social edge |
+/// | `circle` / `member` | already PDA seeds; repeating them adds a memcmp handle for enumeration |
+///
+/// `last_month` is OVERWRITTEN, never appended to. That is the whole privacy
+/// argument in live state: there is no field here whose value grows with
+/// attendance, so no query over this account can rank one member above another.
+///
+/// What this does NOT achieve, stated here and not only in the doc: the ledger
+/// still records that a write happened, so `getSignaturesForAddress` on this PDA
+/// counts a member's attested months exactly. That residual is accepted by
+/// explicit user decision (2026-08-14) and is scoped to F59 alone — any OTHER
+/// feature introducing a per-person counter remains a CRITICAL.
+#[account]
+pub struct Presence {
+    /// Months since 1970-01 (see `crate::month`). Strictly increasing.
+    pub last_month: u32,
+    pub bump: u8,
+}
+
+impl Presence {
+    pub const SPACE: usize = 8 + 4 + 1;
+}

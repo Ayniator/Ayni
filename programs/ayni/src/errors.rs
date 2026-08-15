@@ -141,4 +141,12 @@ pub enum AyniError {
     EpochNotSettled,
     #[msg("Too few members for a group conscience — grow the circle, or have a seat of the parent Circle co-sign the ballot")]
     ElectorateTooSmall,
+    #[msg("Only a month that has already closed may be attested — the current month narrows a member to a window a meeting calendar can resolve")]
+    MonthNotClosed,
+    #[msg("A presence record only moves forward — this month is not later than the one already recorded")]
+    MonthWentBackwards,
+    #[msg("The subject and the witness must be two different people — the two proofs carry the same nullifier")]
+    WitnessIsSubject,
+    #[msg("The on-chain clock is unusable for calendar arithmetic")]
+    ClockUnavailable,
 }
