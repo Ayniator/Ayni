@@ -666,3 +666,119 @@ so requiring it would deadlock the gate permanently.
   exactly one signable seat plus the Foundation with four, so the original
   claim stands and the disagreement is recorded rather than deferred to.
   No application code, no behavioural change to the frontend.
+- b3c4046ebe8007e88701a4f0ff59c4fb69ef5fb8 content(traditions): three wording changes to the Twelve Traditions
+  Covered by NRR-2026-08-15-f98-karma.md (PASS WITH WARNINGS). All three
+  changed keys (twelve.tradition.3/.8/.11) verified present and correctly
+  changed across all 19 locale blocks (38 diff lines each = 19 old + 19 new);
+  twelve.tradition.2 verified untouched (0 diff lines) in both this commit and
+  982532075d2a3cf403a2839c45962622d0a888c8. A full-file CJK-contamination
+  sweep found no stray CJK characters outside the zh: locale block (the three
+  remaining 靠 occurrences are legitimate Chinese, confirmed by locale-block
+  position) -- the stray Dzongkha 靠 the commit says it fixed before commit is
+  confirmed absent. Tradition 11's 18 non-English strings are flagged as an
+  unverified machine re-translation (structural integrity checked, fidelity
+  not). WARNING (not FAIL): neither this commit nor 982532075d2a3cf... has a
+  docs/shipped.md entry.
+- 982532075d2a3cf403a2839c45962622d0a888c8 feat(F98): sponsorship karma, built under an explicit Tradition 2 waiver
+  Covered by NRR-2026-08-15-f98-karma.md (PASS WITH WARNINGS). The Tradition 2
+  waiver (CLAUDE.md, user, 2026-08-15) is accepted as a settled decision and
+  karma itself is NOT raised as a Traditions CRITICAL, per this round's
+  instructions. Confirmed the waiver was applied narrowly: privacy-sweep.sh
+  still fails on planted `memberScore`/`trustRating` siblings (scratch file
+  created, gate confirmed red, deleted -- git status clean before and after);
+  Tradition 2's text is byte-identical across all 19 locales; docs/presence.md
+  is untouched. 42/42 Rust incl. 6 new karma_tests; 6/6 tests/karma.ts on a
+  fresh local validator; mutation `if !award.credited` -> `if true` reproduced
+  independently (3/6 karma.ts cases go red exactly as the commit claims),
+  reverted via `git checkout --` on the single touched file, rebuilt,
+  redeployed, reconfirmed 6/6 green, working tree clean throughout.
+  CRITICAL-SEVERITY FUNCTIONAL FINDING (not a Traditions/privacy CRITICAL --
+  reported as a regression against the commit's OWN stated guarantee):
+  KarmaAward is seeded by DIRECTED role (mentee, wing), not a canonicalised
+  pair, so the same two members can each sponsor the other once (two
+  individually-legitimate transactions) and collect a COMBINED 220 karma
+  against the 110 a single directed sponsorship should cap the pair at --
+  reproduced live on a local validator (A=110, B=110 after a role swap; not
+  a case tests/karma.ts covers). "Once per pair, forever" is not true as
+  shipped; it is once per directed pair. See NRR for full detail and
+  suggested remediation (fix is the main agent's job, not Sentinel's).
+  set_karma_params's bounds/one-shot/cross-circle guards, the bump==0
+  sentinel, the u128 arithmetic, and the SPACE constants were all reviewed
+  and found sound. docs/shipped.md is stale (still says karma is "Not built"
+  and awaiting a waiver); BACKLOG.md's F98 row is unamended -- WARNING.
+- 5229e23cc4afee4e9658366bd6de8ab38b67309a fix(F98): the karma pair-guard was directional; a role swap paid twice
+  Covered by NRR-2026-08-15-f99-map-marker.md (PASS WITH WARNINGS). This is
+  the fix for the CRITICAL the f98-karma round found. Confirmed the fix
+  genuinely closes it: KarmaAward::lo/hi sorts the two commitments so both
+  call orders derive the identical PDA (checked directly via
+  findProgramAddressSync, no chain call needed). Adversarially probed beyond
+  the shipped test on a local validator (scratch file, run, deleted, not
+  committed) -- PDA derivation both directions equal; a three-member ring
+  (A wings B, B wings C, C wings A) credits three genuinely distinct pairs
+  once each, re-running the ring or reversing any edge pays nothing further;
+  a different, unrelated rent-payer funding a role-swapped call does not
+  create a second award; the same two commitments linked in two different
+  Circles credit independently in each (documented, accepted per-Circle
+  scope, not a bypass within one Circle). No remaining double-credit path
+  found. MUTATION per the round's own instruction: restored the directional
+  seed in BOTH establish_wing_peer.rs and the matching client derivation in
+  tests/karma.ts, ran `anchor build` (not `cargo build-sbf`, which does not
+  regenerate the IDL), redeployed to a fresh local validator -- 6 passing / 1
+  failing, exact predicted message ("a role swap paid the pair a second time
+  -- the award seed is directional again"); reverted both files via
+  `git checkout --`, rebuilt, redeployed, reconfirmed 7/7 green throughout,
+  git status clean before and after. KarmaAward::lo/hi ordering confirmed
+  total (lexicographic over [u8;32], mentee != wing enforced by the caller so
+  never equal) and collision-free (lo/hi are pure selection, so (lo,hi)
+  uniquely recovers the set {a,b}). 42/42 Rust unchanged. WARNING (minor):
+  lo/hi have no dedicated Rust #[test] of their own, proven only at
+  integration level this round.
+- 758c7836b17c40f15fc573445991958c4cf82c57 feat(F99): a bookmark pin for "You are here", not an identicon
+  Covered by NRR-2026-08-15-f99-map-marker.md (PASS WITH WARNINGS). Six
+  independent mutations (not a replay of the author's own six): remote
+  iconUrl, identicon restored on the own-position marker, popup hardcoded to
+  English, one locale's home.youAreHere key deleted, one locale left holding
+  the English string, an external <image> planted in the SVG -- all six
+  caught by tests/sentinel/map-marker-check.sh (15/15 baseline), all
+  reverted via `git checkout --` on exactly the mutated file, git status
+  clean after each and at round end. PRIVACY independently verified live (not
+  just by reading source): a standalone Playwright script against the
+  deployed container (https://aha.a13z.org:8443), geolocation permission
+  granted with a faked Paris coordinate, recorded every outbound request,
+  console message and full storage dump after the location flow ran -- the
+  fake coordinate appeared in zero requests, zero storage keys, zero console
+  messages across 115 total requests; every request resolved to aha.a13z.org
+  or *.tile.openstreetmap.org (z/x/y tile-index form, never raw lat/lon), no
+  other host contacted. curl against the live site confirms /img/you-are-here.svg
+  is served from our own origin, 525 bytes, matching docs/credits.md's own
+  count. i18n-key-check.sh passes; home.youAreHere present in all 19 locales,
+  exactly one (en) holding the English literal; all 18 non-English values are
+  structurally plausible translations on inspection -- HONESTLY FLAGGED as
+  machine translations, fidelity unverified by a native speaker (dz's
+  slightly irregular spacing noted as a minor quality observation only,
+  cannot actually read Dzongkha). Confirmed generateJazziconSvg import intact
+  and still used for Circle markers; no wallet-avatar file (Identicon.tsx)
+  appears anywhere in the commit's diff. docs/credits.md's "licence NOT
+  VERIFIED -- attribution given anyway" disposition judged honest and
+  reasonable, not a blocker, tracked as an open item pending the source URL.
+  Full regression sweep clean: 42/42 Rust, 12/12 presence-zk, 5/5
+  badge-count, tsc clean, 69/69 Playwright against the deployed container
+  (already serving the F99 change), privacy-sweep.sh 5/5,
+  no-third-party-assets-check.sh 4/4, f35r2-wing-gate.sh 9/9 (confirms F98's
+  seed change in the same round didn't disturb it), npm audit 0 critical.
+  WARNING (recurring, same pattern as the prior round): neither commit has a
+  docs/shipped.md or BACKLOG.md entry for F99 itself (5229e23 did correctly
+  update both for the F98 fix).
+
+- 41db5b0 docs(F99): close the round's two warnings
+  Post-round follow-up to f99-map-marker, named here because it touches tracked
+  non-bookkeeping files (programs/ayni/src/state.rs, BACKLOG.md,
+  docs/shipped.md). The program change is TEST-ONLY: three unit tests added to
+  the existing `karma_tests` module pinning KarmaAward::lo/hi (order
+  independence, non-collision of distinct pairs, and a total/stable ordering
+  where commitments differ only in the first or last byte). No behavioural
+  delta; `cargo build-sbf` clean, 45/45 Rust. The BACKLOG/shipped edits add the
+  F99 row the round found missing, carrying both residuals openly: the 18
+  non-English `home.youAreHere` strings are unverified machine translations, and
+  docs/credits.md attributes the SVG provisionally because its SVG Repo licence
+  could not be identified from bare path data.

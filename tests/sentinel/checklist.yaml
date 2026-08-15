@@ -3999,3 +3999,401 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
          become your sponsor via a single tap) is explicitly left open by
          the commit itself (needs a two-way handshake) -- tracked, not a
          gap in this round's coverage."
+
+  - id: F98-KARMA
+    name: "F98 -- sponsorship karma, built under an EXPLICIT, narrowly-scoped
+      Tradition 2 waiver (user, 2026-08-15, recorded in CLAUDE.md). Three
+      accounts: Karma [\"karma\", circle, commitment] (one saturating u64,
+      17 bytes incl. discriminator), KarmaParams [\"karmaparams\", circle]
+      (gain_sponsee: u64, sponsor_ratio_bps: u16, min_sponsors: u8 ADVISORY
+      ONLY, 20 bytes, init_if_needed with defaults 100/1000bps/2 materialised
+      on the first Link and overwritable only by an executed 4-of-7
+      SetKarmaParams proposal), KarmaAward [\"karmaaward\", circle, mentee,
+      wing] (10 bytes, the once-per-DIRECTED-pair anti-farm guard). Sentinel
+      does NOT re-litigate the waiver -- karma ranking members is a settled
+      decision -- and instead adversarially tested the guard's actual shape."
+    shipped_round: f98-karma (2026-08-15)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-f98-karma.md"
+      - "cargo test --manifest-path programs/ayni/Cargo.toml -- 42/42,
+         including the 6 new state::karma_tests (defaults, truncation,
+         extremes, u128 non-wrap, saturating total, SPACE arithmetic)."
+      - "tests/karma.ts on a local validator -- 6/6 as claimed (first-Link
+         defaults, re-establish pays nothing, release/re-link x3 pays
+         nothing, Council vote changes the rate for a NEW pair only,
+         propose-time ratio bound, advisory minimum gates nothing)."
+      - "MUTATION, reproduced independently this round: `if !award.credited`
+         -> `if true` in establish_wing_peer.rs turns 3 of the 6 karma.ts
+         cases red (re-establish pays double, release/re-link farms to 500,
+         Council-vote case picks up the stale double-credit) -- exactly the
+         claim in the commit message. Reverted via `git checkout --` on the
+         single file (working tree was clean before and after; the file was
+         the only local change); `git status` clean, rebuilt, redeployed,
+         confirmed 6/6 green again before continuing."
+      - "PRIVACY-SWEEP SCOPE, reproduced adversarially: planted
+         frontend/lib/__sentinel_scratch_karma_siblings.ts exporting
+         `memberScore` and `trustRating`; tests/sentinel/privacy-sweep.sh
+         correctly FAILED (exit 1, CRITICAL) on the siblings while `karma`
+         itself passes clean. Scratch file deleted immediately after; gate
+         re-run clean; git status confirmed clean."
+      - "Tradition 2 TEXT check: `git show 9825320|8257b18..HEAD -- ...
+         i18n.generated.ts` -- zero lines touching any
+         \"twelve.tradition.2\" key in any of the 19 locale blocks, across
+         both b3c4046 and 9825320. Only .3/.8/.11 changed, and only in
+         b3c4046 (a separate, non-karma commit)."
+      - "docs/presence.md per-person-counter rule: untouched by this round
+         (last modified 6b95d77, well before b3c4046/9825320); still reads
+         as a live CRITICAL gate for any OTHER feature."
+    findings_this_round:
+      - "CRITICAL-SEVERITY FUNCTIONAL BUG (not a Traditions/privacy
+         CRITICAL -- karma ranking is waived; this is the guard's own
+         integrity), REPRODUCED LIVE on a local validator, NOT in the
+         committed test suite: KarmaAward is seeded
+         [\"karmaaward\", circle, mentee_membership.commitment,
+         wing_membership.commitment] -- i.e. by DIRECTED role, not by an
+         order-independent (canonicalised/sorted) pair. establish_wing_peer
+         only requires mentee != wing and that the SIGNER control the
+         mentee side; nothing stops the same two members from later calling
+         it again with roles swapped (B sponsors A after A sponsored B).
+         That produces a SECOND, distinct KarmaAward PDA -- credited=false,
+         so it pays out again. Demonstrated end to end: A wings B (A=10,
+         B=100), then B wings A (roles swapped) -> A=110, B=110, a COMBINED
+         total of 220 against the 110 a single directed sponsorship should
+         cap this pair at. Any two colluding members can double their
+         combined take with two ordinary, individually-legitimate
+         transactions -- no farming loop, no release/re-link, nothing the
+         existing guard or its test suite exercises. The commit message's
+         own framing (\"THE GUARD IS THE POINT... once per pair, forever\")
+         is not true as shipped: it is once per DIRECTED pair. NOT covered
+         by tests/karma.ts (no role-swap case exists). Reported, not fixed,
+         per Sentinel's mandate; recommend either canonicalising the
+         KarmaAward seed (e.g. lexicographically ordered commitment pair)
+         or an explicit require! that a WingPeer/KarmaAward does not
+         already exist in the reverse direction, plus a regression test
+         asserting the pair's COMBINED total after a role swap."
+      - "DOCS DRIFT (Layer E, WARNING): docs/shipped.md still states (lines
+         65-68, in the F97 entry) 'Not built: karma... awaits an explicit
+         written waiver' -- stale as of 9825320, which built it under a
+         now-granted waiver. Neither commit in this round's scope
+         (b3c4046's Traditions wording change, 9825320's karma feature) has
+         its own docs/shipped.md entry, and BACKLOG.md's F98 row (line 480)
+         is unamended -- still shows the pre-waiver '⛔ CONFLICTS WITH A
+         LOCKED POSITION' status. Violates CLAUDE.md's own rule to keep
+         docs/shipped.md and BACKLOG.md reconciled in the same commit as
+         the change."
+      - "min_sponsors / bump==0 sentinel / arithmetic / cross-circle apply
+         reviewed and found sound: sponsor_ratio_bps bounded <=10000 at
+         BOTH propose (propose.rs) and apply (set_karma_params.rs) time;
+         set_karma_params cannot be applied against another Circle's
+         proposal (proposal has_one=circle, params PDA seeded on the SAME
+         circle account passed in); `drained` is one-shot exactly like
+         set_treasury_wallet; sponsor_gain's u128 intermediate cannot wrap
+         back into u64 because the result is bounded above by
+         gain_sponsee itself whenever ratio<=10000 (confirmed by the
+         a_huge_gain_does_not_wrap unit test); `bump == 0` as an
+         'uninitialised' sentinel is a first-use-in-this-codebase pattern
+         (no precedent elsewhere in programs/ayni/src) but is
+         cryptographically sound -- the canonical PDA bump landing on
+         exactly 0 requires on-curve results at bumps 255 down to 1, an
+         astronomically improbable coincidence, and a legitimate
+         SetKarmaParams-written bump can never be silently re-defaulted
+         (it is written and read from the same field the sentinel checks).
+         Karma/KarmaAward/KarmaParams SPACE constants (17/10/20 bytes
+         incl. 8-byte discriminator) match their Borsh layout exactly by
+         manual field-width arithmetic (all fields are fixed-width
+         u64/u16/u8/bool -- no Vec/String to make this non-obvious)."
+      - "Third-party payer cannot trigger a credit alone: `payer` is a
+         separate mut Signer from `signer` (which must control
+         mentee_membership); the instruction still requires the mentee's
+         own signature to run at all, so a relayer/rent-payer pattern (as
+         used elsewhere, e.g. F61) does not let an outsider mint karma
+         for someone else."
+      - "Same pair across DIFFERENT circles: each Circle's Karma/KarmaAward
+         PDAs are seeded on that Circle's own pubkey, so the SAME two
+         commitments (if both are members of two different Circles) can
+         each be credited once per Circle. Judged NOT a farm -- karma is
+         explicitly a per-Circle ranking (state.rs's own doc comment:
+         \"a complete ranked table of A Circle\"), and two separate
+         communities choosing to credit the same real relationship
+         independently is consistent with that scope, not an evasion of
+         the once-per-pair guard within one Circle."
+    checks:
+      - cmd: "cargo test --manifest-path programs/ayni/Cargo.toml"
+      - cmd: "bash tests/sentinel/privacy-sweep.sh"
+      - cmd: "grep -c '\"twelve.tradition.2\":' frontend/lib/i18n.generated.ts"
+    coverage_gaps:
+      - "THE ROLE-SWAP DOUBLE-CREDIT ABOVE HAS NO REGRESSION TEST. This is
+         the single most important gap this round found: without a test
+         pinning the pair's COMBINED total after a role swap, the bug (or
+         any future variant of it) can regress silently. FAIL in the next
+         round if still uncovered."
+      - "No frontend/e2e coverage at all -- explicitly out of scope
+         ('Frontend surfacing of karma is NOT in this commit'), so none
+         expected yet, but also none exists to gain in a later round
+         without a fresh Sentinel entry."
+      - "No adversarial/Layer-D test asserts the commit's own stated cost
+         ('a Karma PDA is derivable from a membership commitment... ANY
+         observer can build a complete ranked table of a Circle') is
+         actually true and not overstated, or conversely that nothing
+         ELSE about a member (beyond the point total) is newly derivable
+         from the Karma account. Reviewed by inspection only (Karma holds
+         only points+bump, nothing else) -- no executable adversarial
+         dump-and-correlate test exists for it yet."
+      - "docs/shipped.md and BACKLOG.md drift (see findings above) is
+         itself a coverage gap in the sense that Sentinel has no automated
+         docs-drift check for 'a waiver was granted but the shipped-doc
+         entry was not updated' -- currently caught only by manual
+         reading."
+
+  - id: TRADITIONS-B3C4046
+    name: "content(traditions): three wording changes to the Twelve
+      Traditions, applied across all 19 locales -- Tradition 3 drops a
+      trailing clause ('...asking yourself Who do you think you are?'),
+      Tradition 8 changes 'our service centers' to 'our service', Tradition
+      11's media list is reordered/extended to 'press, radio, film, new
+      media, social things and more generally any digital activity.' A
+      stray CJK character (靠) that had crept into the Dzongkha string was
+      caught and fixed before commit."
+    shipped_round: f98-karma (2026-08-15)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-f98-karma.md"
+      - "Locale coverage: `git show b3c4046 -- frontend/lib/i18n.generated.ts`
+         touches exactly 38 lines each for twelve.tradition.3/.8/.11 (19
+         locales x one removed + one added line), 0 lines for
+         twelve.tradition.2. 19 locale blocks independently counted two
+         ways (grep of the tradition.1 key, and grep of the top-level
+         '  xx: {' block openers) -- both agree at 19
+         (en/fr/es/se/th/hi/zh/de/sv/nb/da/ar/lo/dz/bo/my/vi/tl/qu)."
+      - "CJK-contamination sweep: a Python script walked every locale block
+         and flagged any CJK Unified/Compat character outside the zh block.
+         Result: NONE. The three remaining occurrences of 靠 in the whole
+         file are all inside the zh: block (lines 7034, 7517, 7530 --
+         '我们靠自身的贡献自养' and 'nfcHold' x2, all legitimate Chinese),
+         confirmed by locating the nearest preceding top-level locale-key
+         line for each. dz (Dzongkha) itself contains zero CJK characters
+         after the fix."
+      - "Spot-read across 6 structurally diverse locales (en/fr/ar/zh/dz/qu)
+         for all three changed strings -- no leftover old phrasing, no
+         visible mojibake/encoding corruption in any."
+    findings_this_round:
+      - "HONESTY NOTE, carried into this report per the round's own
+         instruction: Tradition 11's eighteen non-English strings are a
+         machine re-translation. This round did not and cannot verify
+         translation FIDELITY (only structural integrity -- key coverage,
+         encoding, no stray old text) -- no native speaker has checked
+         them. Flagged, not silently treated as equivalent to the
+         English source."
+      - "Neither b3c4046 nor 9825320 has a docs/shipped.md entry -- see
+         the docs-drift finding under F98-KARMA (same root cause, same
+         round)."
+    checks:
+      - cmd: "python3 -c \"import re; s=open('frontend/lib/i18n.generated.ts',encoding='utf-8').read(); assert '靠' not in s.split('dz: {')[1].split('bo: {')[0]\""
+      - cmd: "grep -c '\"twelve.tradition.2\":' frontend/lib/i18n.generated.ts"
+    coverage_gaps:
+      - "No native-speaker review of Tradition 11's 18 re-translations
+         exists or is tracked anywhere as a follow-up task -- should be
+         logged in BACKLOG.md, not just this checklist, if it is not
+         already."
+      - "No automated CJK/script-contamination sweep is wired into CI --
+         this round's Python check was ad hoc and is not a committed
+         script. A committed version of it (checking every non-CJK locale
+         block for CJK codepoints, and vice versa for other scripts) would
+         close this gap for future locale edits."
+
+  - id: F98-KARMA-PAIR-GUARD-FIX
+    name: "fix(F98) -- the KarmaAward pair-guard re-seeded as a CANONICALISED
+      (sorted) pair via KarmaAward::lo/hi, closing the role-swap double-credit
+      the f98-karma round found (220 between a pair instead of 110)."
+    shipped_round: f99-map-marker (2026-08-15)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-f99-map-marker.md"
+      - "cargo test --manifest-path programs/ayni/Cargo.toml -- 42/42
+         unchanged (no new Rust unit test was added FOR lo/hi specifically --
+         see coverage_gaps)."
+      - "tests/karma.ts on a local validator -- 7/7, including the NEW `a
+         ROLE SWAP between the same two members does not pay twice` case
+         asserting the pair's COMBINED total across a role swap."
+      - "MUTATION, reproduced independently this round: restored the
+         directional seed
+         (`mentee_membership.commitment.as_ref(), wing_membership.commitment.as_ref()`)
+         in BOTH establish_wing_peer.rs AND the matching client derivation in
+         tests/karma.ts (the two must stay in lock-step or every call fails
+         PDA-mismatch, not just the abuse case), ran `anchor build` (NOT
+         `cargo build-sbf`, which does not regenerate the IDL), redeployed to
+         a fresh local validator, and watched exactly the predicted case go
+         red: 6 passing / 1 failing, with the assertion message the commit
+         promised verbatim -- 'a role swap paid the pair a second time -- the
+         award seed is directional again' (expected 1200, actual 600 raw
+         lamport-style points units). Reverted both files via `git checkout
+         --` (working tree was clean before and after -- confirmed by `git
+         diff --stat` on exactly those two paths pre- and post-mutation),
+         rebuilt, redeployed, reconfirmed 7/7 green."
+      - "ADVERSARIAL PROBING BEYOND THE COMMIT'S OWN TEST (scratch file, run,
+         then deleted -- not committed), all on the FIXED build, all held:
+         (1) PDA derivation -- award(a,b) and award(b,a) derive the
+         byte-identical PublicKey, checked directly via
+         findProgramAddressSync with no chain call needed; (2) a
+         three-member ring A-wings-B, B-wings-C, C-wings-A within ONE
+         Circle -- three genuinely distinct pairs, each credited exactly
+         once (110 each, 330 total), confirmed NOT a bypass; re-running the
+         SAME three links, and then the REVERSE direction of each of the
+         three edges, both pay nothing further; (3) a different, unrelated
+         rent-payer key funding the second (role-swapped) call does not
+         create a second award -- the guard is keyed on the two membership
+         commitments only, never on `payer`; (4) the SAME two commitments
+         linked in TWO DIFFERENT Circles are credited independently in
+         each -- confirmed this is the documented, accepted per-Circle
+         scope (Karma's own doc comment: 'a complete ranked table of A
+         Circle'), not a bypass of the once-per-pair guard WITHIN one
+         Circle."
+      - "ORDERING SANITY (KarmaAward::lo/hi): `[u8; 32]`'s derived
+         `PartialOrd`/`Ord` is lexicographic and total (byte-wise, no
+         partial-order gaps, no NaN-equivalent), and `mentee != wing` is
+         enforced by the caller (`require!` in establish_wing_peer before
+         any PDA is touched), so the two commitments being compared are
+         NEVER equal -- the ordering used is genuinely total, not merely
+         'usually distinguishes'. lo()/hi() are pure selection (return `a`
+         or `b` unchanged, never re-encoded), so distinct unordered pairs
+         {a,b} != {c,d} cannot collide on one (lo,hi) tuple: the pair
+         (lo,hi) uniquely recovers the SET {a,b}. Checked by inspection and
+         by the PDA-derivation probe above (which would have shown a
+         collision as two different pairs mapping to the same PublicKey,
+         and did not)."
+    findings_this_round:
+      - "NO remaining path to a double credit was found under adversarial
+         probing (cross-circle, three-member ring, different payers, both
+         orders re-run) beyond the one already fixed. The fix genuinely
+         closes the f98-karma CRITICAL."
+      - "WARNING (minor, non-blocking): `KarmaAward::lo`/`hi` themselves have
+         no dedicated Rust `#[test]` (the six `karma_tests` cover
+         defaults/truncation/extremes/wrap/saturation/SPACE, not
+         commutativity or injectivity of lo/hi). Coverage exists at the
+         integration level (this round's PDA-derivation probe, and the new
+         role-swap case in tests/karma.ts) but not as a fast, deterministic
+         unit test. Recommend a small `#[test]` asserting
+         `lo(a,b)==lo(b,a)`, `hi(a,b)==hi(b,a)`, and `lo(a,b)!=hi(a,b)` for a
+         handful of fixed byte pairs -- cheap, and closes the gap for good."
+    checks:
+      - cmd: "cargo test --manifest-path programs/ayni/Cargo.toml"
+      - cmd: "ANCHOR_PROVIDER_URL=http://127.0.0.1:8999 ANCHOR_WALLET=$HOME/.config/solana/aha-deployer.json npx ts-mocha -p ./tsconfig.json -t 1000000 tests/karma.ts"
+    coverage_gaps:
+      - "No dedicated Rust unit test for KarmaAward::lo/hi commutativity and
+         injectivity (see WARNING above) -- WARNING this round, FAIL next
+         round if still uncovered."
+      - "docs/shipped.md / BACKLOG.md now correctly describe the fix (this
+         commit updated both in the same diff), closing the prior round's
+         docs-drift WARNING for F98 specifically."
+
+  - id: F99-MAP-MARKER
+    name: "F99 -- the visitor's own map position now renders a static,
+      first-party 'You are here' bookmark-pin SVG instead of a jazzicon
+      identicon seeded with the literal \"__you__\"; the label is now
+      i18n (`home.youAreHere`, all 19 locales) instead of hardcoded
+      English. Circle markers are UNCHANGED (still generateJazziconSvg)."
+    shipped_round: f99-map-marker (2026-08-15)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-f99-map-marker.md"
+      - "bash tests/sentinel/map-marker-check.sh -- 15/15, re-run clean after
+         this round's own mutations."
+      - "MUTATION-TESTED SIX WAYS INDEPENDENTLY THIS ROUND (not a replay of
+         the author's own six): (1) iconUrl pointed at a remote host --
+         caught (2 checks fail); (2) identicon restored on the own-position
+         marker (`icon(\"__you__\")`) -- caught (2 checks fail); (3) popup
+         hardcoded back to English -- caught (2 checks fail, including the
+         shared-label check); (4) one locale's `home.youAreHere` key deleted
+         (fr, line 1910) -- caught ('defined in 18 of 19 locales'); (5) one
+         locale (es) left holding the literal English string -- caught ('2
+         locales carry the English string verbatim'); (6) an external
+         `<image href=\"https://evil.example.com/...\">` planted inside the
+         SVG -- caught ('the asset contains a script or an external
+         reference'). Each reverted via `git checkout --` on exactly the one
+         mutated file; `git status --short frontend/` confirmed clean after
+         every mutation and at round end."
+      - "PRIVACY (independent of the gate): a standalone Playwright script
+         (chromium, `permissions: [\"geolocation\"]`, a faked Paris
+         coordinate, `locale: \"fr-FR\"`) against the deployed container at
+         https://aha.a13z.org:8443, recording EVERY outbound request, all
+         console messages, and a full localStorage/sessionStorage dump after
+         the location flow ran. Result: the fake coordinate (48.85837,
+         2.294481) appeared in ZERO outbound request URLs or POST bodies,
+         ZERO storage keys, and ZERO console messages; every one of 115
+         outbound requests resolved to aha.a13z.org, tile.openstreetmap.org
+         (in z/x/y tile-index form, never raw lat/lon), or no other host at
+         all -- no solana.com traffic occurred on this page, consistent with
+         it being an allowed-not-required host. The own-position marker's
+         rendered DOM (`.leaflet-marker-icon`) carried
+         `src=\"/img/you-are-here.svg\"` and `alt=\"You are here\"` --
+         confirming the asset is first-party and the label resolves through
+         i18n on a REAL render, not just in source. Script deleted after
+         the run; not committed."
+      - "Confirmed on the live deployed site: `curl -sk
+         https://aha.a13z.org:8443/img/you-are-here.svg` returns the exact
+         vendored SVG (525 bytes, matches docs/credits.md's own byte count),
+         served from our own origin over the same TLS cert as the app."
+      - "i18n: `bash tests/sentinel/i18n-key-check.sh` PASS (1081 known t()
+         keys all resolve). `home.youAreHere` confirmed present in all 19
+         locale blocks (en/fr/es/se/th/hi/zh/de/sv/nb/da/ar/lo/dz/bo/my/vi/tl/qu),
+         with exactly one (en) holding the literal English string. Read all
+         19 values directly: all 18 non-English strings are STRUCTURALLY
+         plausible translations of 'You are here' (correct grammatical
+         person/tense in every language checked against basic reference
+         knowledge of that language, e.g. fr 'Vous êtes ici', de 'Sie sind
+         hier', ar 'أنت هنا', vi 'Bạn đang ở đây', qu 'Kaypim kachkanki').
+         HONESTLY STATED, per this round's brief: these are machine
+         translations. This round verified structural integrity only (key
+         present, not left in English, plausible on inspection) -- NOT
+         fidelity, and no native speaker has reviewed any of the 18. One,
+         dz (Dzongkha), has slightly irregular internal spacing
+         ('ཁྱོད་ འ་ནི་ནང་ ཡོད།') compared to the closely related bo (Tibetan)
+         string on the same source phrase -- flagged as a minor quality
+         note, not a correctness finding, since this round cannot read
+         Dzongkha."
+      - "Confirmed generateJazziconSvg import is NOT removed and IS still
+         legitimately called for Circle markers
+         (`icon(\\`AHA${c.circle}\\`)`); confirmed no wallet-avatar file
+         (`Identicon.tsx`, used on My Circle) appears anywhere in this
+         commit's diff (`git show 758c783 --stat --name-only` touches only
+         docs/credits.md, CircleMap.tsx, i18n.generated.ts,
+         you-are-here.svg, and the new check script)."
+      - "Regression sweep: bash tests/sentinel/no-third-party-assets-check.sh
+         (4/4, unaffected -- CSS-scoped, not this asset, but confirms no new
+         remote-asset pattern crept in generally); bash
+         tests/sentinel/privacy-sweep.sh (5/5); bash
+         tests/sentinel/f35r2-wing-gate.sh (9/9, unaffected by the F98 seed
+         change reviewed in the same round); cd frontend && npx tsc
+         --noEmit clean; npx playwright test 69/69 against the deployed
+         container (unchanged pass count from the commit's own claim)."
+    findings_this_round:
+      - "No functional or privacy regression found. All 15 static checks and
+         all 6 independent mutations behaved as claimed; the geolocation
+         privacy property was independently confirmed live, not just by
+         source inspection."
+      - "WARNING (docs drift, same recurring pattern as F98): neither
+         `docs/shipped.md` nor `BACKLOG.md` has an F99 entry -- grepped for
+         'F99', 'map marker', 'You are here', 'you-are-here', 'bookmark
+         pin' in both files, zero hits. Violates CLAUDE.md's own rule to
+         keep docs/shipped.md and BACKLOG.md reconciled in the same commit
+         as the change."
+      - "JUDGEMENT CALL, not a finding: docs/credits.md's disposition
+         ('licence NOT VERIFIED -- attribution given anyway') is an HONEST
+         and reasonable one -- it names the uncertainty explicitly, credits
+         conservatively rather than assuming no licence is needed, and
+         states exactly what would close it (the SVG Repo source URL). This
+         round treats it as acceptable to ship as-is, not a blocker, but
+         notes it is still an OPEN item until that URL is supplied."
+    checks:
+      - cmd: "bash tests/sentinel/map-marker-check.sh"
+      - cmd: "bash tests/sentinel/i18n-key-check.sh"
+      - cmd: "cd frontend && npx tsc --noEmit"
+      - cmd: "cd frontend && npx playwright test"
+    coverage_gaps:
+      - "No native-speaker review of any of the 18 non-English
+         `home.youAreHere` translations -- same untracked gap pattern as
+         Tradition 11 in TRADITIONS-B3C4046. Should be logged as a single
+         BACKLOG.md follow-up covering ALL machine-translated strings
+         project-wide, not re-raised piecemeal per key."
+      - "docs/credits.md's licence line is provisional pending the SVG Repo
+         source URL -- tracked here as open, not elsewhere."
+      - "No automated docs-drift check exists that would have caught the
+         missing docs/shipped.md/BACKLOG.md entries mechanically -- same
+         gap noted in F98-KARMA and TRADITIONS-B3C4046, still open."
