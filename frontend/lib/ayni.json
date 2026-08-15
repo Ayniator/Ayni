@@ -1021,6 +1021,232 @@
       ]
     },
     {
+      "name": "attest_presence_zk",
+      "docs": [
+        "F59 — \"last stood in circle: March 2026\", vouched by a fellow member.",
+        "",
+        "Two anonymous Groth16 proofs under the SAME external nullifier: the",
+        "subject consents (proving against the single-leaf consent root) and a",
+        "fellow member vouches (proving against the member tree). Requiring the",
+        "two nullifiers to differ is what proves two different people acted.",
+        "",
+        "Reuses the shipped `member_vote` key — no new circuit, no new ceremony.",
+        "Two verifications do NOT fit the 200k default compute budget; the client",
+        "must prepend a `SetComputeUnitLimit`. See `docs/presence.md`."
+      ],
+      "discriminator": [
+        224,
+        50,
+        136,
+        184,
+        191,
+        240,
+        38,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "member_tree",
+            "recent_roots"
+          ]
+        },
+        {
+          "name": "member_tree",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recent_roots",
+          "docs": [
+            "F54 ring buffer; may be absent for a Circle that has never cranked",
+            "`note_root`, in which case only the exact current root is accepted."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "presence",
+          "docs": [
+            "Thirteen bytes, keyed by the subject's commitment. `init_if_needed`",
+            "because the FIRST attestation and every later one must be",
+            "indistinguishable in cost and shape — a separate \"open a presence",
+            "record\" instruction would itself be a first-attendance signal."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  101,
+                  115,
+                  101,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "subject_commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "A relayer pays, so neither party's wallet appears."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "subject_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "month_index",
+          "type": "u32"
+        },
+        {
+          "name": "witness_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "subject_nullifier",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "witness_nullifier",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "subject_proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "subject_proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "subject_proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "witness_proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "witness_proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "witness_proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "begin_member_epoch",
       "docs": [
         "F54b — begin a new member epoch: empty the tree; only live memberships",
@@ -1041,7 +1267,8 @@
           "name": "circle",
           "writable": true,
           "relations": [
-            "member_tree"
+            "member_tree",
+            "proposal"
           ]
         },
         {
@@ -1091,9 +1318,18 @@
           }
         },
         {
-          "name": "seat",
+          "name": "proposal",
           "docs": [
-            "Any Council seat (signs; pays the ring-buffer rent if first use)."
+            "The executed 4-of-7 `BeginMemberEpoch` authorization. Marked `drained`",
+            "here so it authorizes exactly one rebuild."
+          ],
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Whoever triggers the (permissionless) rebuild; pays the ring-buffer rent",
+            "on first use. Carries NO authority — the Council's approvals do."
           ],
           "writable": true,
           "signer": true
@@ -1210,6 +1446,124 @@
         {
           "name": "choice",
           "type": "bool"
+        },
+        {
+          "name": "nullifier",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "clear_presence",
+      "docs": [
+        "F59 — the subject erases their own presence record, closing the account",
+        "so that erased and never-claimed are identical in live state. One proof,",
+        "not two: erasing is a claim about nothing, and requiring a witness would",
+        "let a member be held to a record because no fellow member would sit with",
+        "them. The month erased is read from the account, never from an argument."
+      ],
+      "discriminator": [
+        63,
+        130,
+        133,
+        103,
+        26,
+        158,
+        52,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "circle"
+        },
+        {
+          "name": "presence",
+          "docs": [
+            "Closed, not emptied. `has_one` is impossible here by design — `Presence`",
+            "stores neither its circle nor its member (see `docs/presence.md` §3), so",
+            "the PDA seeds ARE the binding, and Anchor checks them."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  101,
+                  115,
+                  101,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "arg",
+                "path": "subject_commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "A relayer pays and is refunded, so the subject's wallet never appears."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "subject_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         },
         {
           "name": "nullifier",
@@ -1773,6 +2127,60 @@
               }
             ]
           }
+        },
+        {
+          "name": "recent_roots",
+          "docs": [
+            "The epoch ring buffer, read to check the votable set has settled since the",
+            "last rebuild.",
+            "",
+            "Deliberately an `UncheckedAccount` with a seeds constraint rather than an",
+            "`Account` or an `Option<Account>`. `Account` would break every Circle that",
+            "has never rebuilt (they have no such account, and `epoch == 0` is exactly",
+            "the settled case). `Option` would be worse: it lets the CALLER elect",
+            "absence, so the attacker whose rebuild we are guarding against could just",
+            "omit the account and skip the check. Seed-bound-and-always-present means",
+            "the address is program-derived, the caller cannot substitute a friendlier",
+            "ring buffer, and \"empty\" is the only way to be absent.",
+            "",
+            "`try_deserialize` (which checks the discriminator) after an owner check."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "parent_circle",
+          "docs": [
+            "The parent Circle — required ONLY when this Circle's votable set is below",
+            "`MIN_ELECTORATE`. Checked against `circle.parent` (a PDA seed, so fixed",
+            "for life), never trusted from the caller."
+          ],
+          "optional": true
+        },
+        {
+          "name": "parent_seat",
+          "docs": [
+            "A seat of the parent Circle, co-signing a small Circle's ballot. Supplies",
+            "the second party that a captured seat of THIS Circle cannot manufacture."
+          ],
+          "signer": true,
+          "optional": true
         },
         {
           "name": "proposer",
@@ -2351,6 +2759,115 @@
               {
                 "kind": "account",
                 "path": "mentee_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "karma_params",
+          "docs": [
+            "F98 — the Circle's karma policy, seed-bound so a caller cannot substitute",
+            "another Circle's (or their own) numbers.",
+            "",
+            "`init_if_needed` rather than optional: an optional PDA whose `bump`",
+            "constraint reads the account itself cannot be \"absent\" and \"checked\" at",
+            "once, and the ambiguity showed up immediately as an",
+            "AccountOwnedByWrongProgram on a Circle that had never voted. So the",
+            "account always exists, and the FIRST Link materialises the documented",
+            "defaults into it. A later 4-of-7 `SetKarmaParams` overwrites them. The",
+            "upshot is better than the optional version: a Circle's karma policy is",
+            "always readable on chain rather than being an implicit constant."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  97,
+                  114,
+                  109,
+                  97,
+                  112,
+                  97,
+                  114,
+                  97,
+                  109,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "karma_award",
+          "docs": [
+            "F98 — the once-per-pair award record, so a released-and-restored Link is",
+            "not paid for twice.",
+            "",
+            "The pair is CANONICALISED (sorted), not in role order. Seeded by role,",
+            "the guard was directional: the same two members could swap roles and",
+            "derive a second award, collecting twice — found and reproduced on a",
+            "validator by the f98-karma Sentinel round. Sorting makes both directions",
+            "land on one account, which is what the guard always claimed to do."
+          ],
+          "writable": true
+        },
+        {
+          "name": "mentee_karma",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  97,
+                  114,
+                  109,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "mentee_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wing_karma",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  97,
+                  114,
+                  109,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "wing_membership.commitment",
                 "account": "Membership"
               }
             ]
@@ -6167,6 +6684,86 @@
       ]
     },
     {
+      "name": "set_karma_params",
+      "docs": [
+        "F98 — write the Circle's karma policy (points to a sponsee on accepting a",
+        "Link, the sponsor's share in basis points, and the ADVISORY recommended",
+        "minimum number of sponsors), authorized by an executed 4-of-7",
+        "`SetKarmaParams` proposal.",
+        "",
+        "Karma ranks members. That is a Tradition 2 rule the user waived",
+        "explicitly on 2026-08-15 (see CLAUDE.md and `state::Karma`), not an",
+        "oversight — and the waiver is scoped to karma alone."
+      ],
+      "discriminator": [
+        251,
+        145,
+        35,
+        25,
+        80,
+        12,
+        49,
+        127
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "params",
+          "docs": [
+            "Created on first use, so a Circle need not vote before karma works — it",
+            "runs on `KarmaParams::DEFAULT_*` until the Council decides otherwise."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  97,
+                  114,
+                  109,
+                  97,
+                  112,
+                  97,
+                  114,
+                  97,
+                  109,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "docs": [
+            "Whoever triggers the (permissionless) application; pays rent on first use."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "set_meetings",
       "docs": [
         "Publish/replace a Circle's meeting calendar (recurring + sessions JSON)."
@@ -8105,6 +8702,45 @@
       ]
     },
     {
+      "name": "Karma",
+      "discriminator": [
+        77,
+        183,
+        53,
+        233,
+        147,
+        167,
+        203,
+        120
+      ]
+    },
+    {
+      "name": "KarmaAward",
+      "discriminator": [
+        179,
+        89,
+        161,
+        242,
+        143,
+        109,
+        87,
+        94
+      ]
+    },
+    {
+      "name": "KarmaParams",
+      "discriminator": [
+        56,
+        212,
+        112,
+        141,
+        219,
+        117,
+        238,
+        208
+      ]
+    },
+    {
       "name": "LevelGrant",
       "discriminator": [
         69,
@@ -8336,6 +8972,19 @@
         56,
         192,
         150
+      ]
+    },
+    {
+      "name": "Presence",
+      "discriminator": [
+        255,
+        181,
+        116,
+        26,
+        172,
+        166,
+        141,
+        39
       ]
     },
     {
@@ -8662,7 +9311,7 @@
     {
       "code": 6030,
       "name": "InvalidVotingPeriod",
-      "msg": "Voting period must be between 1 and 90 days"
+      "msg": "Voting period is outside the allowed range for this kind of proposal"
     },
     {
       "code": 6031,
@@ -8833,6 +9482,41 @@
       "code": 6064,
       "name": "MaciTallyUnverified",
       "msg": "MACI tallying is disabled: the chain cannot yet verify a tally, so its result must not decide seats or treasury"
+    },
+    {
+      "code": 6065,
+      "name": "EpochNotSettled",
+      "msg": "A member epoch was rebuilt too recently: let the good-standing set re-enter before opening a ballot against it"
+    },
+    {
+      "code": 6066,
+      "name": "ElectorateTooSmall",
+      "msg": "Too few members for a group conscience — grow the circle, or have a seat of the parent Circle co-sign the ballot"
+    },
+    {
+      "code": 6067,
+      "name": "MonthNotClosed",
+      "msg": "Only a month that has already closed may be attested — the current month narrows a member to a window a meeting calendar can resolve"
+    },
+    {
+      "code": 6068,
+      "name": "MonthWentBackwards",
+      "msg": "A presence record only moves forward — this month is not later than the one already recorded"
+    },
+    {
+      "code": 6069,
+      "name": "WitnessIsSubject",
+      "msg": "The subject and the witness must be two different people — the two proofs carry the same nullifier"
+    },
+    {
+      "code": 6070,
+      "name": "ClockUnavailable",
+      "msg": "The on-chain clock is unusable for calendar arithmetic"
+    },
+    {
+      "code": 6071,
+      "name": "InvalidKarmaRatio",
+      "msg": "The sponsor's share must be between 0 and 10000 basis points (0-100%)"
     }
   ],
   "types": [
@@ -9648,6 +10332,107 @@
           {
             "name": "approved_at",
             "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Karma",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "points",
+            "docs": [
+              "Total points. Saturating — a member's karma never wraps or goes negative."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "KarmaAward",
+      "docs": [
+        "F98 — proof that a given (sponsee, sponsor) pair has ALREADY been credited.",
+        "",
+        "WHY THIS EXISTS, because without it the feature is a faucet.",
+        "`establish_wing_peer` is `init_if_needed` and `end_wing_peer` only flips a",
+        "flag, so a pair can link, release and re-link as often as they like. If karma",
+        "were credited on every establish, two members could sit in a loop and mint",
+        "each other an unbounded total — and since karma now ranks members, that is",
+        "not a cosmetic bug, it is the ranking being meaningless.",
+        "",
+        "So the credit is once per pair, FOREVER: keyed by both commitments, and a",
+        "released-then-restored Link pays nothing the second time. Re-establishing is",
+        "still allowed — it simply is not paid for again.",
+        "",
+        "The account is thirteen bytes and its mere existence is the record; `credited`",
+        "is stored anyway rather than relying on existence alone, so that a future",
+        "change which creates this PDA for some other reason cannot silently be read",
+        "as \"already paid\"."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "credited",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "KarmaParams",
+      "docs": [
+        "Per-Circle karma policy, editable only by an executed 4-of-7",
+        "`SetKarmaParams` proposal (group conscience, Tradition 2's \"trusted",
+        "servants\" acting for the group rather than an owner key).",
+        "",
+        "Absent for a Circle that has never voted on it, in which case the DEFAULTS",
+        "below apply — so karma works from day one without a governance step, and a",
+        "Circle that wants different numbers votes for them."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "gain_sponsee",
+            "docs": [
+              "Points credited to the sponsee when a sponsorship Link is accepted."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "sponsor_ratio_bps",
+            "docs": [
+              "The sponsor's share, in basis points of `gain_sponsee` (1000 = 10%).",
+              "Basis points rather than a float: there are no floats on chain, and a",
+              "ratio expressed as an integer cannot round differently on two machines."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "min_sponsors",
+            "docs": [
+              "The community-recommended minimum number of sponsors. ADVISORY ONLY —",
+              "nothing in this program refuses an action for falling below it, and",
+              "nothing should start to without a separate decision. It exists so the",
+              "UI's hint has a governed source rather than a hardcoded constant."
+            ],
+            "type": "u8"
           },
           {
             "name": "bump",
@@ -10635,6 +11420,50 @@
       }
     },
     {
+      "name": "Presence",
+      "docs": [
+        "F59 — \"last stood in circle: March 2026\". ONE account, THIRTEEN bytes.",
+        "",
+        "The design of record is `docs/presence.md`; read it before changing this",
+        "struct, because most of the design is in what the struct REFUSES to hold.",
+        "",
+        "| Not stored | Why |",
+        "|---|---|",
+        "| any timestamp | a written-at time is finer-grained than the month promised |",
+        "| any count / total / streak | the thing Epic 4 forbids — there must be no field to increment |",
+        "| `first_month` | two scalars make a span, and a span is a duration to compare |",
+        "| any `Vec` | a list is a history, and a history can be summed |",
+        "| the witness | anonymous by construction; storing them recreates a social edge |",
+        "| `circle` / `member` | already PDA seeds; repeating them adds a memcmp handle for enumeration |",
+        "",
+        "`last_month` is OVERWRITTEN, never appended to. That is the whole privacy",
+        "argument in live state: there is no field here whose value grows with",
+        "attendance, so no query over this account can rank one member above another.",
+        "",
+        "What this does NOT achieve, stated here and not only in the doc: the ledger",
+        "still records that a write happened, so `getSignaturesForAddress` on this PDA",
+        "counts a member's attested months exactly. That residual is accepted by",
+        "explicit user decision (2026-08-14) and is scoped to F59 alone — any OTHER",
+        "feature introducing a per-person counter remains a CRITICAL."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "last_month",
+            "docs": [
+              "Months since 1970-01 (see `crate::month`). Strictly increasing."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "ProgressToken",
       "docs": [
         "A progress token — an on-chain milestone \"chip\" celebrating a member's",
@@ -10811,6 +11640,26 @@
               {
                 "name": "recipient",
                 "type": "pubkey"
+              }
+            ]
+          },
+          {
+            "name": "BeginMemberEpoch"
+          },
+          {
+            "name": "SetKarmaParams",
+            "fields": [
+              {
+                "name": "gain_sponsee",
+                "type": "u64"
+              },
+              {
+                "name": "sponsor_ratio_bps",
+                "type": "u16"
+              },
+              {
+                "name": "min_sponsors",
+                "type": "u8"
               }
             ]
           }

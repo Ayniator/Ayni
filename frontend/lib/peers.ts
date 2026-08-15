@@ -18,6 +18,39 @@ const milestoneLe = (m: number) => {
 export const wingPeerPda = (circle: PublicKey, mentee: Uint8Array) =>
   PublicKey.findProgramAddressSync([seed("wingpeer"), circle.toBytes(), mentee], PROGRAM_ID)[0];
 
+/** F98 — a member's karma total in a Circle. */
+export const karmaPda = (circle: PublicKey, member: Uint8Array) =>
+  PublicKey.findProgramAddressSync([seed("karma"), circle.toBytes(), member], PROGRAM_ID)[0];
+
+/** F98 — the Circle's karma policy. */
+export const karmaParamsPda = (circle: PublicKey) =>
+  PublicKey.findProgramAddressSync([seed("karmaparams"), circle.toBytes()], PROGRAM_ID)[0];
+
+/** F98 — the once-per-pair award record.
+ *
+ *  The pair is CANONICALISED: the two commitments are SORTED, not passed in
+ *  role order. This must mirror `KarmaAward::lo/hi` in the program exactly — if
+ *  the client sorts differently (or not at all) it derives a PDA the program
+ *  does not expect and every call fails with a seeds-constraint error.
+ *
+ *  Sorting is what makes the award pair-wise rather than directional: seeded by
+ *  role, the same two members could swap places and collect a second time. A
+ *  Sentinel round found and reproduced exactly that. */
+export const karmaAwardPda = (circle: PublicKey, a: Uint8Array, b: Uint8Array) => {
+  // Plain byte comparison rather than Buffer.compare: `Buffer` in a browser
+  // bundle depends on a polyfill this module should not assume, and the
+  // ordering must be byte-for-byte identical to the program's `a <= b` on
+  // [u8; 32] anyway.
+  let cmp = 0;
+  for (let i = 0; i < a.length && i < b.length && cmp === 0; i++) cmp = a[i] - b[i];
+  if (cmp === 0) cmp = a.length - b.length;
+  const [lo, hi] = cmp <= 0 ? [a, b] : [b, a];
+  return PublicKey.findProgramAddressSync(
+    [seed("karmaaward"), circle.toBytes(), lo, hi],
+    PROGRAM_ID
+  )[0];
+};
+
 export const progressPda = (circle: PublicKey, member: Uint8Array, milestone: number) =>
   PublicKey.findProgramAddressSync([seed("progress"), circle.toBytes(), member, milestoneLe(milestone)], PROGRAM_ID)[0];
 
@@ -49,6 +82,14 @@ export async function establishWingPeer(wallet: SigningWallet, circle: PublicKey
         menteeMembership: membershipPda(circle, mentee),
         wingMembership: membershipPda(circle, wing),
         wingPeer: wingPeerPda(circle, mentee),
+        // F98 karma. `karmaAward` is supplied explicitly because its seed is a
+        // sorted pair, which Anchor cannot auto-resolve from the IDL; the other
+        // three it can, but they are passed for symmetry so the account list
+        // reads the same as the program's.
+        karmaParams: karmaParamsPda(circle),
+        karmaAward: karmaAwardPda(circle, mentee, wing),
+        menteeKarma: karmaPda(circle, mentee),
+        wingKarma: karmaPda(circle, wing),
         signer: auth.authority,
         payer,
         systemProgram: SystemProgram.programId,
