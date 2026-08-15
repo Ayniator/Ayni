@@ -1546,6 +1546,55 @@ mod karma_tests {
 
     /// Thirteen and eighteen bytes. Pinned so a field cannot be added without
     /// the size change being deliberate — the same discipline `Presence` uses.
+    /// The canonical pair seeds. This is the fix for the f98-karma round's
+    /// CRITICAL, and until now it was proved only at integration level — a
+    /// validator test that would go red for many reasons other than this one.
+    #[test]
+    fn the_award_pair_seed_is_order_independent() {
+        let a = [1u8; 32];
+        let b = [2u8; 32];
+        // Both directions must yield the SAME (lo, hi), which is what makes one
+        // award account serve a pair rather than a role.
+        assert_eq!(KarmaAward::lo(&a, &b), KarmaAward::lo(&b, &a));
+        assert_eq!(KarmaAward::hi(&a, &b), KarmaAward::hi(&b, &a));
+        assert_eq!(KarmaAward::lo(&a, &b), &a[..]);
+        assert_eq!(KarmaAward::hi(&a, &b), &b[..]);
+    }
+
+    /// The opposite failure, and the easier one to miss: if two DISTINCT pairs
+    /// could produce the same (lo, hi), one of them would be silently denied a
+    /// credit it had earned.
+    #[test]
+    fn distinct_pairs_do_not_collide() {
+        let a = [1u8; 32];
+        let b = [2u8; 32];
+        let c = [3u8; 32];
+        let pair = |x: &[u8; 32], y: &[u8; 32]| {
+            (KarmaAward::lo(x, y).to_vec(), KarmaAward::hi(x, y).to_vec())
+        };
+        assert_ne!(pair(&a, &b), pair(&a, &c));
+        assert_ne!(pair(&a, &b), pair(&b, &c));
+        assert_ne!(pair(&a, &c), pair(&b, &c));
+    }
+
+    /// Ordering must be total and stable, including where the two differ only
+    /// in the last byte — a comparison that looked only at a prefix would let a
+    /// near-identical pair swap places between calls.
+    #[test]
+    fn the_ordering_is_total_and_stable() {
+        let mut a = [7u8; 32];
+        let mut b = [7u8; 32];
+        a[31] = 1;
+        b[31] = 2;
+        assert_eq!(KarmaAward::lo(&a, &b), &a[..]);
+        assert_eq!(KarmaAward::lo(&b, &a), &a[..], "the order flipped between calls");
+        // And where they differ only in the FIRST byte.
+        let mut c = [7u8; 32];
+        c[0] = 6;
+        assert_eq!(KarmaAward::lo(&c, &a), &c[..]);
+        assert_eq!(KarmaAward::lo(&a, &c), &c[..]);
+    }
+
     #[test]
     fn the_accounts_are_the_size_they_claim() {
         assert_eq!(Karma::SPACE, 8 + 8 + 1);

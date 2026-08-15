@@ -68,6 +68,52 @@ and this paragraph used to say it awaited a waiver. The waiver was given on
 
 ---
 
+## F99 — "You are here" is a pin, not an identicon (2026-08-15)
+
+Verification: `code` + `built` (tsc clean, container rebuilt and serving) +
+`exec` — `tests/sentinel/map-marker-check.sh` 15/15, Playwright 69/69, and a
+live check with geolocation granted. Covered by
+`reports/sentinel/NRR-2026-08-15-f99-map-marker.md` (PASS WITH WARNINGS).
+
+The visitor's own marker on Find your Circle rendered a jazzicon seeded with the
+literal `"__you__"`. Wrong twice over: an identicon stands in for an *identity*,
+and "where I am standing" is not one; and because the seed was its own literal
+rather than anything derived from the member, the pattern never matched the
+wallet avatar on `/me`, so it read as a bug even to someone who accepted the
+idea. It is now a static bookmark pin, `frontend/public/img/you-are-here.svg`,
+served from our own origin — a marker fetched from a third party would hand that
+host the visitor's IP and a `Referer` naming the page, on the one page that has
+just read their location.
+
+**The label was hardcoded English** (`<Popup>You are here</Popup>`) — one
+untranslated word on an otherwise fully localised page. `home.youAreHere` is a
+NEW key, added to all 19 locales with real translations, sitting beside
+`home.km` and `home.circleFallback` where the map's other strings live. The
+popup and the marker's `alt` share the one resolved string, so an `alt` cannot
+drift back to English where no sighted reviewer would notice.
+
+`generateJazziconSvg` is **kept** — Circle markers still use it; only the
+own-position path changed. The wallet avatar on `/me` is untouched.
+
+**Coverage is a static gate, not an e2e test**, because the marker renders only
+after a real geolocation grant and a browser test that quietly never reached it
+would pass whether or not any of this held — the failure mode that has bitten
+this repo twice. Fifteen checks: the asset is referenced and first-party, the
+SVG carries no script or external reference, no identicon on the own-position
+path, the label resolves through i18n with no hardcoded literal, the key exists
+in all 19 locales with none left in English, and no coordinate reaches storage,
+a network call, a log, or an IP-geolocation service. Mutation-tested six ways;
+the round then ran six of its own and independently verified the geolocation
+privacy property with its own Playwright script.
+
+⚠ The 18 non-English strings are machine translations, not checked by a native
+speaker. ⚠ `docs/credits.md` records the SVG's attribution *provisionally*: SVG
+Repo spans CC0, MIT and Creative Commons, and the asset arrived as bare path
+data, so the collection could not be identified. Credit is given anyway; supply
+the source URL to make it exact.
+
+---
+
 ## F98 — sponsorship karma, under an explicit Tradition 2 waiver (2026-08-15)
 
 Verification: `code` + `built` (`cargo build-sbf` clean) + `exec` — 42/42 Rust
