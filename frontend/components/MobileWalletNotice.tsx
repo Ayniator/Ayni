@@ -4,15 +4,21 @@
 // then cannot finish it — see lib/mobileWallet.ts for why Firefox on Android
 // hangs on the connect spinner forever.
 //
-// Two strengths of message, because the two situations are genuinely different:
+// THREE strengths of message, because the same sentence is true on one device
+// and false on another — which is how the first version of this banner got iOS
+// wrong, telling iPhone users the in-app browser was "the most reliable way"
+// when it is the only one that exists:
 //
-//   * Firefox on Android — MWA is offered and WILL hang. This is stated as a
+//   * "broken" — Firefox on Android. MWA is offered and WILL hang. Stated as a
 //     fact, up front, BEFORE the person taps Connect and loses two minutes to a
 //     spinner and an app switch. Saying it after would be an apology; saying it
 //     before is the useful thing.
-//   * Any other mobile browser with no wallet injected — Connect may well work
-//     (Chrome does complete MWA). Here the in-app-browser route is offered as an
-//     alternative, not a warning, so a working button is not talked out of.
+//   * "only-route" — iOS, any browser. The adapter injects MWA only on Android,
+//     so Safari, Chrome and Firefox on iPhone/iPad have NO path to an external
+//     wallet at all. Understating that is worse than saying nothing.
+//   * "alternative" — Android Chrome, Samsung Internet and friends, where
+//     Connect genuinely works. Offered as a fallback, not a warning, so a button
+//     that is fine does not get talked out of.
 //
 // Renders nothing on desktop, and nothing inside a wallet's own browser where
 // the ordinary Connect button is the right answer.
@@ -23,9 +29,10 @@
 import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
-  mwaWillHang,
+  noticeTone,
   shouldOfferWalletBrowser,
   walletBrowserLinks,
+  type NoticeTone,
   type WalletBrowserLink,
 } from "../lib/mobileWallet";
 
@@ -36,14 +43,14 @@ export default function MobileWalletNotice() {
   // and the first client pass and trip hydration.
   const [state, setState] = useState<{
     show: boolean;
-    hang: boolean;
+    tone: NoticeTone;
     links: WalletBrowserLink[];
-  }>({ show: false, hang: false, links: [] });
+  }>({ show: false, tone: "alternative", links: [] });
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     if (!shouldOfferWalletBrowser()) return;
-    const hang = mwaWillHang();
+    const tone = noticeTone();
     // Read the same vetted list WalletChooser uses, so a wallet is added or
     // dropped in one data file rather than in two places that can disagree.
     // On failure we show nothing: a banner with no way out is worse than
@@ -54,7 +61,7 @@ export default function MobileWalletNotice() {
         const links = walletBrowserLinks((cfg?.wallets ?? []) as Parameters<
           typeof walletBrowserLinks
         >[0]);
-        setState({ show: links.length > 0, hang, links });
+        setState({ show: links.length > 0, tone, links });
       })
       .catch(() => {});
   }, []);
@@ -62,19 +69,33 @@ export default function MobileWalletNotice() {
   if (connected || dismissed || !state.show || state.links.length === 0) return null;
 
   return (
-    <div className={`mw-notice${state.hang ? " is-warning" : ""}`} role="status">
+    <div
+      className={`mw-notice${state.tone === "alternative" ? "" : " is-warning"}`}
+      role="status"
+    >
       <div className="mw-notice-body">
-        {state.hang ? (
+        {state.tone === "broken" && (
           <>
             <strong>Connecting will not work in this browser.</strong> Firefox for
             Android cannot complete the Solana wallet handshake — tapping Connect
             opens your wallet on its account screen, and this tab keeps spinning.
-            It is not your wallet or your phone.
+            It is not your wallet or your phone. Chrome and Samsung Internet
+            connect normally.
           </>
-        ) : (
+        )}
+        {state.tone === "only-route" && (
           <>
-            <strong>On a phone?</strong> The most reliable way to connect is to
-            open this site inside your wallet&apos;s own browser.
+            <strong>On iPhone and iPad, connecting needs your wallet&apos;s own
+            browser.</strong> No iOS browser can reach a Solana wallet directly —
+            not Safari, not Chrome, not Firefox. Opening this site inside your
+            wallet is the only way, and it works normally there.
+          </>
+        )}
+        {state.tone === "alternative" && (
+          <>
+            <strong>On a phone?</strong> Connect should work here. If it does
+            not, opening this site inside your wallet&apos;s own browser is the
+            reliable fallback.
           </>
         )}
       </div>
@@ -102,8 +123,7 @@ export default function MobileWalletNotice() {
       <div className="mw-notice-foot">
         Listed in random order — these are the wallets that publish a link we can
         open, not a recommendation. Any wallet works once you are inside it.
-        {state.hang && " Chrome for Android also connects normally."} Nothing here
-        is stored or sent anywhere.
+        Nothing here is stored or sent anywhere.
       </div>
     </div>
   );

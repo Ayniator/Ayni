@@ -90,6 +90,28 @@ export function shouldOfferWalletBrowser(): boolean {
   return isMobile() && !isInWalletBrowser();
 }
 
+/** How strongly to put it — because the SAME sentence is true on one device and
+ *  false on another, which is how the first version of this banner got it
+ *  wrong.
+ *
+ *  * `"broken"` — Android Firefox. MWA is offered and will hang. Say so before
+ *    the tap.
+ *  * `"only-route"` — iOS, any browser. The adapter injects MWA **only** on
+ *    Android (its own environment check tests the UA for "android"), so on
+ *    iPhone and iPad there is no browser path to an external wallet at all.
+ *    Calling the in-app browser "the most reliable way" here understates it to
+ *    the point of being wrong: it is the only way.
+ *  * `"alternative"` — Android Chrome, Samsung Internet and friends, where
+ *    Connect genuinely works. Offer the route without talking anyone out of a
+ *    button that is fine. */
+export type NoticeTone = "broken" | "only-route" | "alternative";
+
+export function noticeTone(): NoticeTone {
+  if (mwaWillHang()) return "broken";
+  if (isIOS()) return "only-route";
+  return "alternative";
+}
+
 /** The current page, absolute, for handing to a wallet's browser. */
 function here(): string {
   if (typeof window === "undefined") return "";
