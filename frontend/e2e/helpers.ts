@@ -49,7 +49,12 @@ export const I18N_NAMESPACES = [
   "nav", "home", "me", "admin", "board", "create", "onboarding", "inbox",
   "reflections", "documents", "notifications", "member", "msg", "recovery",
   "shard", "twelve", "wallet", "foundation", "brand", "ctl", "footer",
-  "getapp",
+  // A namespace missing from this list is a namespace whose leaked keys render
+  // on screen UNDETECTED — the raw-key regex simply never matches them. Both of
+  // these were absent until the e2e-smoke gate caught them: "glossary" since
+  // F94, "sponreq" since F97 (mine). Add a namespace here in the same commit
+  // that introduces it.
+  "getapp", "glossary", "sponreq",
 ];
 
 /**

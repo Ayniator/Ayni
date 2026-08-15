@@ -113,7 +113,13 @@ function nearestKey(key) {
 }
 
 const cases = [
-  ["08-12", "08-13"], // no exact entry -> next nearest day forward
+  // A date with NO entry, so the nearest-day fallback is actually exercised.
+  // This was "08-12" until F101 filled that gap — the fixture then passed by
+  // resolving exactly, which is the fallback path silently no longer being
+  // tested. Re-pointed at a date that is still absent; if the dataset ever
+  // covers the whole year this case should be deleted rather than re-pointed
+  // again, because there would be nothing left to fall back from.
+  ["12-26", "12-25"], // no exact entry -> NEAREST day (either direction; 25 is closer than 27)
   ["12-31", "01-01"], // year-boundary wrap
   ["02-29", "03-01"], // leap day, not in the 12 fixed months
   ["01-01", "01-01"], // exact hit

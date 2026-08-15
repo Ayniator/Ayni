@@ -53,8 +53,26 @@ pub fn give_karma(ctx: Context<GiveKarma>, amount: u64) -> Result<()> {
 
     // Must actually hold it.
     let from = &mut ctx.accounts.giver_karma;
+    // checked_sub, not `-`, and the require! stays. Belt and braces on purpose:
+    // this crate builds with `overflow-checks = true`, so a bare `-` would panic
+    // on underflow — which is SAFE (no wrap, no silent debit) but surfaces to the
+    // member as "attempt to subtract with overflow" instead of "you do not hold
+    // that much karma". It also made my own overdraft test pass for the wrong
+    // reason: with the require! deleted the test still went red, on the panic, so
+    // it could not distinguish a working guard from a missing one. A Sentinel
+    // round caught that. Now the guard is what refuses, and the checked_sub is
+    // the thing that cannot be wrong even if someone later removes the require!.
     require!(from.points >= amount, AyniError::InsufficientKarma);
-    from.points -= amount;
+    // `expect` rather than a second error path: the require! above has already
+    // proven this cannot underflow, so a distinct error here would be dead code
+    // that a test could never reach — and while it existed, deleting the
+    // require! was undetectable, because both paths returned the same error.
+    // This is the arithmetic backstop `overflow-checks` gives us anyway, written
+    // explicitly so the intent is not a build-profile side effect.
+    from.points = from
+        .points
+        .checked_sub(amount)
+        .expect("balance checked immediately above");
     // No bump write: the giver's account must already exist (you cannot give
     // what you never earned), so its bump is a `bump = giver_karma.bump`
     // constraint rather than a freshly derived one.

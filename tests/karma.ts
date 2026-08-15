@@ -481,9 +481,20 @@ describe("F100 — giving karma", () => {
     // `require!(from.points >= amount)` turns this red.
     await give(gC, tC, giver, 40);            // giver: 100 -> 60
     assert.equal(await points(gC), 60, "the transfer did not debit the giver");
-    let threw = false;
-    try { await give(gC, fC, giver, 80); } catch { threw = true; }  // 80 <= cap, > balance
-    assert.isTrue(threw, "a member gave karma they did not hold");
+    // Assert the SPECIFIC error, not merely that something threw. This crate
+    // builds with overflow-checks = true, so a bare subtraction panics on
+    // underflow — meaning a test that only checked "it threw" stayed green with
+    // the balance guard deleted, and could not tell a working guard from a
+    // missing one. A Sentinel round caught exactly that. InsufficientKarma is
+    // reachable only through the guard; a panic reads "subtract with overflow".
+    let msg = "";
+    try { await give(gC, fC, giver, 80); } catch (e: any) { msg = String(e?.message || e); }
+    assert.notEqual(msg, "", "a member gave karma they did not hold");
+    assert.include(
+      msg,
+      "InsufficientKarma",
+      `expected the balance guard to refuse it, got: ${msg}`
+    );
     assert.equal(await points(gC), 60, "a refused gift still moved karma");
   });
 
