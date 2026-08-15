@@ -782,3 +782,58 @@ so requiring it would deadlock the gate permanently.
   non-English `home.youAreHere` strings are unverified machine translations, and
   docs/credits.md attributes the SVG provisionally because its SVG Repo licence
   could not be identified from bare path data.
+- 0a119307bf3c27b8af8fdec72a224cec8aaaac35 fix(F98): sync the frontend IDL and wire the karma accounts
+  Covered by NRR-2026-08-15-idl-sync.md (PASS WITH WARNINGS). Verified the fix
+  genuinely closes the drift: `diff target/idl/ayni.json frontend/lib/ayni.json`
+  is empty, confirmed both as committed and after a completely fresh `anchor
+  build` from this commit's `programs/` source (still byte-identical) --
+  85 instructions, 49 account structs, all types/errors/address/metadata equal,
+  not only `establish_wing_peer`. `karmaAwardPda`'s sort in peers.ts cross-checked
+  against a Buffer.compare reference for 2,000 random pairs plus first-byte-only,
+  last-byte-only, and identical-bytes edge cases -- 100% agreement both
+  directions; Rust's own KarmaAward::lo/hi unit tests (order independence,
+  non-collision, total/stable ordering) pass as part of 45/45 cargo test; live
+  confirmation via tests/karma.ts 7/7 on a local validator running a binary built
+  from this exact commit, including the role-swap-does-not-pay-twice case, which
+  only passes if the client-derived seeds match the program's. The byte-loop
+  itself (a[i]-b[i] on Uint8Array elements, plain JS number subtraction) has no
+  sign or termination bug. Devnet cross-check: `solana program show` reports
+  Last Deployed In Slot 484069558 (matches the task's CONTEXT exactly), and
+  `solana program dump` of the live devnet binary is MD5-identical to
+  target/deploy/ayni.so rebuilt locally from this commit's source
+  (aa013090ad141840c1e339a0e76226ea both sides) -- the vendored IDL, the local
+  build, and what devnet is actually running are the same program, not merely
+  "no known drift." Full regression clean: 45/45 Rust, 12/12 presence-zk, 5/5
+  badge-count, tsc --noEmit clean, 69/69 Playwright against the deployed
+  container, all seven standing gates green (map-marker 13/13, privacy-sweep
+  5/5, no-third-party-assets 4/4, i18n 1081/1081, sponsor-wording 13/13,
+  f35r2-wing-gate 9/9, gate-check 13/13), npm audit (frontend) unchanged from
+  the prior round's baseline (0 critical, 12 low/6 moderate/10 high).
+  WARNING (recurring, same pattern as F98-KARMA/F99-MAP-MARKER): no
+  docs/shipped.md or BACKLOG.md entry for this fix despite touching
+  frontend/ and averting a live-site break. WARNING (new): the IDL-drift
+  defect class itself has no gate -- nothing in build/lint/typecheck/CI would
+  have caught the frontend IDL falling behind before this fix; recorded as
+  checklist.yaml entry F98-IDL-SYNC-GAP, FAILS the round after this one if
+  still uncovered. Caveat on method: frontend/lib/peers.ts could not be
+  directly imported under ts-node in this environment (rpc-websockets/uuid
+  ERR_REQUIRE_ESM outside the Next.js bundle, pre-existing tooling limitation)
+  so the loop cross-check used the verbatim-extracted function body rather than
+  a live import -- also recorded as a coverage gap (tests/karma.ts maintains a
+  separate, parallel derivation rather than importing the frontend module).
+
+- 48ab925 test(sentinel): gate the vendored IDL, and cross-check the award pair ordering
+  Post-round follow-up to idl-sync, closing both of its warnings (one marked
+  fail-next-round). TEST/GATE ONLY — no application code, no behavioural delta.
+  Adds tests/sentinel/idl-sync-check.sh (handler-vs-vendored-IDL parsed from
+  source so it works without build artifacts; byte-identity against
+  target/idl/ayni.json when present, naming the instruction or account list that
+  moved; both hand-written award-pair derivations must still sort) and
+  tests/pda-sort-check.mjs (cross-checks peers.ts against tests/karma.ts over
+  2000 random pairs plus first-byte, last-byte and 0xFF-vs-0x01 cases — closing
+  the parallel-derivation divergence gap this round recorded). docs/shipped.md
+  records the devnet upgrade to slot 484069558 and the round's MD5-identity
+  finding. Both new checks were mutation-tested, and TWO false passes in them
+  were found and fixed that way: the gate's first sort check matched "[lo, hi]",
+  which an unsorted `const [lo, hi] = [a, b]` also satisfies, and the sort test
+  threw at module scope instead of reporting a named failure.

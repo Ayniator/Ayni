@@ -4397,3 +4397,101 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
       - "No automated docs-drift check exists that would have caught the
          missing docs/shipped.md/BACKLOG.md entries mechanically -- same
          gap noted in F98-KARMA and TRADITIONS-B3C4046, still open."
+
+  - id: F98-IDL-SYNC-GAP
+    name: "fix(F98) -- frontend/lib/ayni.json (the frontend's own VENDORED copy
+      of the on-chain IDL) had fallen 3 instructions / 4 accounts behind
+      target/idl/ayni.json (the real build artifact), so every
+      establishWingPeer call from /me would have failed with
+      AccountNotEnoughKeys against the devnet program upgraded to slot
+      484069558 (F59 presence + F98 karma). This entry is NOT about whether
+      the fix is correct (it is -- see below) but about the DEFECT CLASS: a
+      second source of truth for on-chain account layout that nothing in the
+      build, lint, typecheck, or any existing gate checks against the real
+      one."
+    shipped_round: idl-sync (2026-08-15)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-idl-sync.md"
+      - "Programmatic diff, target/idl/ayni.json vs frontend/lib/ayni.json:
+         instructions (85), accounts (49 structs), types, errors (72),
+         address, metadata -- all equal, both as committed and after a FRESH
+         `anchor build` from this commit's programs/ source (idl regenerated
+         from scratch, still byte-identical)."
+      - "karmaAwardPda sort cross-checked against a Buffer.compare reference
+         over 2,000 random pairs + 3 targeted edge cases (first-byte-only
+         diff, last-byte-only diff, identical bytes) -- 100% agreement both
+         directions. Rust KarmaAward::lo/hi's own 3 unit tests (part of
+         45/45 cargo test) independently cover the same edges on the program
+         side."
+      - "Live: tests/karma.ts 7/7 on a local validator running a binary
+         built from this exact commit's source (program ID
+         AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG), including the
+         role-swap case that only passes if client-derived seeds match the
+         program's."
+      - "Devnet cross-check: `solana program show` Last Deployed In Slot
+         484069558 (matches the upgrade this fix was written against);
+         `solana program dump` of the LIVE devnet binary is MD5-identical
+         (aa013090ad141840c1e339a0e76226ea) to target/deploy/ayni.so rebuilt
+         locally from this commit's source -- the vendored IDL, the local
+         build, and the deployed program are proven to be the SAME program,
+         not merely 'no drift found by inspection.'"
+      - "Full regression sweep clean: 45/45 Rust, 12/12 presence-zk, 5/5
+         badge-count, tsc --noEmit clean, 69/69 Playwright against the
+         deployed container, all 7 standing gates green, npm audit
+         (frontend) unchanged (0 critical, 12 low/6 moderate/10 high)."
+    findings_this_round:
+      - "The fix itself is sound -- no remaining IDL drift found anywhere in
+         the 85-instruction / 49-account surface, not just the parts the
+         commit message names."
+      - "CRITICAL AVOIDED, NOT A CRITICAL FOUND: this round confirms the fix
+         genuinely prevents a live-site break; it is reported as sound, not
+         as a regression."
+      - "WARNING (the actual coverage gap this entry exists to record): NO
+         gate anywhere in this repo (build, lint, typecheck, CI, or any
+         tests/sentinel/*.sh script) would have caught frontend/lib/ayni.json
+         falling behind target/idl/ayni.json BEFORE it shipped. It was found
+         by a human/agent manually diffing the two files while verifying an
+         unrelated devnet upgrade -- pure luck of timing, not process. A
+         one-line `diff -q target/idl/ayni.json frontend/lib/ayni.json ||
+         exit 1` gate (or a pre-build step that copies rather than vendors
+         the file) would close this permanently and costs nothing to run."
+      - "WARNING (recurring docs-drift pattern, same as F98-KARMA /
+         F98-KARMA-PAIR-GUARD-FIX / F99-MAP-MARKER): commit 0a11930 touches
+         frontend/ and has no docs/shipped.md or BACKLOG.md line, despite
+         averting a live-site break."
+      - "Coverage caveat: frontend/lib/peers.ts's karmaAwardPda could not be
+         directly `import`-ed and executed under ts-node in this environment
+         (@solana/web3.js -> rpc-websockets -> uuid triggers ERR_REQUIRE_ESM
+         outside the Next.js webpack bundle -- pre-existing tooling gap, not
+         introduced by this commit). The cross-check used the verbatim
+         function body extracted from the committed file via `sed`, not a
+         live import. tests/karma.ts maintains its OWN, separately
+         implemented (Buffer.compare-based) derivation rather than importing
+         frontend/lib/peers.ts, so the two client-side implementations could
+         silently diverge from each other in the future with nothing to
+         catch it except a manual round like this one."
+    checks:
+      - cmd: "diff <(node -e \"console.log(JSON.stringify(require('./target/idl/ayni.json')))\") <(node -e \"console.log(JSON.stringify(require('./frontend/lib/ayni.json')))\")"
+      - cmd: "cargo test --manifest-path programs/ayni/Cargo.toml"
+      - cmd: "ANCHOR_PROVIDER_URL=http://127.0.0.1:8999 ANCHOR_WALLET=$HOME/.config/solana/aha-deployer.json npx ts-mocha -p ./tsconfig.json -t 1000000 tests/karma.ts"
+    coverage_gaps:
+      - "NO AUTOMATED GATE for IDL drift between target/idl/ayni.json and
+         frontend/lib/ayni.json exists yet -- this is the primary gap this
+         entry exists to track. WARNING this round (idl-sync); FAILS the
+         round after this one if a gate (script + CI wiring, or a build-time
+         copy replacing the hand-vendored file) is still not in place by
+         then, per the spec's own rule that missing coverage is a WARNING in
+         round n and a FAIL in round n+1."
+      - "frontend/lib/peers.ts cannot be unit-tested by direct import in this
+         environment (ts-node + rpc-websockets ERR_REQUIRE_ESM); no test
+         imports the actual shipped module, only a verbatim-extracted copy
+         of its function body this round, and tests/karma.ts's own parallel
+         (not shared) derivation. A jest/webpack-capable unit-test harness,
+         or refactoring the PDA-derivation logic into one module both
+         frontend/ and tests/ import, would close this."
+      - "docs/shipped.md / BACKLOG.md have no entry for this fix -- same
+         recurring pattern as F98-KARMA, F98-KARMA-PAIR-GUARD-FIX,
+         F99-MAP-MARKER."
+      - "Layer D full adversarial suite not re-run this round (narrow-scope
+         round by design); carried forward, not believed at risk from this
+         commit's diff."
