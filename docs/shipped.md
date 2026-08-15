@@ -18,6 +18,57 @@
 
 ---
 
+## F97 — Sponsors & Sponsees on /me, the invitation page, the messages badge (2026-08-15)
+
+Verification: `code` + `built` (tsc clean, container rebuilt and serving) +
+`exec` — Playwright 69/69, `tests/badge-count.test.mjs` 5/5,
+`tests/sentinel/sponsor-wording-check.sh` 18/18. Covered by
+`reports/sentinel/NRR-2026-08-15-f97-sponsorship.md` (PASS WITH WARNINGS), which
+ran its own mutations rather than replaying mine.
+
+**`/me` is reordered** to My memberships → Join a Circle → Sponsors → Sponsees:
+the first two are one thought, so the join box no longer sits below votes and
+recovery.
+
+**Compassionate wording**, as the request specified: "Release this Link",
+"Accept this Link", "Not at this time" — never "reject" or "delete". The user
+renamed *bond* → **Link**. Both release paths confirm first and say plainly that
+the other person keeps full use of the platform and can still create Circles.
+
+**A real Sponsees list.** It previously rendered only the subset of mentees still
+eligible for the one-time first-gas grant, so most sponsees were invisible; it
+now lists every active link with its since-date, and the faucet button appears
+only where it applies.
+
+**`/sponsor-request`** is the landing page for a scanned or shared invitation,
+with the QR drawn locally from the `qrcode` dependency already vendored for
+`/wallet`. The link carries only the Circle address and the inviter's *already
+public* membership commitment — nothing secret, and no third-party request.
+
+**Messages badge** — top-right red circle, hidden at zero, `99+` cap,
+`aria-label="My Messages, 3 unread"`; the nav label became "My Messages".
+
+**Direction correction, stated because the first version had it backwards.**
+Only the mentee may write a WingPeer link (`establish_wing_peer.rs`: "a member
+sets their own wing — never imposed"), so a one-tap invitation can only complete
+in the direction where the **scanner becomes the sponsee**. The copy now reads
+"take someone under your wing". The reverse handshake remains unbuilt.
+
+**Two pieces of coverage that could not fail, caught in the same commit.** Both
+new surfaces render only for a connected wallet, which no test here can be. An
+e2e assertion that "the page never says reject" passed with **"Reject" live in
+the dictionary**; and the badge had no coverage at all. Replaced by
+`sponsor-wording-check.sh` (a static gate over the shipped string table) and
+`badge-count.test.mjs` (pure functions), each verified red by mutation before
+being trusted.
+
+**Not built: karma.** The request's points system is a per-person reputation
+score — forbidden by Tradition 2 and by `privacy-sweep.sh`. It is recorded as
+**F98** and awaits an explicit written waiver. Nothing in this round introduces
+a counter, total, or ordering.
+
+---
+
 ## F96 — the connect button, the cluster box, and the three-tone mobile banner (2026-08-15)
 
 Verification: `code` + `built` (tsc clean, container rebuilt and serving) +

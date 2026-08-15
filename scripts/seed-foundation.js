@@ -130,7 +130,30 @@ async function main() {
   const [memberTree] = PublicKey.findProgramAddressSync(
     [Buffer.from("members"), circle.toBuffer()], program.programId);
 
+  // Say the address BEFORE doing anything with it. The Circle is a PDA of
+  // (deployer pubkey, name), so the very same command means "adopt the existing
+  // Foundation" on one machine and "create a brand-new one with the same name"
+  // on another — which is exactly what happened once: a verification run against
+  // devnet quietly created a SECOND "AHA Foundation" because the local deployer
+  // differed from the one that built the original. Nothing warned anybody.
+  console.log(`cluster:  ${RPC}`);
+  console.log(`deployer: ${kp.publicKey.toBase58()}  (the Circle address derives from this)`);
+  console.log(`circle:   ${circle.toBase58()}`);
+
   if (!(await connection.getAccountInfo(circle))) {
+    // Creating is cheap to do and impossible to undo — a Circle account can be
+    // closed only by a 4-of-7 vote of a Council that does not exist yet. On a
+    // shared cluster, require the intent to be explicit.
+    const isLocal = /127\.0\.0\.1|localhost/.test(RPC);
+    if (!isLocal && process.env.CONFIRM_CREATE !== "1") {
+      console.error(
+        `\nRefusing to CREATE a new Circle on a shared cluster without confirmation.\n` +
+        `No Circle exists at ${circle.toBase58()} for deployer ${kp.publicKey.toBase58()}.\n` +
+        `If you meant to adopt an existing Foundation, you are using the wrong deployer keypair.\n` +
+        `If you really mean to create a new one here, re-run with CONFIRM_CREATE=1.`
+      );
+      process.exit(2);
+    }
     await program.methods
       .initializeCircle(parent, NAME, ONE_YEAR, new anchor.BN(RECOVERY_TIMELOCK), seats)
       .accounts({ circle, parent, payer: kp.publicKey })

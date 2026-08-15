@@ -68,10 +68,27 @@ This is the blocker, and it is not in any document:
 | | |
 |---|---|
 | Current program | `AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG` |
-| Circle accounts owned by it on devnet | **0** |
+| Circle accounts owned by it on devnet | **1** — see the note below; it was **0** when this document was written |
 | Old program | `3ogteUFYhbHaV7UEWuGCqGVm1X4HDgAswvSePvDspHCw` |
 | Circle accounts owned by it | **14**, including the configured Foundation |
 | `NEXT_PUBLIC_FOUNDATION_CIRCLE` (in `frontend/.env`) | `DH6uDzb77mZuF8TP2ucdHUkwyW6wyZkJj8nm3i79EAUo` — owned by the **old** program |
+
+> **The one Circle under the current program was created by accident, and it is
+> worth knowing why.** While verifying this document's own claims, a Sentinel
+> round ran `scripts/seed-foundation.js` against **devnet** rather than a local
+> validator. Both seed scripts derive the Circle address from
+> `["circle", <local deployer pubkey>, name]`, and this machine's deployer is not
+> the one that built the original Foundation — so instead of finding the existing
+> Circle and reporting "foundation exists", it silently created a **second**
+> Circle also named `AHA Foundation`, at
+> `211ED6gqbitukLw6n1VNEAasgnXaQovmUdUPbLuwM29V`.
+>
+> It is harmless (empty treasury, no members) and it is in fact the only Circle
+> the current program can currently talk to. But the footgun is real and
+> pre-existing: **the same command means "adopt" or "create" depending on whose
+> keypair is in `~/.config/solana`, with no confirmation step.** `seed-foundation.js`
+> now prints the address it will use and refuses to create on a non-local cluster
+> unless `CONFIRM_CREATE=1` is set.
 
 An Anchor `Account<'info, Circle>` checks the owning program before it
 deserialises, so every Foundation instruction against `DH6uDz…` fails at account
