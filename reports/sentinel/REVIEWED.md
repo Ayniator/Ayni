@@ -476,3 +476,32 @@ so requiring it would deadlock the gate permanently.
   underlying T6 2-of-5 endorsement tension carried from the prior round
   remains an open, disclosed product question, not a defect. Full detail in
   the NRR.
+- ba6f891 feat(wallet): the connect button says "Connect" and carries the Solana mark
+  Covered by NRR-2026-08-15-connect-and-cluster.md (PASS WITH WARNINGS). First
+  review of this commit (an earlier round covering it was killed before it
+  wrote anything). e2e/wallet-button.spec.ts's 4 cases confirmed live, full
+  suite 58/58 before it and 66/66 after (0c6bb24 added 8 more). No stray
+  .sol-badge, mark renders with non-zero size, the :not(:has()) guard tested
+  by injecting the element the library renders. No forbidden pattern found.
+- 5030153 fix(ui): drop Testnet from the cluster box; tell iOS the truth about connecting
+  Covered by NRR-2026-08-15-connect-and-cluster.md (PASS WITH WARNINGS).
+  Shipped with no committed test reading either behaviour change (fixed in
+  arrears by 0c6bb24). noticeTone()'s decision tree is exhaustive over the
+  states shouldOfferWalletBrowser() reaches; isIOS()'s pre-existing (04251ca,
+  not this commit) touch-Mac false positive means a desktop Mac with a touch
+  display and a wallet browser extension could see the "only-route" copy,
+  which would be false for it -- narrow, pre-existing, disclosed as a
+  WARNING. Testnet-box conditional verified never blank across devnet/
+  localhost/mainnet/testnet RPC shapes by 0c6bb24's own test.
+- 0c6bb24 test(ui): cover the cluster box and all three mobile-banner tones
+  Covered by NRR-2026-08-15-connect-and-cluster.md (PASS WITH WARNINGS).
+  Replaces 535a316 (dangling, non-ancestor object, confirmed via
+  `git merge-base --is-ancestor`), which had accidentally carried F59
+  programs/ WIP files into a commit message describing only frontend tests --
+  a mis-scoping process finding, caught by the author, not by tooling.
+  Frontend diff confirmed byte-identical between 535a316 and 0c6bb24 for both
+  new spec files. Independently mutation-tested (not the author's own two
+  mutations): disabled-attribute removal on the mainnet <option>, and a
+  hardcoded is-warning class on MobileWalletNotice -- each broke exactly one
+  intended assertion (2 failed/6 passed), reverted, rebuilt, 8/8 then 66/66
+  again. Deployment left exactly as found.

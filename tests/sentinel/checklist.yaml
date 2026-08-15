@@ -3708,3 +3708,121 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
       - cmd: "bash tests/sentinel/glossary-check.sh"
       - cmd: "bash tests/sentinel/privacy-sweep.sh"
       - cmd: "diff docs/wallets.json frontend/public/wallets.json"
+
+  - id: CONNECT-AND-CLUSTER-COVERAGE
+    name: "ba6f891 (Connect label + Solana mark in the wallet button),
+      5030153 (drop Testnet from the cluster box; three-tone mobile banner
+      incl. iOS 'only-route'), 0c6bb24 (e2e coverage for both, in arrears --
+      originally mis-committed as 535a316 with F59 programs/ files riding
+      along in the index; corrected by the requesting session, verified
+      independently by this round: 535a316 is a dangling, non-ancestor
+      object, 0c6bb24 is HEAD with exactly the 2 frontend test files, byte-
+      identical content to 535a316's copies)."
+    shipped_round: connect-and-cluster (2026-08-15)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-connect-and-cluster.md"
+      - "e2e/wallet-button.spec.ts (4 cases, shipped with ba6f891 itself --
+         this was the commit an earlier, killed round never reached; this
+         round is its first review). e2e/network-selector.spec.ts (3 cases)
+         and e2e/wallet-notice-tone.spec.ts (5 cases) shipped with 0c6bb24,
+         covering 5030153's two behaviour changes that shipped with no
+         committed test reading either one."
+      - "Full suite 66/66 (58 chromium + wallet-button/network-selector/
+         wallet-notice-tone + 5 mobile-firefox-android), matching 0c6bb24's
+         claim. tsc --noEmit clean."
+      - "MUTATION-TESTED INDEPENDENTLY of the author's own two mutations
+         (unconditional testnet <option>; restored 'most reliable way'
+         copy). This round broke a DIFFERENT assertion in each new file,
+         rebuilt the container, confirmed exactly the intended failures and
+         no others, reverted, rebuilt, confirmed 8/8 then 66/66 again:
+           1. NetworkSelector.tsx: removed `disabled` from the mainnet
+              <option> -> 'mainnet is present but not selectable' failed
+              red (toBeDisabled), the other 2 network-selector tests stayed
+              green.
+           2. MobileWalletNotice.tsx: hardcoded the notice's className to
+              always include is-warning -> 'is not styled as a warning'
+              (Android Chrome) failed red, the other 4 wallet-notice-tone
+              tests stayed green.
+         2 failed / 6 passed on the mutated build; 8/8 after revert.
+         Deployment (frontend-frontend-1 via docker compose) rebuilt twice
+         more (mutate, revert) and left serving 200 at the end, matching
+         its state at round start."
+      - "Tone decision tree (noticeTone()) checked for exhaustiveness: it is
+         only reached when shouldOfferWalletBrowser() is true (isMobile()
+         && !isInWalletBrowser()), and inside that guard the three branches
+         (mwaWillHang() -> broken; isIOS() -> only-route; else ->
+         alternative) partition every reachable state -- isAndroid() and
+         isIOS() are not formally proven disjoint but no realistic UA
+         satisfies both. isIOS()'s touch-Mac detection (maxTouchPoints > 1
+         on a 'Macintosh'/'Mac OS X' UA) PRE-DATES this round (introduced in
+         04251ca, not touched by 5030153/0c6bb24) and creates a real, narrow
+         false-positive: a desktop Mac with a touch-capable external display
+         and maxTouchPoints > 1 would be classified isIOS()=true and shown
+         the 'only-route' copy ('No iOS browser can reach a Solana wallet
+         directly ... opening this site inside your wallet is the only
+         way'), which is FALSE for that machine if it has a wallet browser
+         extension installed -- extensions are exactly the desktop path the
+         iOS copy says does not exist. Narrow (external touch monitors on
+         Mac are rare) and pre-existing, but the specific device-message
+         mismatch the round was asked to look for. Recorded as a WARNING,
+         not introduced by the reviewed commits."
+      - "T6 residual re-confirmed, not re-litigated: docs/wallets.json and
+         frontend/public/wallets.json still byte-identical (md5
+         9e8506499fbe66c3e8cf44bc1004e011 both); only phantom and solflare
+         carry a `browse` template, so the mobile banner's shuffle is over a
+         fixed 2-item set, not the full 5 -- same disclosed 2-of-5
+         endorsement tension as F95-COVERAGE-VERIFIED above, unchanged by
+         this round's commits."
+      - "Privacy: grepped WalletButton.tsx, NetworkSelector.tsx,
+         MobileWalletNotice.tsx, mobileWallet.ts for analytics/telemetry/
+         console.log-of-identity/score-rating-rank-karma-tier-badge-count
+         patterns -- none found beyond prose false-positives (see below).
+         mobile-firefox-android's 'mounting the notice contacts no
+         third-party host' test asserts NOTICE is visible before checking
+         network traffic, so it cannot pass by vacuum; confirmed this
+         property is still real by the mutation test above landing on the
+         same component."
+      - "privacy-sweep.sh flagged one hit this round: 'plausible' (a bare
+         English word in an uncommitted, out-of-scope programs/ayni/src/
+         month.rs WIP comment -- F59, not part of ba6f891/5030153/0c6bb24,
+         explicitly not to be touched this round) matches the script's
+         analytics-SDK pattern because 'plausible' (Plausible Analytics) is
+         listed as a bare word rather than a domain-qualified string like
+         'plausible.io'. False positive, not a real analytics SDK reference,
+         and outside this round's scope since the file is uncommitted WIP
+         from a different epic. Recorded as a WARNING against the gate
+         script's precision, not a CRITICAL for this round."
+      - "Process finding: 0c6bb24 replaced 535a316 mid-round because the
+         requesting session's own `git commit` (no pathspec, F59 already
+         staged in the index) had swept incomplete on-chain instruction code
+         into a commit whose message described only frontend tests --
+         caught by the author noticing `git status` was unexpectedly empty,
+         not by any automated check. Neither gate-check.sh nor
+         privacy-sweep.sh nor this checklist's own coverage mechanism reads
+         commit-message-vs-diff coherence, so a mis-scoped commit like this
+         would not have been caught by tooling before a human or an
+         independent Sentinel diff review (`git show --stat`) looked at it.
+         Worth a script-side check (message claims 'frontend' + diff touches
+         programs/ -> flag) but none exists today."
+      - "Confirmed at round end: programs/ayni/src/month.rs,
+         instructions/attest_presence_zk.rs, instructions/clear_presence.rs
+         (untracked) and errors.rs/instructions/mod.rs/lib.rs/state.rs
+         (modified) are present and were not touched by this round -- git
+         diff/status against these paths shows only changes made by other,
+         concurrent activity outside this session (file mtimes moved during
+         the round, consistent with the shared-identity multi-session
+         setup this repo already runs under), never by any command this
+         round issued. No checkout/stash/clean/reset was run."
+    checks:
+      - cmd: "git log --oneline -5"
+      - cmd: "git merge-base --is-ancestor 535a316 HEAD"
+      - cmd: "git show --stat 0c6bb24"
+      - cmd: "git diff 535a316 0c6bb24 -- frontend/e2e/network-selector.spec.ts frontend/e2e/wallet-notice-tone.spec.ts"
+      - cmd: "cd frontend && npx tsc --noEmit"
+      - cmd: "cd frontend && npx playwright test"
+      - cmd: "bash tests/sentinel/gate-check.sh"
+      - cmd: "bash tests/sentinel/privacy-sweep.sh"
+      - cmd: "bash tests/sentinel/e12-wallet-check.sh"
+      - cmd: "diff docs/wallets.json frontend/public/wallets.json"
+      - cmd: "git diff --stat -- frontend/"
+      - cmd: "git status --short -- programs/"

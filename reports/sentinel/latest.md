@@ -1,1 +1,1 @@
-NRR-2026-08-14-f95-coverage.md
+NRR-2026-08-15-connect-and-cluster.md
