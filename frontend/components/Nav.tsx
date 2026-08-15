@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import BrandAyni from "./BrandAyni";
 import NotificationsBell from "./NotificationsBell";
-import WalletButton, { SolanaBadge } from "./WalletButton";
+import WalletButton from "./WalletButton";
 import FoundationNavLink from "./FoundationNavLink";
 import InboxNavLink from "./InboxNavLink";
 import SettingsControls from "./SettingsControls";
@@ -49,9 +49,9 @@ export default function Nav() {
       <div className="nav-right">
         <NotificationsBell />
         <SettingsControls />
+        {/* The Solana mark is inside the connect button now — it marks the
+            chain you are connecting to, which is what that button does. */}
         <WalletButton />
-        {/* The Solana mark sits with the cluster it names, not on the wallet. */}
-        <SolanaBadge />
         <NetworkSelector />
       </div>
     </header>

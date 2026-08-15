@@ -119,13 +119,34 @@ a:hover { text-decoration: underline; }
 .settings-ctl { display: flex; align-items: center; gap: 8px; }
 .net-select { padding: 7px 8px; font-size: 13px; border-radius: 9px; }
 
-/* Solana mark as a small badge immediately BEFORE the network selector, so the
-   chain mark labels the cluster combo rather than decorating the wallet. */
+/* The Solana mark now sits INSIDE the connect button rather than in its own
+   badge beside the network selector (2026-08-14). It marks the chain you are
+   connecting to, which is what the button does, and it costs one element fewer
+   in an already crowded nav.
+   Carried as CSS rather than a React child because the upstream
+   BaseWalletConnectionButton overwrites `startIcon` unconditionally with the
+   selected wallet's icon — there is no supported prop to put anything else
+   there, so injecting an element would mean reimplementing the whole dropdown.
+   :has() keeps the two icons from stacking: once a wallet IS selected the
+   library renders that wallet's own icon in .wallet-adapter-button-start-icon,
+   and the Solana mark steps aside for it. */
 .sol-wallet { display: inline-flex; align-items: center; gap: 7px; }
-.sol-badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
-  background: var(--panel); border: 1px solid var(--border-strong); box-shadow: var(--shadow-sm);
+.sol-wallet .wallet-adapter-button-trigger:not(:has(.wallet-adapter-button-start-icon))::before {
+  content: "";
+  width: 18px; height: 14px; flex-shrink: 0;
+  margin-right: 8px;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 18'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239945FF'/%3E%3Cstop offset='1' stop-color='%2314F195'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill='url(%23g)'%3E%3Cpath d='M5 1 L24 1 L19 5 L0 5 Z'/%3E%3Cpath d='M0 7 L19 7 L24 11 L5 11 Z'/%3E%3Cpath d='M5 13 L24 13 L19 17 L0 17 Z'/%3E%3C/g%3E%3C/svg%3E");
+}
+/* The pre-hydration placeholder carries the same mark, so the button does not
+   visibly gain an icon when the real one mounts. */
+.wallet-fallback::before {
+  content: "";
+  width: 18px; height: 14px; flex-shrink: 0;
+  background-repeat: no-repeat; background-size: contain; background-position: center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 18'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239945FF'/%3E%3Cstop offset='1' stop-color='%2314F195'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill='url(%23g)'%3E%3Cpath d='M5 1 L24 1 L19 5 L0 5 Z'/%3E%3Cpath d='M0 7 L19 7 L24 11 L5 11 Z'/%3E%3Cpath d='M5 13 L24 13 L19 17 L0 17 Z'/%3E%3C/g%3E%3C/svg%3E");
 }
 .wallet-fallback {
   display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px;

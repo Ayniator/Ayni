@@ -2,49 +2,41 @@
 
 import dynamic from "next/dynamic";
 
-// The wallet button reads `window`-registered wallets, so render it client-side only.
-const WalletMultiButton = dynamic(
-  async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton,
+// "Connect", not "Select Wallet".
+//
+// The upstream WalletMultiButton hardcodes its own LABELS and passes them to
+// BaseWalletMultiButton, so the only supported way to change the wording is to
+// use the Base component directly and supply the whole label set. Every other
+// label is kept at the upstream wording on purpose — this is a rename of one
+// string, not a re-voicing of the wallet menu.
+const LABELS = {
+  "change-wallet": "Change wallet",
+  connecting: "Connecting ...",
+  "copy-address": "Copy address",
+  copied: "Copied",
+  disconnect: "Disconnect",
+  // Upstream says "Connect" here already: a wallet is chosen but not connected.
+  "has-wallet": "Connect",
+  // Upstream says "Select Wallet". This is the one the user sees first, and
+  // "Connect" is what it actually does.
+  "no-wallet": "Connect",
+} as const;
+
+// The button reads `window`-registered wallets, so render it client-side only.
+const BaseWalletMultiButton = dynamic(
+  async () => (await import("@solana/wallet-adapter-react-ui")).BaseWalletMultiButton,
   {
     ssr: false,
-    loading: () => <span className="wallet-fallback">Connect Wallet</span>,
+    // Match the real button's label so the swap at hydration is not a visible
+    // word change.
+    loading: () => <span className="wallet-fallback">Connect</span>,
   }
 );
 
 export default function WalletButton() {
   return (
     <span className="sol-wallet">
-      <WalletMultiButton />
+      <BaseWalletMultiButton labels={LABELS} />
     </span>
-  );
-}
-
-/** The Solana mark in its badge — rendered by the nav immediately before the
- *  network selector, so the chain mark reads as a label for the cluster combo
- *  ("Solana · Devnet") instead of decorating the wallet button. */
-export function SolanaBadge() {
-  return (
-    <span className="sol-badge" aria-hidden="true">
-      <SolanaMark />
-    </span>
-  );
-}
-
-/** The Solana mark (three slanted bars, purple→teal gradient). */
-export function SolanaMark({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={(size * 18) / 24} viewBox="0 0 24 18" aria-hidden="true" className="sol-mark">
-      <defs>
-        <linearGradient id="solg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#9945FF" />
-          <stop offset="1" stopColor="#14F195" />
-        </linearGradient>
-      </defs>
-      <g fill="url(#solg)">
-        <path d="M5 1 L24 1 L19 5 L0 5 Z" />
-        <path d="M0 7 L19 7 L24 11 L5 11 Z" />
-        <path d="M5 13 L24 13 L19 17 L0 17 Z" />
-      </g>
-    </svg>
   );
 }
