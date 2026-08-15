@@ -837,3 +837,74 @@ so requiring it would deadlock the gate permanently.
   were found and fixed that way: the gate's first sort check matched "[lo, hi]",
   which an unsorted `const [lo, hi] = [a, b]` also satisfies, and the sort test
   threw at module scope instead of reporting a named failure.
+
+- b7695c22eb555083c53257317a7f40dd635cd1b1 feat(F100,F101): the karma box on /me, giving karma, and the full year of Reflections
+  Covered by NRR-2026-08-15-f100-karma-ui.md (PASS WITH WARNINGS). Combined
+  commit from two concurrent, mutually-unreviewing sessions -- F100 (karma
+  gifting: give_karma/reclaim_karma, KarmaGift PDA, KarmaCard.tsx) reviewed as
+  the requesting session's own work; F101 (Daily Reflections 161->359 dated
+  entries, new fr/es translations, scripts/extract-reflections-xlsx.mjs)
+  reviewed as genuinely unreviewed third-party work, per the brief. On a local
+  validator rebuilt+redeployed from this exact commit's source: 47/47 Rust,
+  19/19 tests/karma.ts. Adversarially probed the "once per ORDERED pair, ever"
+  mint bound (a three-member ring A->B->C->A with the return period voted to
+  0 first, then a same-pair-in-a-second-Circle check, then a static
+  no-close-instruction check for KarmaGift): the bound holds in every case
+  tried -- the ring mints exactly 3x the per-gift cap (300), matching the
+  disclosed bound scaled to three pairs, not a violation of it. Regenerated
+  frontend/lib/daily-reflections-default.ts from the committed
+  daily_reflexions.xlsx and diffed it against the committed file:
+  byte-identical, confirming real (not hand-edited) provenance; all 366
+  possible calendar days resolve to a non-blank entry in en/fr/es. ONE
+  MEDIUM finding: mutating give_karma.rs to remove
+  `require!(from.points >= amount, ...)`, rebuilding and redeploying, left
+  all 19 tests/karma.ts tests GREEN (including the "no overdraft" case) --
+  contradicting the commit's own claim that this mutation "turns the
+  overdraft test red". Root cause: this workspace's
+  `[profile.release] overflow-checks = true` makes the raw
+  `from.points -= amount` panic on underflow regardless of the require!, so
+  the test's generic try/catch cannot tell a deliberate rejection from an
+  incidental arithmetic panic. No live overdraft exists today (giver balance
+  and receiver balance both confirmed unchanged after the attempt) -- this is
+  a test-rigor gap, not an exploit -- but it is the same defect class
+  (a test that cannot fail for the right reason) the commit itself fixed one
+  paragraph earlier for the cap-vs-balance ordering bug. Mutation reverted via
+  `git checkout --` on the single file edited; cargo test re-confirmed 47/47
+  after the revert. Also found: docs/karma.md states plainly-wrong-not-
+  merely-omitted that karma "is not a record of who helped whom in any
+  detail" -- a KarmaGift PDA's seeds/fields are exactly that (not re-raised
+  as a Traditions/privacy CRITICAL; same enumerable-PDA shape already
+  accepted for KarmaAward/WingPeer, and the 2026-08-15 karma waiver already
+  accepts full public comparability); BACKLOG.md carries two duplicate F100
+  rows (two sessions each appended their own); docs/shipped.md has no F100 or
+  F101 entry at all (recurring docs-drift pattern). Two pre-existing,
+  unrelated gate failures noted and confirmed NOT caused by this commit:
+  e11-recovery-check.sh (lib/masterSecret.ts import, unmodified since
+  f4b92e6) and f82-f83-check.sh (its "08-12 has no entry" fixture is now
+  stale because F101 legitimately added that date -- the feature working as
+  intended, not a regression). Full sweep otherwise clean: tsc --noEmit,
+  69/69 Playwright against the deployed container, all other
+  tests/sentinel/*.sh gates, privacy-sweep.sh (karma waiver still narrowly
+  scoped -- score/rating/ranking/reputation/leaderboard/streak still
+  forbidden), badge-count 5/5, pda-sort-check 8/8, presence-zk 12/12.
+
+- 6c834e1 fix(F100): make the overdraft guard the only path to InsufficientKarma
+  Post-round follow-up to f100-karma-ui, closing its MEDIUM finding. The round
+  showed that `overflow-checks = true` made the bare subtraction panic on
+  underflow regardless of the require!, so the overdraft test could not tell a
+  working guard from a missing one (no live vulnerability — a panic aborts the
+  transaction — but an opaque error for the member and a test proving nothing).
+  My FIRST fix was also a false pass and was caught by mutation: checked_sub
+  returning the same InsufficientKarma made both paths identical, so deleting
+  the require! still left 19/19 green. The require! is now the sole source of
+  that error and the arithmetic backstop is an `expect`; the test asserts the
+  specific error. Verified by removing the guard, rebuilding, redeploying to a
+  local validator and confirming the named failure, then restoring to 19/19.
+  Also re-points f82-f83-check.sh's nearest-day fixture (F101 filled the 08-12
+  gap it relied on, so it began resolving exactly and stopped testing the
+  fallback) and registers the "sponreq" and "glossary" namespaces in
+  e2e/helpers.ts I18N_NAMESPACES, whose absence meant leaked keys in those
+  namespaces would render undetected. Does NOT touch e11-recovery-check.sh,
+  which fails on a masterSecret import introduced in fe750cd and verified
+  failing at HEAD~1 — widening a recovery-surface gate to clean up my own round
+  is what that gate exists to prevent.

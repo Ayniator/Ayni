@@ -4495,3 +4495,383 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
       - "Layer D full adversarial suite not re-run this round (narrow-scope
          round by design); carried forward, not believed at risk from this
          commit's diff."
+
+  - id: F100-KARMA-GIFT
+    name: "F100 -- the karma box on /me (KarmaCard.tsx) plus give_karma /
+      reclaim_karma and the new KarmaGift [\"karmagift\", circle, giver,
+      receiver] PDA (giver.commitment, receiver.commitment ORDERED, never
+      sorted -- deliberately the opposite seeding from KarmaAward/F98).
+      KarmaParams grew two votable fields, max_gift: u64 and
+      gift_return_secs: i64, written by three places (establish_wing_peer's
+      and give_karma's bump==0 default-materialisation blocks, and
+      set_karma_params's votable-write block). A gift moves karma the giver
+      holds (require! from.points >= amount), is capped per gift
+      (require! amount <= params.max_gift), and after a Circle-votable
+      return period (read AT RECLAIM TIME, not pinned at gift time) the
+      giver reclaims their amount while the receiver keeps theirs --
+      deliberately minting karma, bounded only by 'once per ORDERED pair,
+      ever' via KarmaGift being created with init (never init_if_needed)
+      and KEPT (never closed) after a reclaim. Shipped in the same commit
+      as F101 (unrelated: Daily Reflections content), from two concurrent,
+      mutually-unreviewing sessions -- reviewed here as one combined diff."
+    shipped_round: f100-karma-ui (2026-08-15)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-f100-karma-ui.md"
+      - "cargo test --manifest-path programs/ayni/Cargo.toml -- 47/47
+         (unchanged from the pre-commit baseline; no new Rust unit tests
+         landed with F100 itself, the karma_tests module's F100-relevant
+         cases -- gift-may-equal-balance boundary, reclaim saturates -- were
+         added in the prior f98-karma round in anticipation)."
+      - "tests/karma.ts on a local validator, program rebuilt + redeployed
+         from this exact commit's source (program ID
+         AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG) -- 19/19 (7 F98 +
+         12 F100), including the cap-vs-balance ordering fix, the
+         once-per-ordered-pair guard, the reverse-direction asymmetry with
+         KarmaAward, vote-the-period-down-then-reclaim, replay refusal, and
+         no-re-gift-after-reclaim."
+      - "ADVERSARIAL, reproduced live on the same validator (not in the
+         committed suite; scratch script written, run, deleted --
+         tests/_adv_karma_ring.ts): a three-member ring A->B->C->A, each
+         leg at the per-gift cap (100), with gift_return_secs voted to 0
+         FIRST so every leg is reclaimable immediately. Result: the ring
+         alone conserves total (410 total was really 110 principal + the
+         ring circulating it, confirmed as a pure-transfer step); the three
+         reclaims then mint exactly 300 (= 3 pairs x cap), matching the
+         disclosed 'once per ordered pair, ever' bound scaled to three
+         pairs -- NOT a violation of the stated bound, the ring is just the
+         bound acting on 3 distinct pairs at once. Re-gifting ANY leg again
+         after its reclaim was correctly refused (KarmaGift kept, not
+         closed -- init still guards it). A SECOND, DIFFERENT Circle was
+         then adversarially tried for the SAME two commitments' SAME
+         ordered pair: allowed, by design (Karma and KarmaGift are seeded
+         per-circle; 'once per pair' is a per-Circle bound, not a global
+         one -- consistent with the program's own stated Circle-local
+         reasoning, not a bypass)."
+      - "STATIC, no close/reopen path exists: grepped programs/ayni/src for
+         any `close =` constraint or instruction touching KarmaGift --
+         none. The account can never be closed by any instruction in this
+         program, so 'close then reopen to reset the once-per-pair guard'
+         is not merely refused at runtime, it has no code path at all."
+      - "establish_wing_peer.rs and give_karma.rs's bump==0
+         default-materialisation blocks, and set_karma_params.rs's
+         votable-write block, all independently re-read and confirmed to
+         write EVERY KarmaParams field (gain_sponsee, sponsor_ratio_bps,
+         min_sponsors, max_gift, gift_return_secs, bump) -- no remaining
+         partial-init path found. This is the exact defect class the
+         commit's own message discloses fixing (max_gift silently 0 for a
+         Circle that had never voted, because establish_wing_peer taught
+         two new fields to KarmaParams without teaching this block about
+         them); re-checked as CLOSED, not re-opened."
+      - "reclaim_karma.rs: destination is giver_karma, seed-bound to
+         giver_membership.commitment -- not an argument -- so a caller
+         cannot redirect a reclaim. karma_gift.returned is set before
+         anything else and the account is never closed, so a reclaim
+         cannot be replayed (tests/karma.ts's own case + re-derived by
+         inspection). The return period is read from karma_params AT
+         RECLAIM TIME by design (commit's own stated intent, confirmed);
+         the adversarial ring script above exercises exactly the
+         vote-the-period-down-then-mass-reclaim shape the brief asked
+         about and finds no bound violation beyond the disclosed one."
+      - "cd frontend && npx tsc --noEmit -- clean."
+      - "bash tests/sentinel/privacy-sweep.sh -- still forbids
+         score/rating/ranking/reputation/leaderboard/streak; karma remains
+         the sole, explicitly-waived exception (CLAUDE.md, 2026-08-15).
+         KarmaCard.tsx re-read: members are listed by short COMMITMENT
+         only (`short(r.commitment)`, first 8 hex chars), never by wallet
+         address -- no `.owner`/pubkey field is read from listCircleMembers
+         anywhere in the component. No new localStorage/network write
+         found in KarmaCard.tsx or lib/karma.ts beyond the existing
+         program RPC calls."
+      - "bash tests/sentinel/idl-sync-check.sh, i18n-key-check.sh,
+         f35r2-wing-gate.sh, glossary-check.sh, map-marker-check.sh,
+         no-third-party-assets-check.sh, sponsor-wording-check.sh,
+         zk-integrity.sh, push-gate-selftest.sh, gate-check.sh -- all
+         green. e11-recovery-check.sh and f82-f83-check.sh both fail, but
+         both PRE-DATE this commit and touch no file this commit changed
+         (verified: git show for both failing lines at parent commit
+         b98583e and at cf1bbdd are identical to HEAD) -- see
+         coverage_gaps / the NRR for detail; not counted against F100."
+    findings_this_round:
+      - "MEDIUM (test-rigor, NOT an exploitable overdraft): independently
+         mutated give_karma.rs, commenting out
+         `require!(from.points >= amount, AyniError::InsufficientKarma)`,
+         rebuilt, redeployed, and re-ran tests/karma.ts in full: ALL 19
+         TESTS STILL PASS, including 'refuses a gift the giver cannot
+         afford ... no overdraft'. This contradicts the commit message's
+         own claim ('removing the balance check turns the overdraft test
+         red'). Root cause: this workspace's Cargo.toml sets
+         `[profile.release] overflow-checks = true`, so the raw
+         `from.points -= amount` panics ('attempt to subtract with
+         overflow', confirmed in the transaction logs on a local
+         validator) whenever the mutated code is reached -- the test's
+         generic `try { } catch { threw = true }` cannot distinguish a
+         deliberate, typed InsufficientKarma rejection from an incidental
+         arithmetic panic, so it stays green either way. Confirmed by a
+         second, isolated probe: giver balance is correctly left
+         untouched and the receiver gets nothing, so THERE IS NO LIVE
+         OVERDRAFT in the current code -- this is not a security
+         regression. But it is exactly the defect class ('a test that
+         cannot fail for the right reason') the same commit prides itself
+         on having caught and fixed for the cap-vs-balance ordering bug
+         one paragraph earlier, recurring in a different shape the commit
+         did not catch: the mutation-testing claim for THIS guard is not
+         reproducible as stated. If overflow-checks were ever disabled, or
+         `from.points -= amount` were ever rewritten as
+         `.saturating_sub(amount)` (a pattern already used elsewhere in
+         this exact file for the receiver's saturating_add), the require!
+         becomes the ONLY thing preventing a real overdraft/mint, with
+         nothing in the suite positioned to notice the require! is gone.
+         Recommended (not performed -- Sentinel does not fix code):
+         assert the specific error code (AnchorError InsufficientKarma),
+         not just that a throw occurred. Mutation reverted via `git
+         checkout --` on the single file I had just edited; cargo test
+         re-run at 47/47 after the revert; git status confirmed clean."
+      - "LOW/DOCS -- docs/karma.md contains a claim that is actually WRONG,
+         not merely omitted (the brief's own bar for flagging it): 'It is
+         not a record of who helped whom in any detail -- only that some
+         recognition passed between two members.' A KarmaGift PDA IS
+         exactly that record -- giver commitment, receiver commitment, and
+         given_at timestamp are literally its seeds/fields, kept forever
+         (never closed), and derivable by anyone who has (or brute-forces
+         over) the two commitments -- which, per this same document and
+         KarmaCard.tsx's own comment, are already treated as the
+         enumerable, comparable 'anonymous identity' this whole feature
+         runs on. Not re-raised as a Traditions/privacy CRITICAL: this is
+         the same enumerable-PDA shape already accepted for
+         KarmaAward/WingPeer in the F97/F98 rounds ('Sponsor graph stays
+         PRIVATE... pre-existing F27 WingPeer PDA enumerability... not
+         deepened'), and the 2026-08-15 karma waiver already accepts full
+         public comparability of totals -- but the DOCS TEXT specifically
+         denies that a who-thanked-whom detail exists, and it does. Member-
+         facing copy that is wrong about what a feature reveals is worth
+         fixing even though the underlying architecture is accepted."
+      - "LOW/DOCS -- BACKLOG.md carries TWO separate, differently-worded
+         rows both titled '| F100 | E5 . E2 |' (lines 482 and 484 as
+         committed), an artefact of the two concurrent, mutually-unaware
+         sessions that produced this combined commit each appending their
+         own F100 summary. Not contradictory in content, just duplicated;
+         a reader scanning the table sees F100 twice and F101 once."
+      - "WARNING (recurring docs-drift pattern, same as F97/F98/F98-IDL-
+         SYNC-GAP/F99): docs/shipped.md has NO entry for F100 or F101 at
+         all, despite both being live on the deployed container."
+      - "e11-recovery-check.sh (frontend/app/recovery/{page,setup}/page.tsx
+         importing lib/masterSecret.ts, outside the gate's declared
+         recovery-surface allowlist) and f82-f83-check.sh
+         (nearestKey('08-12') now resolves EXACT, not the fallback '08-13'
+         the gate's fixture hardcodes) both fail on this HEAD, but neither
+         touches a file this commit changed. e11: recovery/page.tsx and
+         lib/masterSecret.ts unmodified since f4b92e6, script unmodified
+         since the same commit -- pre-existing, unrelated to F100/F101.
+         f82/f83: the failure is F101 WORKING AS INTENDED -- the workbook
+         legitimately grew from 161 to 359 dates and 08-12 is now a real
+         entry (confirmed present in DEFAULT_REFLECTIONS), so the gate's
+         own hardcoded fixture ['08-12' has no entry, falls back to
+         '08-13'] is now stale data, not a functional bug. Recorded as a
+         WARNING (stale sentinel fixture, main agent's job to update,
+         Sentinel does not weaken or fix the gate) rather than a
+         regression against F100/F101."
+    checks:
+      - cmd: "cargo test --manifest-path programs/ayni/Cargo.toml"
+      - cmd: "ANCHOR_PROVIDER_URL=http://127.0.0.1:8999 ANCHOR_WALLET=$HOME/.config/solana/aha-deployer.json npx ts-mocha -p ./tsconfig.json -t 1000000 tests/karma.ts"
+      - cmd: "bash tests/sentinel/privacy-sweep.sh"
+      - cmd: "bash tests/sentinel/idl-sync-check.sh"
+      - cmd: "cd frontend && npx tsc --noEmit"
+    coverage_gaps:
+      - "No committed test exercises the three-member-ring / cross-circle /
+         vote-the-period-to-zero adversarial shapes -- this round's probe
+         was a scratch script, run and deleted, not landed in tests/. The
+         behaviour is correct as found, but nothing stops it silently
+         changing in a future edit."
+      - "No committed test asserts on the SPECIFIC error code for the
+         no-overdraft guard (InsufficientKarma) rather than 'did it
+         throw' -- see the MEDIUM finding above; this is the concrete gap
+         that finding recommends closing."
+      - "No Playwright/e2e coverage of KarmaCard.tsx itself (giving karma
+         through the UI, the outstanding-gifts list, the take-back button)
+         -- reviewed by source reading only this round. The pre-existing
+         69/69 Playwright suite does not target /me's karma box; a new
+         wallet-driven spec would be needed and does not exist."
+      - "docs/shipped.md has no F100 or F101 row (see findings above)."
+      - "18 non-English me.karma.* strings are unverified machine
+         translations (disclosed in the commit/BACKLOG already, not
+         independently checked for quality this round)."
+
+  - id: F101-DAILY-REFLECTIONS-EXPANSION
+    name: "F101 -- Daily Reflections grew from 161 to 359 dated entries
+      (English source of record), with full French and Spanish
+      translations added for all 359 dates; the other 16 locales remain
+      at their pre-existing 161. New scripts/extract-reflections-xlsx.mjs
+      reads daily_reflexions/daily_reflexions.xlsx (hand-parsed zip+XML,
+      no new dependency) and regenerates
+      frontend/lib/daily-reflections-default.ts, matching spreadsheet
+      columns BY HEADER NAME. Written by a session that did not write or
+      review F100, sharing this commit only by coincidence of timing --
+      reviewed here as genuinely unreviewed third-party work, per the
+      brief."
+    shipped_round: f100-karma-ui (2026-08-15)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-f100-karma-ui.md"
+      - "Regeneration check: ran `node scripts/extract-reflections-xlsx.mjs`
+         against the committed daily_reflexions.xlsx and diffed the
+         output against the COMMITTED frontend/lib/daily-reflections-
+         default.ts -- byte-IDENTICAL (0 lines of diff). The generated
+         file was not hand-edited after generation; provenance is real,
+         not merely asserted."
+      - "Header-matching, read from source: FIELD_OF_HEADER maps
+         lowercased/trimmed header text -> field for all 8 known columns;
+         REQUIRED = [date, title, content] throws with the literal header
+         list seen if any is missing. Confirmed by inspection this is
+         name-based, not positional -- the exact defect class the
+         commit message says the glossary extractor learned to avoid.
+         xlsx parsing is a from-scratch zip central-directory walk +
+         regex XML read (readFileSync/inflateRawSync only) -- no xlsx/
+         exceljs/sheetjs package added; `git show --stat` confirms no
+         package.json change."
+      - "Count/uniqueness check: REFLECTION_KEYS has 359 entries, all
+         359 unique (Set size == array length). All 366 possible MM-DD
+         keys (incl. the 3 that never get an exact entry: 02-29, and the
+         circular-nearest-day fallback logic) resolve, through the SAME
+         defaultReflectionFor()/nearestKey() circular-distance algorithm
+         reflections.ts actually ships, to a non-blank title+quote in
+         en, fr, AND es -- scripted, all 366 x 3 checked, 0 blank."
+      - "Identity-material / raw-key sweep over the full 2.5 MB generated
+         file: no {{...}} template placeholder, no bare me.*/t()-shaped
+         key, no email-shaped string, no 0x-prefixed long hex string
+         found."
+      - "Weight claim verified: wc -c on the committed file reads
+         2,528,011 bytes (~2.5 MB), matching the header comment's and
+         BACKLOG's disclosed figure; it IS a 'use client' component
+         import (frontend/app/reflections/page.tsx-side, via
+         lib/reflections.ts), so this weight really does reach the
+         browser on every load of that page. BACKLOG.md's F101 row
+         records the fix (move to public/reflections.json, fetch by
+         day) as NOT done -- accurately disclosed, not silently
+         deferred."
+      - "cd frontend && npx tsc --noEmit -- clean (this file alone is a
+         meaningful fraction of the project's type-checked surface)."
+    findings_this_round:
+      - "No functional or privacy regression found in the F101 half.
+         The ~2.5 MB client-bundle weight is real, disclosed, unfixed,
+         and IS recorded in BACKLOG.md's F101 row -- the brief's specific
+         concern (is it actually recorded, not just mentioned in the
+         commit message) checks out."
+      - "f82-f83-check.sh's nearestKey('08-12') fixture is now stale
+         because of this feature's legitimate growth (08-12 gained a
+         real entry) -- see the F100-KARMA-GIFT entry above for detail;
+         cross-referenced here since it is F101's own dataset that moved."
+      - "The non-en/fr/es locales (16 of 19) were not touched by this
+         expansion and still cover only the original 161 dates -- not a
+         regression (nothing there worked less than before), but worth
+         naming as a widening gap between fr/es (359) and the rest (161)
+         that will read as inconsistent once members compare languages."
+    checks:
+      - cmd: "node scripts/extract-reflections-xlsx.mjs"
+      - cmd: "cd frontend && npx tsc --noEmit"
+      - cmd: "bash tests/sentinel/f82-f83-check.sh"
+    coverage_gaps:
+      - "No automated (non-scratch) test regenerates and diffs the
+         workbook against the committed TS module -- this round's
+         provenance check was manual/ad hoc. A `node
+         scripts/extract-reflections-xlsx.mjs && git diff --exit-code
+         frontend/lib/daily-reflections-default.ts` CI step would close
+         this permanently."
+      - "No automated test resolves all 366 possible calendar days
+         against DEFAULT_REFLECTIONS/REFLECTIONS_I18N and asserts non-
+         blank title/quote in every shipped locale -- this round's check
+         covered en/fr/es only (the three that matter for the 359-entry
+         claim) via a scratch script, not landed."
+      - "f82-f83-check.sh's hardcoded '08-12 has no entry' fixture needs
+         updating to a date that is still genuinely absent (e.g. one of
+         the remaining December gaps) -- Sentinel does not edit gates;
+         flagged for the main agent."
+
+  - id: F100-KARMA-GIFT-INDEPENDENT-RECHECK
+    name: "Independent second Sentinel pass over the SAME commit
+      (b7695c22eb555083c53257317a7f40dd635cd1b1) already covered by
+      F100-KARMA-GIFT / F101-DAILY-REFLECTIONS-EXPANSION above, run by a
+      concurrent session that started before discovering the first pass's
+      report already existed. Does not replace it -- corroborates it via
+      independent methods and adds a small number of new checks. See the
+      addendum section of reports/sentinel/NRR-2026-08-15-f100-karma-ui.md."
+    shipped_round: f100-karma-ui (2026-08-15)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-f100-karma-ui.md (addendum section)"
+      - "Overdraft mutation independently reproduced in an ISOLATED git
+         worktree (not the shared working tree): require! removed -> 19/19
+         tests/karma.ts still pass, on-chain log shows a raw SBF panic
+         ('attempt to subtract with overflow') from workspace-wide
+         overflow-checks=true, not the intended AnchorError. Same worktree
+         rebuilt with the mutation reverted -> verified-clean baseline
+         correctly returns AnchorError InsufficientKarma (6075) for the
+         identical scenario. Independently corroborates the existing
+         MEDIUM finding via a from-scratch reproduction, not a replay."
+      - "establish_wing_peer.rs's bump==0 fix independently proven
+         load-bearing: reverting ONLY its two new field writes (leaving
+         give_karma.rs/set_karma_params.rs untouched), rebuilding,
+         redeploying in the same isolated worktree -> 12/19 tests/karma.ts
+         pass, 7/19 fail, all seven inside the F100 describe block
+         (cascading from max_gift staying 0). Reverted, rebuilt,
+         redeployed, reconfirmed 19/19."
+      - "F101 accounting re-derived from the raw .xlsx bytes via a
+         from-scratch OOXML parser (zip central directory + inflate +
+         sharedStrings + row/cell walk), independent of the shipped
+         extractor: en/fr/es each 359 unique dates, 0 duplicates, 4/44/0
+         blank extra rows -- matches the commit's claim exactly. English
+         xlsx date SET is byte-identical to REFLECTION_KEYS (0 missing, 0
+         extra). Per-locale REFLECTIONS_I18N counts re-derived directly:
+         fr/es at 359, the other 16 locales unchanged at 161."
+      - "NEW adversarial case not explicitly in the first pass: a giver in
+         Circle X attempting give_karma against a receiverMembership
+         commitment with NO membership record in Circle X (only in a
+         different Circle Y) -- refused, confirmed live on a validator
+         (account deserialization fails; has_one=circle cannot be
+         substituted). This is the literal 'gifting to a member of another
+         Circle' scenario named in the brief, distinct from the existing
+         report's same-pair-in-a-second-circle probe."
+      - "Full me.karma.* i18n sweep, all 19 locales x 17 keys (323 entries,
+         matching grep -c exactly): 0 missing, 0 raw-key-shaped values, 0
+         empty strings. Spot-read lede/give/sent/rule in zh/ar/th/hi/dz/bo
+         -- genuinely translated, script-correct prose in every case, none
+         an English copy. Narrows (does not close) the existing
+         'unverified machine translations' coverage gap: presence and
+         structural correctness now verified; native-speaker fidelity
+         review remains open."
+      - "e11-recovery-check.sh's pre-existing failure corroborated by a
+         DIFFERENT method: checked out the parent commit b98583e in a
+         disposable git worktree and re-ran the gate there unmodified --
+         identical failure, same two lines. (The existing report used
+         git show/line-diffing; this is an independent execution.)"
+      - "Layer E re-confirmed: cargo test 47/47, presence-zk 12/12,
+         badge-count 5/5, pda-sort-check 8/8, tsc --noEmit clean,
+         Playwright 69/69 against the live deployed container."
+    findings_this_round:
+      - "No new CRITICAL. No change to the existing PASS WITH WARNINGS
+         verdict -- this pass corroborates it and narrows one coverage
+         gap (me.karma.* i18n presence/structure, not fidelity)."
+      - "PROCESS NOTE, disclosed: this session ran `rm -rf
+         /tmp/aha-f100-ledger` before starting its own validator, not
+         realising a solana-test-validator (PID 220778, started before
+         this session's own activity, serving the exact port/ledger the
+         task brief specifies) was already running there -- very likely
+         the concurrent session that produced the first pass's report,
+         whose own reproduction commands cite the identical
+         http://127.0.0.1:8999. That validator was used successfully for
+         this session's first several test runs and was later found dead
+         (no process on port 8999); both sessions' own recorded results
+         appear to have completed before/around that point, with no
+         inconsistent or partial result observed. All of this session's
+         SUBSEQUENT mutation testing was redone in a fully isolated git
+         worktree with its own disposable ledger/ports specifically to
+         avoid further interference, torn down cleanly at the end. Recorded
+         plainly per CLAUDE.md's standing rule against concealment -- an
+         rm -rf against a shared, brief-specified path without checking
+         for a live process on it is exactly the kind of action that could
+         destroy concurrent work, even though it did not here."
+    checks:
+      - cmd: "git rev-parse b7695c2"
+      - cmd: "cargo test --manifest-path programs/ayni/Cargo.toml"
+      - cmd: "bash tests/sentinel/i18n-key-check.sh"
+    coverage_gaps:
+      - "Same as F100-KARMA-GIFT above, except me.karma.* i18n presence is
+         now closed (structure verified); fidelity of the 18 non-English
+         translations still needs a native-speaker pass."
