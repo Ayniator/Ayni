@@ -71,13 +71,21 @@ else
 fi
 
 # `single_leaf_root` must be called from the faucet and nowhere that writes the
-# F54 ring. (Callers outside activate_faucet_zk.rs / merkle.rs / tests are a
-# review trigger, not automatically wrong — so this reports, loudly.)
-callers=$(grep -rln 'single_leaf_root' programs/ayni/src | grep -vE "(merkle.rs|activate_faucet_zk.rs|proptests.rs)$" || true)
+# F54 ring. (Callers outside the allowlist are a review trigger, not
+# automatically wrong — so this reports, loudly.)
+#
+# F59 adds two legitimate callers, both reusing the SAME F35-R2 subject-consent
+# trick and both reviewed for it (docs/presence.md §2 cites it by name):
+#   - attest_presence_zk.rs — the subject-consent proof for a presence claim;
+#   - clear_presence.rs      — the subject-consent proof for erasing one.
+# Neither pushes the single-leaf root into RecentRoots; the f59-presence round
+# verified that invariant directly (report item c). Widening the allowlist to
+# them is the acknowledgement the gate asks for, not a loosening of it.
+callers=$(grep -rln 'single_leaf_root' programs/ayni/src | grep -vE "(merkle.rs|activate_faucet_zk.rs|attest_presence_zk.rs|clear_presence.rs|proptests.rs)$" || true)
 if [ -n "$callers" ]; then
   bad "single_leaf_root has unexpected callers (ring contamination risk): $callers"
 else
-  ok "single_leaf_root is called only by activate_faucet_zk (+ merkle/proptests)"
+  ok "single_leaf_root callers are all on the reviewed allowlist (faucet + F59 presence + merkle/proptests)"
 fi
 
 if grep -q 'pub(crate) static WING_ZEROS' "$MK"; then

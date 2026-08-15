@@ -505,3 +505,90 @@ so requiring it would deadlock the gate permanently.
   hardcoded is-warning class on MobileWalletNotice -- each broke exactly one
   intended assertion (2 failed/6 passed), reverted, rebuilt, 8/8 then 66/66
   again. Deployment left exactly as found.
+- 351af80 feat(F59): wire the presence attestation on chain, with the proofs tested
+  Covered by NRR-2026-08-15-f59-presence.md (PASS WITH WARNINGS). Verified the
+  distinct-persons rule holds structurally: the external nullifier is computed
+  ONCE on chain from (circle, subject_commitment, month_index) and used as the
+  public input for both proofs, so no argument lets a caller feed the subject
+  and witness proofs different Es. Independently mutation-tested the
+  attest/clear domain-tag separation (not replaying the author's own claim):
+  collapsed clear_presence.rs's tag to attest_presence_zk.rs's, got exactly 2
+  Rust + 2 JS tests red (including the proof-level one), reverted with a
+  single-line sed back to the original text, confirmed 36/36 Rust + 12/12 JS
+  green again, git status clean throughout. Confirmed single_leaf_root's only
+  callers across programs/ayni/src are activate_faucet_zk.rs (pre-existing)
+  and F59's two new files, neither of which ever writes RecentRoots -- the
+  documented invariant (single_leaf_root must never enter RecentRoots) holds.
+  Confirmed clear_presence's PDA-seeds-only binding (no has_one, by design) is
+  sound: the presence address is a one-way function of (circle,
+  subject_commitment), so neither can be substituted without changing the
+  derived address. Confirmed Presence is exactly 13 bytes with no forbidden
+  field (score/rating/rank/karma/tier/badge/count grep clean beyond the
+  substring inside "account(s)"). Independently recomputed month.rs's
+  corrected boundary constants against `date -u`, not against the code under
+  test -- both correct. Re-ran cargo test (36/36), cargo build-sbf (clean),
+  node tests/presence-zk.test.mjs (12/12), full Playwright (66/66, unchanged
+  -- this commit does not touch frontend/). One new, real finding: bash
+  tests/sentinel/f35r2-wing-gate.sh now exits 1 (not a piped-command
+  artifact -- checked the real exit code directly) because its
+  single_leaf_root caller-allowlist was not widened for F59's legitimate,
+  documented reuse of the F35-R2 trick; the underlying invariant the script
+  protects is confirmed intact by this round's own review, but the gate
+  script itself needs its allowlist updated. F59's shipped code (as opposed
+  to the F59-DOC design-doc entry from an earlier round) has no
+  checklist.yaml coverage yet -- WARNING this round per the checklist's own
+  "WARNING in round n, FAIL in round n+1" rule. Full detail in the NRR.
+- 88116c6 docs(foundation): a test plan, and the treasury hole it turned up
+  Covered by NRR-2026-08-15-f59-presence.md (PASS WITH WARNINGS). The
+  document's central claim -- a Foundation closing a funded child Circle
+  leaves the treasury intact but unreachable through any spend path, and
+  reachable instead by a stranger who re-registers the identical
+  (parent, name) with initialize_circle's genuinely permissionless,
+  caller-chosen seats -- was judged against execute_child_close.rs directly
+  (it has no treasury account in its context at all, so there is no way it
+  could have touched it) and found NOT to be an artifact of the test's own
+  setup: the Circle and treasury PDAs are both deterministic, so the replay
+  is structural, not incidental to the test's chosen donation amount or
+  timelock. Independently reproduced end to end on a clean local validator
+  (cargo build-sbf, fresh solana-test-validator, fresh deploy of
+  AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG, `ANCHOR_PROVIDER_URL=...
+  ANCHOR_WALLET=... npx ts-mocha ... tests/treasury-orphan.ts`): 6/6 passing,
+  matching the commit's claim exactly; validator killed after, never run
+  against devnet. The document's devnet ground-truth claims were checked by
+  this round's own RPC calls, not trusted: getProgramAccounts confirms 0
+  Circle accounts under the current program and 14 under the old
+  (3ogteUFYhbHaV7UEWuGCqGVm1X4HDgAswvSePvDspHCw), including
+  DH6uDzb77mZuF8TP2ucdHUkwyW6wyZkJj8nm3i79EAUo which matches
+  frontend/.env's NEXT_PUBLIC_FOUNDATION_CIRCLE exactly; went further than
+  the document itself by deriving all 14 circles' treasury PDAs under the old
+  program and reading live balances directly -- 0.1, 0.205 and 0.08 SOL,
+  exactly the three amounts the document states, nothing else funded.
+  Verified the privacy-sweep.sh anchoring fix both ways: the bare word
+  "plausible" in programs/ayni/src/month.rs no longer trips the gate (the
+  prior round's WARNING is closed), and a planted "plausible.io" string in a
+  throwaway frontend/lib file still fails the sweep, then was deleted (git
+  status clean after). Confirmed BACKLOG.md's F59 and F96 rows disclose their
+  remaining work honestly (browser prover / QR handoff / /member UI not yet
+  built for F59; the touch-Mac isIOS() false positive recorded, not fixed,
+  for F96) rather than overclaiming. This round records the treasury finding
+  as CRITICAL severity -- real, proven, and reachable on devnet today, though
+  small and pre-existing rather than introduced by this commit, which
+  discloses and proves it rather than hiding or silently patching it.
+  BACKLOG.md's F34 row and docs/shipped.md remain unamended to point at the
+  finding -- flagged as a WARNING. Full detail in the NRR.
+
+- 98c3a8a docs(F34): record the proven treasury-orphan hole in the canonical tables
+  Post-round follow-up closing two of the f59-presence round's three
+  WARNINGs, named here because it touches tracked, non-bookkeeping files
+  (BACKLOG.md, docs/shipped.md, and one comment line in programs/ayni/src/
+  lib.rs). NOT a code change: the lib.rs edit rewords a doc comment from the
+  literal token `single_leaf_root(...)` to prose, because f35r2-wing-gate.sh
+  greps filenames for that token to catch F54-ring contamination and the
+  prose mention tripped it as a false positive (the gate now passes; the
+  allowlist was also widened, in tests/sentinel/, to admit F59's two
+  legitimate single-leaf-consent callers attest_presence_zk.rs and
+  clear_presence.rs, both verified by the round not to enter RecentRoots).
+  The BACKLOG/shipped edits point the canonical tables at the CRITICAL
+  treasury-orphan finding the round proved. Reviewed as a documentation +
+  comment change carrying no behavioural delta; program rebuilt clean
+  (cargo build-sbf) after the comment reword.

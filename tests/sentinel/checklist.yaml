@@ -3826,3 +3826,66 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
       - cmd: "diff docs/wallets.json frontend/public/wallets.json"
       - cmd: "git diff --stat -- frontend/"
       - cmd: "git status --short -- programs/"
+
+  - id: F59-PRESENCE
+    name: "F59 ZK presence attestation, on chain. attest_presence_zk (two
+      Groth16 proofs under one shared external nullifier -- subject consent
+      vs member-tree witness -- with subject_nullifier != witness_nullifier
+      as the distinct-persons rule) and clear_presence (single-proof self-
+      erasure, close = payer, month read from the account not an argument).
+      Presence PDA ['presence', circle, commitment], 13 bytes, one
+      overwritable scalar (last_month) + bump -- no count/total/streak/
+      timestamp/first_month/Vec/witness-identity. month.rs coarsens Clock to
+      a closed-month index on chain (Hinnant civil_from_days, UTC). Shipped
+      wired in 351af80; design of record docs/presence.md (Epic 4 amendment,
+      ledger-archaeology residual accepted by user)."
+    shipped_round: f59-presence (2026-08-15)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-f59-presence.md"
+      - "cargo test --manifest-path programs/ayni/Cargo.toml -> 36/36,
+         including clear_presence::tests (attest vs clear tags never collide,
+         both in-field, month/circle/member bound in, no collision with the
+         faucet tag, frozen preimage vectors) and month::tests (epoch,
+         known dates, leap day, century non-leap, 40-year monotone walk,
+         negative clock rejected)."
+      - "node tests/presence-zk.test.mjs -> 12/12 with REAL Groth16 proofs:
+         subject consent proves against single_leaf_root computed on chain;
+         witness proves membership under the SAME E; self-attestation
+         collapses to one nullifier; a March proof does not verify as April,
+         cross a Circle, or verify as an erasure; a fellow member who knows
+         the commitment cannot forge consent; both JS and Rust external
+         nullifiers pinned to the same frozen vectors."
+      - "MUTATION-TESTED: collapsing AHA-presence-clear into
+         AHA-presence-month turns 2 Rust + 2 JS tests red (incl. the proof-
+         level 'attest does not verify as erasure'); reverted, green again.
+         Independently reproduced by the f59-presence round."
+    checks:
+      - cmd: "cargo build-sbf --manifest-path programs/ayni/Cargo.toml"
+      - cmd: "cargo test --manifest-path programs/ayni/Cargo.toml"
+      - cmd: "node tests/presence-zk.test.mjs"
+      - cmd: "bash tests/sentinel/f35r2-wing-gate.sh"
+
+  - id: F34-TREASURY-ORPHAN-KNOWN-HOLE
+    name: "KNOWN, PROVEN, UNFIXED fund-safety hole (CRITICAL severity,
+      pre-existing -- NOT a regression). execute_child_close closes a
+      child Circle account but never checks or sweeps the separate
+      ['treasury', circle] PDA. Every spend path needs the Circle account
+      to deserialise, so the funds go unreachable -- but Circle is a PDA of
+      (parent, name) and initialize_circle is permissionless with caller-
+      chosen seats, so a stranger re-registers the same name, seats
+      themselves 4-of-7, and drains the orphaned treasury. Documented in
+      docs/testing-foundation.md, proven by tests/treasury-orphan.ts (6/6),
+      reproduced independently by the f59-presence round from a clean
+      deploy. Three devnet treasuries funded today (0.1/0.205/0.08 SOL) are
+      reachable. Cheapest fix (not applied -- governance decision for the
+      user): require treasury.lamports == 0 in execute_child_close."
+    shipped_round: f59-presence (2026-08-15, first recorded here)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-f59-presence.md (CRITICAL finding)"
+      - "tests/treasury-orphan.ts -- 6/6 on a local validator; NEVER run
+         against devnet (step 5 really moves funds). Assertions written so a
+         FIX turns them red."
+      - "docs/testing-foundation.md sec 0 and 4.5."
+    checks:
+      - cmd: "test -f tests/treasury-orphan.ts"
+      - cmd: "grep -q 'treasury.lamports' programs/ayni/src/instructions/execute_child_close.rs || echo 'HOLE STILL OPEN (expected until fixed)'"
