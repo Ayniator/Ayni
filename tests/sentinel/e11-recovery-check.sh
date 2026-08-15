@@ -38,6 +38,12 @@ SURFACE=(
   "$FE/lib/sharding.ts"
   "$FE/lib/shardCustody.ts"
   "$FE/lib/shardHandover.ts"
+  # F91 — the master secret is the CREDENTIAL OF RECORD (CLAUDE.md locked
+  # position): recovery reconstructs it, and /recovery/setup creates it before
+  # splitting it into shards. It was outside this list only because it landed
+  # after the gate was written, which is why the import check kept failing.
+  # Being in the surface means every invariant below now applies to it.
+  "$FE/lib/masterSecret.ts"
 )
 
 for f in "${SURFACE[@]}"; do
@@ -72,7 +78,14 @@ fi
 #          must resolve to another file already inside the declared surface
 #          (or the one explicit UI leaf, SettingsProvider) — anything else is
 #          an undeclared expansion of the surface and must be audited by hand.
-ALLOWED_TARGETS="app/recovery/page app/recovery/setup/page components/ShardSend components/ShardReceive components/SettingsProvider lib/shardSeal lib/recoveryUi lib/recovery lib/sharding lib/shardCustody lib/shardHandover"
+ALLOWED_TARGETS="app/recovery/page app/recovery/setup/page components/ShardSend components/ShardReceive components/SettingsProvider lib/shardSeal lib/recoveryUi lib/recovery lib/sharding lib/shardCustody lib/shardHandover lib/masterSecret lib/keystore"
+# lib/keystore is an ALLOWED IMPORT TARGET but deliberately NOT in SURFACE, and
+# the distinction is the point. It is the Epic 8 passkey keystore and genuinely
+# handles WebAuthn material, which this surface forbids — so pulling it INTO the
+# surface would either fail check 10 correctly or force that check to be
+# weakened. The boundary is: recovery may TRY to seal into the keystore, and
+# must work when it cannot. Check 11 is what makes allowing this import safe;
+# without it, a bare `await unlock()` in adoptMaster would sail through here.
 import_graph_fail=0
 for f in "${SURFACE[@]}"; do
   [ -f "$f" ] || continue
@@ -309,13 +322,43 @@ else
 fi
 
 # ---- 10. no biometric byte handling in recovery (passkey never gates it) ---
-bio_hits=$(grep -niE 'biometric|attestationObject|rawId|PublicKeyCredential' "${SURFACE[@]}" 2>/dev/null)
+# The strong tokens are real WebAuthn API surface and are matched anywhere. The
+# bare word "biometric" is matched only OUTSIDE comments: a file in this surface
+# may legitimately EXPLAIN that the passkey is a device-local unlock and never
+# gates recovery — forbidding it from saying so would push the explanation out
+# of the code, and masterSecret.ts's comment is exactly that sentence.
+bio_hits=$(grep -nE 'attestationObject|rawId|PublicKeyCredential' "${SURFACE[@]}" 2>/dev/null
+           grep -niE '^[^*/]*\bbiometric\b' "${SURFACE[@]}" 2>/dev/null)
 if [ -n "$bio_hits" ]; then
   echo "✘ biometric/WebAuthn material referenced in the recovery surface:"
   echo "$bio_hits"
   fail=$((fail+1))
 else
   echo "✔ no biometric/WebAuthn byte handling anywhere in the recovery surface — recovery does not gate on a passkey"
+fi
+
+# ---- 11. recovery must not GATE on the passkey ----------------------------
+# CLAUDE.md, binding: "The passkey (Epic 8) is a device-local unlock for a
+# locally-encrypted keystore — it is never the credential of record and never
+# gates recovery on its own."
+#
+# `adoptMaster` is the function recovery calls once the master is reconstructed.
+# It may TRY to seal into the keystore, but a device with no keystore must still
+# end up with a working member — so the unlock has to be inside a try/catch that
+# returns rather than throws. If that ever becomes a bare `await unlock()`, a
+# member recovering onto a fresh device is locked out by a passkey they do not
+# have, and nothing else in this gate would notice.
+MS="$FE/lib/masterSecret.ts"
+if [ -f "$MS" ]; then
+  adopt=$(sed -n '/export async function adoptMaster/,/^}/p' "$MS")
+  if ! printf '%s' "$adopt" | grep -q "unlock()"; then
+    echo "✔ adoptMaster does not touch the keystore at all — recovery cannot gate on a passkey"
+  elif printf '%s' "$adopt" | grep -q "try {" && printf '%s' "$adopt" | grep -qE "\} catch"; then
+    echo "✔ adoptMaster tolerates a missing keystore (unlock is inside try/catch) — recovery does not gate on a passkey"
+  else
+    echo "✘ adoptMaster calls unlock() WITHOUT a catch — recovery would gate on a passkey (CLAUDE.md locked position)"
+    fail=$((fail+1))
+  fi
 fi
 
 echo
