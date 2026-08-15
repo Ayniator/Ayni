@@ -117,8 +117,14 @@ pub struct EstablishWingPeer<'info> {
     )]
     pub karma_params: Account<'info, KarmaParams>,
 
-    /// F98 — the once-per-pair award record. Keyed by BOTH commitments, so a
-    /// released-and-restored Link is not paid for twice.
+    /// F98 — the once-per-pair award record, so a released-and-restored Link is
+    /// not paid for twice.
+    ///
+    /// The pair is CANONICALISED (sorted), not in role order. Seeded by role,
+    /// the guard was directional: the same two members could swap roles and
+    /// derive a second award, collecting twice — found and reproduced on a
+    /// validator by the f98-karma Sentinel round. Sorting makes both directions
+    /// land on one account, which is what the guard always claimed to do.
     #[account(
         init_if_needed,
         payer = payer,
@@ -126,8 +132,8 @@ pub struct EstablishWingPeer<'info> {
         seeds = [
             b"karmaaward",
             circle.key().as_ref(),
-            mentee_membership.commitment.as_ref(),
-            wing_membership.commitment.as_ref()
+            KarmaAward::lo(&mentee_membership.commitment, &wing_membership.commitment),
+            KarmaAward::hi(&mentee_membership.commitment, &wing_membership.commitment)
         ],
         bump
     )]

@@ -40,7 +40,13 @@ describe("F98 — sponsorship karma", () => {
   const circle = pda([Buffer.from("circle"), root.toBuffer(), Buffer.from(NAME)]);
   const membership = (c: Buffer) => pda([Buffer.from("membership"), circle.toBuffer(), c]);
   const karma = (c: Buffer) => pda([Buffer.from("karma"), circle.toBuffer(), c]);
-  const award = (m: Buffer, w: Buffer) => pda([Buffer.from("karmaaward"), circle.toBuffer(), m, w]);
+  // CANONICALISED pair seed — sorted, not role-ordered. Must mirror
+  // KarmaAward::lo/hi in the program, or the client derives a different PDA
+  // than the program expects and every call fails.
+  const award = (a: Buffer, b: Buffer) => {
+    const [lo, hi] = Buffer.compare(a, b) <= 0 ? [a, b] : [b, a];
+    return pda([Buffer.from("karmaaward"), circle.toBuffer(), lo, hi]);
+  };
   const wingPeer = (m: Buffer) => pda([Buffer.from("wingpeer"), circle.toBuffer(), m]);
   const karmaParams = pda([Buffer.from("karmaparams"), circle.toBuffer()]);
   const memberTree = pda([Buffer.from("members"), circle.toBuffer()]);
@@ -225,6 +231,59 @@ describe("F98 — sponsorship karma", () => {
       threw = true;
     }
     assert.isTrue(threw, "a ratio above 100% was accepted");
+  });
+
+  it("a ROLE SWAP between the same two members does not pay twice", async () => {
+    // The abuse a Sentinel round found and reproduced against the first
+    // version of this feature: the award PDA was seeded in role order, so the
+    // same pair could swap roles, derive a SECOND award account, and collect
+    // again — 220 between them instead of 110. Two individually-legitimate
+    // transactions, no farming loop.
+    //
+    // This asserts the pair's COMBINED total, which is the thing that was
+    // actually wrong. The original farming test only checked one direction's
+    // individual totals and sailed straight past it.
+    const a = anchor.web3.Keypair.generate();
+    const b = anchor.web3.Keypair.generate();
+    // Byte values must stay BELOW the BN254 field modulus (top byte 0x30), or
+    // the membership's Poseidon leaf insert fails — 0x55/0x66 did exactly that.
+    const aCommit = Buffer.alloc(32, 0x07);
+    const bCommit = Buffer.alloc(32, 0x08);
+    await fund([a, b]);
+    await issue(aCommit, a.publicKey);
+    await issue(bCommit, b.publicKey);
+
+    const linkAs = async (menteeCommit: Buffer, wingCommit: Buffer, signer: anchor.web3.Keypair) =>
+      program.methods
+        .establishWingPeer()
+        .accounts({
+          circle,
+          menteeMembership: membership(menteeCommit),
+          wingMembership: membership(wingCommit),
+          wingPeer: wingPeer(menteeCommit),
+          karmaParams,
+          karmaAward: award(menteeCommit, wingCommit),
+          menteeKarma: karma(menteeCommit),
+          wingKarma: karma(wingCommit),
+          signer: signer.publicKey,
+          payer: payer.publicKey,
+        })
+        .signers([signer])
+        .rpc();
+
+    // A sponsors B.
+    await linkAs(bCommit, aCommit, b);
+    const afterFirst = (await points(aCommit)) + (await points(bCommit));
+
+    // Now the roles swap: B sponsors A. Same two people, same Circle.
+    await linkAs(aCommit, bCommit, a);
+    const afterSwap = (await points(aCommit)) + (await points(bCommit));
+
+    assert.equal(
+      afterSwap,
+      afterFirst,
+      "a role swap paid the pair a second time — the award seed is directional again"
+    );
   });
 
   it("the advisory minimum gates nothing — a member with no sponsor still acts", async () => {

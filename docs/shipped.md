@@ -62,10 +62,43 @@ the dictionary**; and the badge had no coverage at all. Replaced by
 `badge-count.test.mjs` (pure functions), each verified red by mutation before
 being trusted.
 
-**Not built: karma.** The request's points system is a per-person reputation
-score — forbidden by Tradition 2 and by `privacy-sweep.sh`. It is recorded as
-**F98** and awaits an explicit written waiver. Nothing in this round introduces
-a counter, total, or ordering.
+**Karma is now built — see F98 below.** At the time of this round it was not,
+and this paragraph used to say it awaited a waiver. The waiver was given on
+2026-08-15 and the feature shipped; nothing in *this* round introduced a counter.
+
+---
+
+## F98 — sponsorship karma, under an explicit Tradition 2 waiver (2026-08-15)
+
+Verification: `code` + `built` (`cargo build-sbf` clean) + `exec` — 42/42 Rust
+unit tests, 7/7 `tests/karma.ts` on a local validator.
+
+**This ships a per-person reputation score**, which this project forbade
+mechanically until the user waived the rule in their own words (recorded in
+CLAUDE.md and in the commit note). The waiver was applied narrowly: `karma` was
+removed from `privacy-sweep.sh`'s forbidden identifiers and nothing else was;
+Tradition 2's own text is untouched, because it never contained a no-ranking
+clause — that was an engineering invariant *derived* from it.
+
+**What it costs, stated rather than implied:** a `Karma` PDA derives from a
+membership commitment and commitments are already enumerable, so anyone can
+build a complete ranked table of a Circle. That is not a leak in this design; it
+is what "accept that it ranks members" means. Onboarding copy saying so is not
+yet written.
+
+**Accounts:** `Karma` (one saturating u64), `KarmaParams` (gain, sponsor share in
+basis points, advisory `min_sponsors`), `KarmaAward` (the once-per-pair guard).
+Governed by an executed 4-of-7 `SetKarmaParams`, exactly like the treasury
+setters, one-shot via `drained`.
+
+**A CRITICAL, found and fixed in the same session.** The `f98-karma` round
+reproduced an abuse the shipped test missed: `KarmaAward` was seeded in *role*
+order, so the same two members could swap roles, derive a second award account
+and collect again — 220 between them instead of 110, with two individually
+legitimate transactions. The seed is now the canonicalised (sorted) pair, and
+the regression test asserts the pair's **combined** total after a swap, which is
+the thing the original test never looked at. Verified by reverting the seed and
+watching the test fail with "a role swap paid the pair a second time".
 
 ---
 

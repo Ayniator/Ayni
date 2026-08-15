@@ -1463,6 +1463,28 @@ pub struct KarmaAward {
 
 impl KarmaAward {
     pub const SPACE: usize = 8 + 1 + 1;
+
+    /// The pair seeds, CANONICALISED so the record is order-independent.
+    ///
+    /// The first version of this seeded the PDA with (mentee, wing) in role
+    /// order, which made the guard directional rather than pair-wise. A
+    /// Sentinel round found it and reproduced the abuse on a validator: A
+    /// sponsors B (A +10, B +100), then the same two swap roles and B sponsors
+    /// A, which derives a DIFFERENT award account, so the credit fires again —
+    /// 220 between them instead of the 110 a pair should cap at. Two
+    /// individually-legitimate transactions, no farming loop, and the one
+    /// direction the guard never looked at.
+    ///
+    /// Sorting the two commitments makes both directions collide on one
+    /// account, which is what "once per pair, forever" was always supposed to
+    /// mean. `mentee != wing` is enforced by the caller, so the two are never
+    /// equal and the ordering is total.
+    pub fn lo<'a>(a: &'a [u8; 32], b: &'a [u8; 32]) -> &'a [u8] {
+        if a <= b { a } else { b }
+    }
+    pub fn hi<'a>(a: &'a [u8; 32], b: &'a [u8; 32]) -> &'a [u8] {
+        if a <= b { b } else { a }
+    }
 }
 
 #[cfg(test)]
