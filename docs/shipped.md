@@ -68,6 +68,42 @@ and this paragraph used to say it awaited a waiver. The waiver was given on
 
 ---
 
+## Devnet upgrade + the vendored-IDL gate (2026-08-15)
+
+The program was upgraded on devnet to slot `484069558`, carrying F59 presence
+and F98 karma. The `idl-sync` round proved the deployed binary is **MD5-identical
+to a fresh local build** from the committed source, so the vendored IDL, the
+local build and the live program are demonstrably the same program.
+
+**What the upgrade nearly broke.** The frontend carries its own copy of the
+Anchor IDL at `frontend/lib/ayni.json`, and it had fallen three instructions and
+four accounts behind. `establish_wing_peer` gained the karma accounts on chain,
+so against the upgraded program every "set my sponsor" from `/me` would have
+failed with `AccountNotEnoughKeys` — and the Sponsors & Sponsees UI had shipped
+one commit earlier, so it would have been immediate and user-visible. Nothing
+caught it: not the build, not `tsc`, not the e2e suite, not any gate.
+
+`tests/sentinel/idl-sync-check.sh` is that gate now. It checks every handler in
+the `#[program]` module appears in the vendored IDL (source-based, so it works
+with no build artifacts), byte-identity against `target/idl/ayni.json` when one
+is present — naming exactly which instruction or account list moved — and that
+both hand-written derivations of the karma award pair still sort.
+
+`tests/pda-sort-check.mjs` closes the other half: `karmaAward`'s seed is a sorted
+pair Anchor cannot auto-resolve, so `peers.ts` and `tests/karma.ts` each
+implement the ordering by hand. Two hand-written copies of one
+consensus-critical comparison is the shape that drifts, and the round flagged
+that nothing would notice. The test cross-checks them over 2,000 random pairs
+plus first-byte, last-byte and high-byte (signed-comparison) cases.
+
+**Two false passes in my own checks, found by mutating them.** The gate first
+grepped for `[lo, hi]`, which an *unsorted* `const [lo, hi] = [a, b]` also
+matches — it passed on an implementation that sorted nothing. And the sort test
+threw at module scope, producing a stack trace instead of a named red test. Both
+fixed, then re-mutated to confirm they now fail properly.
+
+---
+
 ## F99 — "You are here" is a pin, not an identicon (2026-08-15)
 
 Verification: `code` + `built` (tsc clean, container rebuilt and serving) +
