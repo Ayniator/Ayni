@@ -92,7 +92,7 @@ pub mod ayni {
     /// F59 — "last stood in circle: March 2026", vouched by a fellow member.
     ///
     /// Two anonymous Groth16 proofs under the SAME external nullifier: the
-    /// subject consents (proving against `single_leaf_root(commitment)`) and a
+    /// subject consents (proving against the single-leaf consent root) and a
     /// fellow member vouches (proving against the member tree). Requiring the
     /// two nullifiers to differ is what proves two different people acted.
     ///

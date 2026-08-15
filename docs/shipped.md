@@ -124,6 +124,20 @@ two domain tags: two Rust tests and two JS tests went red, then green on revert.
 **Not yet built:** the browser prover, the QR handoff, and the `/member` presence
 line. Nothing in the UI reads a `Presence` account yet.
 
+### ⚠️ F34 — CRITICAL fund-safety hole found while writing the F59 test plan
+
+Not a regression and not fixed — recorded here so the canonical tables carry it.
+`execute_child_close` closes a child Circle account but never checks or sweeps
+its separate `["treasury", circle]` PDA. The lamports survive but go unreachable
+(every spend path needs the closed Circle to deserialise), and since a Circle is
+a PDA of `(parent, name)` and `initialize_circle` is permissionless with
+caller-chosen seats, a stranger can re-register the name, seat themselves 4-of-7
+and drain it. Proven in `tests/treasury-orphan.ts` (6/6, **local validator
+only**) and reproduced independently by the `f59-presence` round. Three devnet
+treasuries (0.1/0.205/0.08 SOL) are reachable today. Fix options in
+`docs/testing-foundation.md` §0; the cheapest — require `treasury.lamports == 0`
+in `execute_child_close` — is a governance decision left to the user.
+
 ---
 
 ## F67 / F68 / Glossary — Resources menu, wallet chooser, glossary page (2026-08-14)
