@@ -5,6 +5,7 @@
 const anchor = require("@coral-xyz/anchor");
 const { Connection, Keypair, PublicKey } = require("@solana/web3.js");
 const fs = require("fs");
+const path = require("path");
 const idl = require("../target/idl/ayni.json");
 
 const RPC = process.env.RPC_URL || "https://api.devnet.solana.com";
@@ -27,8 +28,32 @@ async function main() {
   const ONE_YEAR = new anchor.BN(365 * 24 * 60 * 60);
 
   // 7 distinct seats; seat[0] is the AHA wallet (so it can sign upserts).
-  const others = Array.from({ length: 6 }, () => Keypair.generate().publicKey);
+  //
+  // The other six USED TO BE `Keypair.generate().publicKey` with the private key
+  // discarded in memory. That made every Circle this script creates permanently
+  // ungovernable: threshold is 4-of-7 and only ONE seat could ever sign, so no
+  // proposal could pass — not even the RotateSeat that would fix it. All 13
+  // Circles seeded on devnet before this change are in that state and cannot be
+  // recovered; their six placeholder seats show 0 SOL because nobody could ever
+  // fund them.
+  //
+  // These are demo pins for the "Find a Circle Near You" map, so they do not
+  // need governance — but a seat is an authority, and creating one nobody can
+  // hold is not a placeholder, it is a hole. The keys are written to disk (0600)
+  // alongside the Foundation's, and reused on re-run.
+  const seatsDir = process.env.SEAT_KEYS_DIR || path.join(process.env.HOME, "aha-seat-keys");
+  fs.mkdirSync(seatsDir, { recursive: true, mode: 0o700 });
+  const others = ["demo-2", "demo-3", "demo-4", "demo-5", "demo-6", "demo-7"].map((n) => {
+    const file = path.join(seatsDir, `${n}.json`);
+    if (fs.existsSync(file)) {
+      return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(file, "utf8")))).publicKey;
+    }
+    const gen = Keypair.generate();
+    fs.writeFileSync(file, JSON.stringify(Array.from(gen.secretKey)), { mode: 0o600 });
+    return gen.publicKey;
+  });
   const seats = [kp.publicKey, ...others];
+  console.log(`seat keys: ${seatsDir}`);
 
   for (const c of CITIES) {
     const [circle] = PublicKey.findProgramAddressSync(

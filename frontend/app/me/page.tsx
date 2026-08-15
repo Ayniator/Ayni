@@ -38,7 +38,8 @@ import { Chip, WingPeerInfo, endWingPeer, establishWingPeer, getWingPeer, listPr
 import QuipuNecklace from "../../components/QuipuNecklace";
 import { Cord } from "../../lib/quipu";
 import { MemberProposal, SeatElectionInfo, SEAT_ROLES, listCircleMembers, listMemberProposals, listSeatElections } from "../../lib/admin";
-import { activateFaucet, activateFaucetAnonymously, getFaucet, hasFaucetGrant, listMenteesOf } from "../../lib/faucet";
+import QRCode from "qrcode";
+import { activateFaucet, activateFaucetAnonymously, getFaucet, hasFaucetGrant, listMenteesOf, type Mentee } from "../../lib/faucet";
 import { flushLedgerQueue, recordGrantInLedger } from "../../lib/faucetLedger";
 import { attestAdmission, getTwoSponsorPolicy, hasAttestation, issueProvisionalMembership } from "../../lib/admission";
 import { attestAdmissionAnonymously, castMemberVote, haveVotingKey, newMemberIdentity } from "../../lib/zk-vote";
@@ -132,13 +133,13 @@ export default function Me() {
       {connected && publicKey && (
         <div className="grid two" style={{ alignItems: "start" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Order is deliberate (F97): My memberships, then Join a Circle
+                DIRECTLY beneath it — the two are one thought ("here is where I
+                belong; here is how to belong somewhere new"), so a member does
+                not have to scroll past votes and recovery to find the join box.
+                Sponsors and Sponsees follow, because a bond is the next thing
+                after belonging. */}
             <WalletCard publicKey={publicKey} balance={balance} memberships={memberships} byPubkey={byPubkey} home={home} />
-            <VotesCard wallet={wallet ?? null} memberships={memberships} />
-            <MentorshipCard wallet={wallet ?? null} memberships={memberships} />
-            <VisibilityCard wallet={wallet ?? null} memberships={memberships} />
-            <ShieldCard wallet={wallet ?? null} memberships={memberships} />
-            <ProfileCard />
-            <RecoveryCard />
             <JoinCard
               circles={circles}
               wallet={wallet ?? null}
@@ -153,6 +154,12 @@ export default function Me() {
                 setHome(c);
               }}
             />
+            <MentorshipCard wallet={wallet ?? null} memberships={memberships} />
+            <VotesCard wallet={wallet ?? null} memberships={memberships} />
+            <VisibilityCard wallet={wallet ?? null} memberships={memberships} />
+            <ShieldCard wallet={wallet ?? null} memberships={memberships} />
+            <ProfileCard />
+            <RecoveryCard />
           </div>
           <SeventhTraditionCard
             circles={circles}
@@ -315,6 +322,11 @@ function VotesCard({ wallet, memberships }: { wallet: any; memberships: MyMember
   );
 }
 
+// The community-recommended minimum number of sponsors — a soft hint only,
+// never enforced (F97). Becomes a Foundation-Council-editable parameter under
+// F98; until then it is the documented default.
+const RECOMMENDED_MIN_SPONSORS = 2;
+
 function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyMembership[] }) {
   const [wings, setWings] = useState<Record<string, WingPeerInfo | null>>({});
   const [chips, setChips] = useState<Record<string, Chip[]>>({});
@@ -323,6 +335,13 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
   const [attestInput, setAttestInput] = useState<Record<string, string>>({});
   // Neophytes I sponsor who can still receive the one-time first-gas grant.
   const [neophytes, setNeophytes] = useState<Record<string, { commitment: string }[]>>({});
+  // Everyone who names me as their sponsor (my sponsees), faucet-eligible or
+  // not — this is the Sponsees list (F97), distinct from `neophytes` above,
+  // which is only the subset still eligible for the one-time first-gas grant.
+  const [sponsees, setSponsees] = useState<Record<string, Mentee[]>>({});
+  // The sponsor-invitation modal: which membership's invite is open, plus the
+  // deep link and its QR data-URL, drawn locally (never sent anywhere).
+  const [invite, setInvite] = useState<{ m: MyMembership; url: string; qr: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const t = useT();
@@ -333,6 +352,8 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
     flushLedgerQueue().catch(() => {});
     for (const m of memberships) {
       getWingPeer(m.circle, m.commitment).then((w) => setWings((p) => ({ ...p, [m.circle]: w }))).catch(() => {});
+      // My sponsees: everyone who named me as their wing, active links only.
+      listMenteesOf(m.circle, m.commitment).then((rows) => setSponsees((p) => ({ ...p, [m.circle]: rows }))).catch(() => {});
       listProgressTokens(m.circle).then((all) => setChips((p) => ({ ...p, [m.circle]: all.filter((c) => c.member === m.commitment) }))).catch(() => {});
       listQuipuCords(m.circle).then((all) => setCords((p) => ({ ...p, [m.circle]: all.filter((c) => c.member === m.commitment).map((c) => ({ step: c.step, completedAt: c.completedAt, sponsor: c.sponsor })) }))).catch(() => {});
       // Parrain action (Epic 0): if I'm someone's wing, their faucet grant is
@@ -444,22 +465,71 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
     finally { setBusy(null); }
   }
 
+  // Release my own sponsor. Compassionate confirm: the member loses nothing but
+  // the link, and must be told so before the tap (F97).
   async function endWing(m: MyMembership) {
     if (!wallet) return;
+    if (!window.confirm(t("me.spon.confirmReleaseSponsor"))) return;
     setBusy("end-" + m.circle); setNote(null);
     try {
       await endWingPeer(wallet, new PublicKey(m.circle), m.commitment, m.commitment);
-      setNote({ kind: "ok", text: t("me.mentor.wingPeerEnded") });
+      setNote({ kind: "ok", text: t("me.spon.releasedSponsor") });
       load();
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
     finally { setBusy(null); }
   }
 
+  // Release a sponsee (I am the wing). The program lets either party end the
+  // link; here I sign with my own membership and target the sponsee's PDA.
+  async function releaseSponsee(m: MyMembership, sponseeCommitment: string) {
+    if (!wallet) return;
+    if (!window.confirm(t("me.spon.confirmReleaseSponsee"))) return;
+    setBusy("rel-" + sponseeCommitment); setNote(null);
+    try {
+      await endWingPeer(wallet, new PublicKey(m.circle), sponseeCommitment, m.commitment);
+      setNote({ kind: "ok", text: t("me.spon.releasedSponsee") });
+      load();
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+    finally { setBusy(null); }
+  }
+
+  // The sponsor invitation: a deep link carrying only the circle and the
+  // inviter's PUBLIC membership commitment — the same value already printed on
+  // the trust page, nothing secret. The QR is drawn locally and neither the
+  // link nor the code is transmitted anywhere by this page.
+  function inviteUrl(m: MyMembership): string {
+    const origin = typeof window === "undefined" ? "" : window.location.origin;
+    const p = new URLSearchParams({ circle: m.circle, to: m.commitment });
+    return `${origin}/sponsor-request?${p.toString()}`;
+  }
+
+  async function openInvite(m: MyMembership) {
+    const url = inviteUrl(m);
+    let qr = "";
+    try {
+      qr = await QRCode.toDataURL(url, { width: 240, margin: 1, color: { dark: "#111111", light: "#ffffff" } });
+    } catch { /* the modal still shows the copyable link if the QR cannot draw */ }
+    setInvite({ m, url, qr });
+  }
+
+  async function copyInvite(m: MyMembership) {
+    try {
+      await navigator.clipboard.writeText(inviteUrl(m));
+      setNote({ kind: "ok", text: t("me.spon.linkCopied") });
+    } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
+  }
+
   if (memberships.length === 0) return null;
   return (
     <div className="card">
-      <h3 style={{ marginTop: 0 }}>{t("me.mentor.title")}</h3>
-      <p className="muted sm" style={{ marginTop: 0 }}>{t("me.mentor.subtitle")}</p>
+      <h3 style={{ marginTop: 0 }}>{t("me.spon.sponsorsTitle")} &amp; {t("me.spon.sponseesTitle")}</h3>
+      <p className="muted sm" style={{ marginTop: 0 }}>{t("me.spon.sponsorsSubtitle")}</p>
+      {/* A soft, non-gating suggestion (F97). The community-recommended minimum
+          is a hint, never a lock: a member with fewer sponsors — or none — keeps
+          full use of the platform and can still create Circles. The number will
+          become a Foundation-Council parameter under F98; until then it is the
+          documented default of 2. */}
+      <p className="muted sm" style={{ marginTop: 0 }}>{t("me.spon.softMinimum").replace("{n}", String(RECOMMENDED_MIN_SPONSORS))}</p>
       {memberships.map((m) => {
         const w = wings[m.circle];
         const cs = chips[m.circle] ?? [];
@@ -474,22 +544,42 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
             <div className="sub" style={{ marginTop: 4 }}>
               {cs.length ? cs.map((c) => <span key={c.milestone} className="badge badge-alt" style={{ marginRight: 4 }}>🏅 {milestoneLabel(c.milestone)}</span>) : <span className="muted">{t("me.mentor.noChips")}</span>}
             </div>
-            <div className="sub" style={{ marginTop: 6 }}>
-              {t("me.mentor.wingPeerLabel")} {w && w.active ? <span className="mono">{w.wing.slice(0, 8)}…</span> : <span className="muted">{t("me.mentor.none")}</span>}
-              {w && w.active && <button className="btn btn-sm btn-ghost" style={{ marginLeft: 8 }} disabled={busy === "end-" + m.circle} onClick={() => endWing(m)}>{t("me.mentor.end")}</button>}
+            {/* ---- Sponsors: the guide who sponsors me in this Circle ---- */}
+            <div className="sub" style={{ marginTop: 10, fontWeight: 600 }}>{t("me.spon.sponsorsTitle")}</div>
+            <div className="sub" style={{ marginTop: 4 }}>
+              {t("me.spon.yourSponsor")}: {w && w.active ? <span className="mono">{w.wing.slice(0, 8)}…</span> : <span className="muted">{t("me.spon.noSponsorYet")}</span>}
+              {w && w.active && <button className="btn btn-sm btn-ghost" style={{ marginLeft: 8 }} disabled={busy === "end-" + m.circle} onClick={() => endWing(m)}>{busy === "end-" + m.circle ? t("me.spon.releasing") : t("me.spon.releaseLink")}</button>}
+            </div>
+            <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+              <button className="btn btn-sm" onClick={() => openInvite(m)}>{t("me.spon.shareQr")}</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => copyInvite(m)}>{t("me.spon.copyLink")}</button>
             </div>
             <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
               <input className="mono" value={wingInput[m.circle] ?? ""} onChange={(e) => setWingInput((p) => ({ ...p, [m.circle]: e.target.value }))} placeholder={t("me.mentor.wingPlaceholder")} style={{ flex: 1, minWidth: 180 }} />
-              <button className="btn btn-sm" disabled={busy === "set-" + m.circle} onClick={() => setWing(m)}>{busy === "set-" + m.circle ? "…" : (w && w.active ? t("me.mentor.change") : t("me.mentor.setWingPeer"))}</button>
+              <button className="btn btn-sm" disabled={busy === "set-" + m.circle} onClick={() => setWing(m)}>{busy === "set-" + m.circle ? "…" : (w && w.active ? t("me.spon.changeSponsor") : t("me.spon.inviteSponsor"))}</button>
             </div>
-            {(neophytes[m.circle] ?? []).map((mentee) => (
-              <div className="row" key={mentee.commitment} style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-                <span className="sub">{t("me.mentor.youSponsor")} <span className="mono">{mentee.commitment.slice(0, 8)}…</span></span>
-                <button className="btn btn-sm" disabled={busy === "gas-" + mentee.commitment} onClick={() => firstGas(m, mentee.commitment)}>
-                  {busy === "gas-" + mentee.commitment ? t("me.sending") : t("me.mentor.activateFaucet")}
-                </button>
-              </div>
-            ))}
+
+            {/* ---- Sponsees: the people I sponsor in this Circle ---- */}
+            <div className="sub" style={{ marginTop: 12, fontWeight: 600 }}>{t("me.spon.sponseesTitle")}</div>
+            {(sponsees[m.circle] ?? []).length === 0 && (
+              <p className="muted sm" style={{ margin: "4px 0 0" }}>{t("me.spon.noSponsees")}</p>
+            )}
+            {(sponsees[m.circle] ?? []).map((sp) => {
+              const eligible = (neophytes[m.circle] ?? []).some((n) => n.commitment === sp.commitment);
+              return (
+                <div className="row" key={sp.commitment} style={{ gap: 6, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  <span className="sub"><span className="mono">{sp.commitment.slice(0, 8)}…</span>{sp.establishedAt ? <span className="muted"> · {t("me.spon.since")} {new Date(sp.establishedAt * 1000).toLocaleDateString()}</span> : null}</span>
+                  {eligible && (
+                    <button className="btn btn-sm" disabled={busy === "gas-" + sp.commitment} onClick={() => firstGas(m, sp.commitment)}>
+                      {busy === "gas-" + sp.commitment ? t("me.sending") : t("me.mentor.activateFaucet")}
+                    </button>
+                  )}
+                  <button className="btn btn-sm btn-ghost" disabled={busy === "rel-" + sp.commitment} onClick={() => releaseSponsee(m, sp.commitment)}>
+                    {busy === "rel-" + sp.commitment ? t("me.spon.releasing") : t("me.spon.releaseLink")}
+                  </button>
+                </div>
+              );
+            })}
             <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
               <input className="mono" value={attestInput[m.circle] ?? ""} onChange={(e) => setAttestInput((p) => ({ ...p, [m.circle]: e.target.value }))} placeholder={t("me.mentor.newcomerCodePlaceholder")} style={{ flex: 1, minWidth: 180 }} />
               <button className="btn btn-sm" disabled={busy === "attest-" + m.circle} onClick={() => attestFor(m)}>
@@ -500,6 +590,27 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
         );
       })}
       {note && <p className={note.kind === "err" ? "error" : "ok-note"} style={{ marginBottom: 0 }}>{note.text}</p>}
+
+      {invite && (
+        <div className="mw-notice" role="dialog" aria-modal="true" aria-label={t("me.spon.qrTitle")} style={{ marginTop: 12 }}>
+          <div className="mw-notice-body">
+            <strong>{t("me.spon.qrTitle")}</strong>
+            <p className="sm" style={{ margin: "4px 0" }}>{t("me.spon.qrHelp")}</p>
+            {invite.qr && (
+              <div style={{ background: "#fff", padding: 8, borderRadius: 8, width: "fit-content" }}>
+                {/* Drawn locally from the deep link; no network involved. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={invite.qr} alt={t("me.spon.qrTitle")} width={200} height={200} />
+              </div>
+            )}
+            <input className="mono" readOnly value={invite.url} onFocus={(e) => e.currentTarget.select()} style={{ width: "100%", marginTop: 8 }} />
+          </div>
+          <div className="mw-notice-actions">
+            <button className="btn btn-sm" onClick={() => copyInvite(invite.m)}>{t("me.spon.copyLink")}</button>
+            <button className="btn btn-sm btn-ghost" onClick={() => setInvite(null)}>{t("me.spon.close")}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
