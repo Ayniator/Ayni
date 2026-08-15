@@ -593,7 +593,15 @@ so requiring it would deadlock the gate permanently.
   comment change carrying no behavioural delta; program rebuilt clean
   (cargo build-sbf) after the comment reword.
 
-- af41220013be4ff5fb6ae3a290f9675395324b836 feat(F97): Sponsors & Sponsees on /me, invitation page, messages badge
+- af4122013be4ff5fb6ae3a290f9675395324b836 feat(F97): Sponsors & Sponsees on /me, invitation page, messages badge
+  SHA CORRECTED 2026-08-15 by the main session: the f97-sponsorship round
+  wrote this hash with an extra "0" after "af4122", producing a 41-character
+  string that names no object in the repository. The push gate caught it and
+  refused the push, which is exactly what it exists to do — a registry entry
+  whose hash does not resolve is indistinguishable from an unreviewed commit.
+  Only the typo was changed; the round's findings below are untouched, and
+  the commit they describe is the one this corrected hash resolves to
+  (verified with git rev-parse).
   Covered by NRR-2026-08-15-f97-sponsorship.md (PASS WITH WARNINGS). All
   specified gates green (sponsor-wording-check.sh 18/18, badge-count.test.mjs
   5/5, privacy-sweep.sh 5/5, f35r2-wing-gate.sh 9/9, i18n-key-check.sh
