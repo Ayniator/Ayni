@@ -1,1 +1,1 @@
-NRR-2026-08-15-f59-presence.md
+NRR-2026-08-15-f97-sponsorship.md

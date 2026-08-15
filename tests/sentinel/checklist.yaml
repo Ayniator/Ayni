@@ -3889,3 +3889,113 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
     checks:
       - cmd: "test -f tests/treasury-orphan.ts"
       - cmd: "grep -q 'treasury.lamports' programs/ayni/src/instructions/execute_child_close.rs || echo 'HOLE STILL OPEN (expected until fixed)'"
+
+  - id: F97-SPONSORSHIP
+    name: "F97 -- Sponsors & Sponsees on /me (real Sponsees list, QR/link
+      invite modal via /sponsor-request), compassionate wording
+      ('Release this Link' / 'Accept this Link' / 'Not at this time',
+      bond->Link rename), and the 'My Messages' unread badge (top-right
+      circle, hidden at zero, capped 99+, aria-label carries true count).
+      Built entirely on the existing F27 WingPeer PDA (establish_wing_peer
+      writes only by the mentee; end_wing_peer by either party); no new
+      on-chain instruction or account. Sponsor graph stays PRIVATE to each
+      member -- /me shows only the connected member's own sponsors/sponsees,
+      filtered client-side by their own commitment; nothing added exposes a
+      third-party enumeration UI. The QR/link carries only two already-public
+      values (Circle address + inviter's membership commitment, the same
+      value shown on /member/[commitment]); qrcode is drawn locally
+      (no network). F98 (karma/reputation points) was explicitly NOT built,
+      recorded as blocked pending a written waiver -- verified this round
+      that no score/rank/karma/reputation field or counter was introduced."
+    shipped_round: f97-sponsorship (2026-08-15)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-15-f97-sponsorship.md"
+      - "tests/sentinel/sponsor-wording-check.sh -- static gate over
+         frontend/lib/i18n.generated.ts's en block: blunt-vocabulary ban
+         (reject/delete/remove/deny/refuse) on sponreq.decline/accept and
+         me.spon.releaseLink, decline must read 'Not at this time', no
+         'bond' survives, sponreq.declined must say nothing was recorded,
+         me.spon.softMinimum must never read as a gate (must/required/
+         cannot/blocked/denied), both release confirmations must reassure
+         'full use of the platform'. MUTATION-TESTED this round: decline ->
+         'Reject' and declined -> 'Declined.' turns 3 checks red, exit 1;
+         reverted, green again (git status clean)."
+      - "tests/badge-count.test.mjs -- 5/5 on the pure exported functions
+         badgeText/messagesLabel/BADGE_MAX from InboxNavLink.tsx (zero/
+         negative/NaN/Infinity hide, 99 shows, 100 caps to '99+', the
+         accessible LABEL stays uncapped). MUTATION-TESTED this round:
+         removing the BADGE_MAX cap turns the 'past the cap' case red
+         (got \"100\", want \"99+\"); reverted, green again."
+      - "frontend/e2e/sponsor-request.spec.ts -- 3/3, run against a FRESH
+         rebuild of the deployed container this round (the running
+         container predated af41220; rebuilt via docker compose before
+         testing). Reachable without a wallet: a well-formed invitation
+         explains itself and offers connect, a malformed link says so and
+         withholds accept/decline controls, and the page contacts no
+         third-party host. What it does NOT and cannot prove in CI (no
+         wallet connects here) is documented in its own comments -- the
+         accept/decline wording contract is covered instead by the static
+         gate above, not by an e2e assertion that could pass vacuously."
+      - "cd frontend && npx playwright test -- 69/69 across chromium +
+         mobile-firefox-android, full suite, not just the new spec."
+      - "bash tests/sentinel/privacy-sweep.sh and bash
+         tests/sentinel/i18n-key-check.sh (1080 keys, including all new
+         me.spon.*/sponreq.* keys, resolve to an English fallback) both
+         green."
+      - "cd frontend && npx tsc --noEmit -- clean."
+      - "Program review: establish_wing_peer.rs confirms only the MENTEE's
+         own signature can write a WingPeer link (require! on
+         mentee_membership.is_member_key(signer)), so the commit's direction
+         claim (scanner becomes the sponsee) is correct and /me's invite
+         copy ('take someone under your wing') matches. end_wing_peer.rs
+         confirms releaseSponsee's argument order
+         (endWingPeer(wallet, circle, sponseeCommitment, myCommitment)) is
+         right: the WingPeer PDA is keyed on the SPONSEE's commitment
+         (matches wing_peer.mentee), and the signer's OWN membership
+         (myCommitment) must equal wing_peer.wing -- correct wiring, not
+         reversed."
+      - "RPC review (devnet, program AHAHnRiJEANtYJpWZxGZZa63ZTFzMa5e5Q8DszCgavSG
+         has 0 circles; old program 3ogteUFYhbHaV7UEWuGCqGVm1X4HDgAswvSePvDspHCw
+         has 14): the seed-script commit-message claim ('13 of 14 ... exactly
+         ONE signable seat') does not reproduce exactly by live balance --
+         11 of 14 show exactly one nonzero-balance seat, and 3 (Foundation +
+         two ad hoc test circles from earlier treasury-orphan-hole testing,
+         AHA TreasTest / AHA Cleanup, unrelated to these two scripts) show
+         4/7. Foundation's own 4-nonzero/3-zero split matches the commit's
+         claim exactly (Treasurer/Scribe/Rhythm/deployer funded, the three
+         elders at 0 SOL). RECOVERY_TIMELOCK is independently enforced
+         on-chain, not just client-side (initialize_circle.rs requires >= 0;
+         council.rs's arm_if_ready saturating-adds it, so 0 is a real,
+         immediate-eligibility opt-out and a negative value can never reach
+         the program). See the NRR for the incident this review triggered:
+         running seed-foundation.js in THIS environment (a deployer keypair
+         that does not match the one that created the real, already-deployed
+         Foundation) silently created a SECOND, different-address 'AHA
+         Foundation' circle on devnet (PDA is deployer-pubkey-derived, a
+         pre-existing characteristic of both scripts, not introduced by
+         af41220) -- a real, disclosed side effect of this round's testing,
+         not a code regression, and not referenced by
+         NEXT_PUBLIC_FOUNDATION_CIRCLE."
+    checks:
+      - cmd: "bash tests/sentinel/sponsor-wording-check.sh"
+      - cmd: "node tests/badge-count.test.mjs"
+      - cmd: "bash tests/sentinel/privacy-sweep.sh"
+      - cmd: "bash tests/sentinel/i18n-key-check.sh"
+      - cmd: "bash tests/sentinel/f35r2-wing-gate.sh"
+      - cmd: "cd frontend && npx tsc --noEmit"
+      - cmd: "cd frontend && npx playwright test -g sponsor-request"
+    coverage_gaps:
+      - "No test exercises the actual on-chain accept/decline path (a real
+         establishWingPeer call from /sponsor-request) end to end -- no
+         wallet can connect in this repo's CI/e2e environment. The program-
+         level correctness of establishWingPeer/endWingPeer wiring was
+         checked this round by source review + the pre-existing F27 program
+         tests, not by a fresh integration test written for F97."
+      - "BACKLOG.md's F97 row is unamended (still marked as requested/
+         proposed with '(proposed)' file paths) despite the feature now
+         being code-complete, and docs/shipped.md has no F97 entry at all --
+         WARNING this round per the docs-drift rule."
+      - "The reverse-direction invitation (asking someone ABOVE you to
+         become your sponsor via a single tap) is explicitly left open by
+         the commit itself (needs a two-way handshake) -- tracked, not a
+         gap in this round's coverage."

@@ -592,3 +592,69 @@ so requiring it would deadlock the gate permanently.
   treasury-orphan finding the round proved. Reviewed as a documentation +
   comment change carrying no behavioural delta; program rebuilt clean
   (cargo build-sbf) after the comment reword.
+
+- af41220013be4ff5fb6ae3a290f9675395324b836 feat(F97): Sponsors & Sponsees on /me, invitation page, messages badge
+  Covered by NRR-2026-08-15-f97-sponsorship.md (PASS WITH WARNINGS). All
+  specified gates green (sponsor-wording-check.sh 18/18, badge-count.test.mjs
+  5/5, privacy-sweep.sh 5/5, f35r2-wing-gate.sh 9/9, i18n-key-check.sh
+  1080/1080, tsc --noEmit clean, Playwright 69/69 across chromium +
+  mobile-firefox-android against a container rebuilt this round to actually
+  include this commit). Both of the author's own "coverage that cannot fail"
+  replacements were independently mutation-tested (wording gate: decline ->
+  "Reject" turns 3 checks red; badge test: removing the 99+ cap turns 1 case
+  red) and reverted clean. Program review confirms establish_wing_peer.rs
+  gates the link write on the MENTEE's own signature (direction claim holds,
+  /me's invite copy is not misleading) and end_wing_peer.rs confirms
+  releaseSponsee's account wiring targets the sponsee's WingPeer PDA correctly
+  with the caller's own membership as signer -- not reversed. No karma/rank/
+  score field found anywhere in the diff; F98 remains correctly unbuilt.
+  Sponsor graph confirmed private-to-viewer in the new UI (every query filters
+  by the connected member's OWN commitment); the pre-existing WingPeer PDA
+  public on-chain enumerability is honestly noted as unchanged, not
+  deepened, and not this commit's regression. Invitation link confirmed to
+  carry only the same commitment already public on /member/[commitment], QR
+  drawn locally (qrcode, no network), e2e confirms no third-party host
+  contact. WARNINGS, not FAILs: (1) BACKLOG.md's F97 row and docs/shipped.md
+  were not updated to reflect the feature now being code-complete --
+  documentation drift, escalates to FAIL next round if unamended; (2) the
+  seed-script commit message's "13 of 14 devnet Circles have exactly ONE
+  signable seat" claim does not reproduce exactly by live RPC (11 of 14, with
+  2 of the other 3 governable circles traced to unrelated earlier
+  treasury-orphan-hole test circles) though the Foundation-specific figures
+  match exactly and RECOVERY_TIMELOCK is independently confirmed enforced
+  on-chain (>=0 required, 0 is a real program-permitted immediate-eligibility
+  opt-out); (3) DISCLOSED INCIDENT -- verifying the seed-script claims by
+  actually running seed-foundation.js against devnet (this environment's
+  deployer keypair differs from the one that created the real, already-
+  deployed Foundation at DH6uDzb77mZuF8TP2ucdHUkwyW6wyZkJj8nm3i79EAUo) silently
+  created a SECOND, different-address "AHA Foundation"
+  (211ED6gqbitukLw6n1VNEAasgnXaQovmUdUPbLuwM29V) on devnet, because both seed
+  scripts derive the Circle PDA from the local deployer's own pubkey -- a
+  pre-existing characteristic unchanged by this commit's diff, not a
+  regression, but a real gap this commit's fix does not guard against. Cost
+  was negligible devnet rent; the phantom circle is not referenced by
+  NEXT_PUBLIC_FOUNDATION_CIRCLE and the running app is unaffected; no further
+  on-chain remediation was attempted so as not to compound an unreviewed
+  state change. tests/sentinel/checklist.yaml gained an F97-SPONSORSHIP entry
+  this same round (was previously uncovered).
+
+- 4caee24 docs(F97): close the round's warnings; guard the seed script's create path
+  Post-round follow-up to the f97-sponsorship round, named here because it
+  touches tracked non-bookkeeping files (BACKLOG.md, docs/shipped.md,
+  docs/testing-foundation.md, scripts/seed-foundation.js). Closes the round's
+  two REAL warnings: F97 marked code-complete in both canonical tables, and a
+  create-guard added to seed-foundation.js after a verification run
+  accidentally created a live second "AHA Foundation" on devnet
+  (211ED6gqbitukLw6n1VNEAasgnXaQovmUdUPbLuwM29V) because the Circle address
+  derives from the LOCAL deployer's pubkey and this machine's deployer differs
+  from the original's. The script now prints cluster/deployer/derived-address
+  before acting and refuses to create on a non-local cluster without
+  CONFIRM_CREATE=1; verified the guard exits 2 writing nothing (probe address
+  confirmed absent afterwards) and that the adopt path still runs clean. The
+  accidental Circle is disclosed in docs/testing-foundation.md, not removed.
+  Explicitly does NOT amend the "13 of 14" figure the round disputed: re-
+  measured by reading all seven seat pubkeys from every Circle account and
+  counting members of the known AHA key family, the result is 13 circles with
+  exactly one signable seat plus the Foundation with four, so the original
+  claim stands and the disagreement is recorded rather than deferred to.
+  No application code, no behavioural change to the frontend.
