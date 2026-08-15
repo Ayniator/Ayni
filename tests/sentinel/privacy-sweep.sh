@@ -30,7 +30,7 @@ report() { # name, hits
 echo "=== Sentinel Layer D — forbidden-pattern sweep ==="
 
 # 1. Analytics / telemetry SDKs and tracking pixels. Nothing may phone home.
-hits=$(grep -rniE '(google-analytics|googletagmanager|gtag\(|mixpanel|segment\.(com|io)|amplitude|posthog|hotjar|fullstory|sentry\.io|datadog|newrelic|plausible|fathom|matomo|facebook\.net|fbq\(|doubleclick\.net)' $SRC $EX . 2>/dev/null | grep -viE 'onDoubleClick|handleDoubleClick')
+hits=$(grep -rniE '(google-analytics|googletagmanager|gtag\(|mixpanel|segment\.(com|io)|amplitude[-./]|posthog|hotjar|fullstory|sentry\.io|datadog|newrelic|plausible[-./]|fathom[-./]|matomo|facebook\.net|fbq\(|doubleclick\.net)' $SRC $EX . 2>/dev/null | grep -viE 'onDoubleClick|handleDoubleClick')
 report "no analytics/telemetry SDK" "$hits"
 
 hits=$(grep -rniE '<img[^>]+(1x1|pixel\.gif|track\.(gif|png))' --include=*.tsx --include=*.ts --include=*.html $EX . 2>/dev/null)

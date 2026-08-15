@@ -18,6 +18,55 @@
 
 ---
 
+## F96 — the connect button, the cluster box, and the three-tone mobile banner (2026-08-15)
+
+Verification: `code` + `built` (tsc clean, container rebuilt and serving) +
+`exec` (Playwright 66/66 across two projects). Covered by
+`reports/sentinel/NRR-2026-08-15-connect-and-cluster.md` (PASS WITH WARNINGS),
+which mutation-tested the new assertions with its own choice of breaks.
+
+**The button says "Connect."** `WalletButton.tsx` uses
+`BaseWalletMultiButton` with an explicit label set, because upstream's
+`WalletMultiButton` hardcodes its own LABELS and exposes no prop. Only
+`no-wallet` is re-worded ("Select Wallet" → "Connect"); every other label is
+left at the upstream wording on purpose. The pre-hydration placeholder says
+"Connect" too, so the word does not change under the reader.
+
+**The Solana mark moved into the button**, as a CSS `::before` rather than a
+React child — `BaseWalletConnectionButton` overwrites `startIcon`
+unconditionally with the selected wallet's icon and exposes no other slot. A
+`:not(:has(...))` guard makes our mark step aside once the library renders a
+real wallet icon, instead of stacking two. `SolanaBadge`/`SolanaMark` and the
+`.sol-badge` rule are deleted rather than left orphaned.
+
+**Testnet is gone from the cluster box** — AHA is not deployed there, and
+listing it even greyed out implies a cluster you could switch to. Removed
+*conditionally*, not deleted: a `<select>` whose `value` matches no rendered
+option renders BLANK, so a straight delete would make a testnet-pointed
+deployment stop naming its cluster entirely. In normal operation that branch is
+dead.
+
+**The mobile banner has three tones, not two** (`noticeTone()` in
+`lib/mobileWallet.ts`): `broken` (Android Firefox — MWA is offered and will
+hang), `only-route` (iOS — the adapter injects MWA only on Android, so no iOS
+browser can reach an external wallet at all), `alternative` (Android Chrome and
+friends, where Connect works and should not be talked out of). The first
+version told iPhone users the in-app browser was "the most reliable way", which
+is wrong by understatement on a device where it is the only way.
+
+**Coverage:** `e2e/wallet-button.spec.ts` (label, mark, two-icon guard, no stray
+badge), `e2e/network-selector.spec.ts` (options, mainnet disabled, and the
+load-bearing one — the box is never blank), `e2e/wallet-notice-tone.spec.ts`
+(one describe per user agent, each asserting the wrong wording is *absent*, not
+just the right wording present).
+
+**Known limit, recorded not fixed:** `isIOS()`'s touch-Mac heuristic
+misclassifies a desktop Mac driving a touchscreen display. iPadOS impersonates
+macOS deliberately and no feature separates them; any tightening also excludes
+real iPads, which is the worse error. See the comment in `lib/mobileWallet.ts`.
+
+---
+
 ## F59 — ZK presence attestation, on chain (2026-08-15)
 
 Verification: `code` + `built` (`cargo build-sbf`, clean) + `exec` — 36/36

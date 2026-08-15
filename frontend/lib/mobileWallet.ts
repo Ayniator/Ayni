@@ -36,6 +36,23 @@ export function isIOS(): boolean {
   const s = ua();
   if (/iphone|ipad|ipod/i.test(s)) return true;
   // iPadOS 13+ reports a desktop Mac UA; touch points give it away.
+  //
+  // KNOWN FALSE POSITIVE, left in deliberately. A desktop Mac driving a
+  // touchscreen display also reports maxTouchPoints > 1, so it is classified
+  // iOS and would be shown the "only route" copy. There is no feature that
+  // separates the two: iPadOS impersonates macOS on purpose, and platform,
+  // pointer media queries and screen size all agree between an iPad with a
+  // trackpad and a Mac with a touch monitor. Any tightening that excludes the
+  // Mac also excludes real iPads, which is the worse error — an iPad user has
+  // NO way to connect and must be told so.
+  //
+  // What the false positive actually costs, since "rare" is not an argument on
+  // its own: the banner is suppressed entirely whenever a wallet provider is
+  // injected (see isInWalletBrowser), so a Mac with an extension never sees it.
+  // A Mac WITHOUT any wallet sees copy addressed to "iPhone and iPad" — advice
+  // aimed at devices they are not using, which is misplaced rather than false,
+  // and offers them a working link either way. Raised as a WARNING by the
+  // connect-and-cluster round; disposition recorded here rather than fixed.
   return /macintosh|mac os x/i.test(s) && (navigator.maxTouchPoints ?? 0) > 1;
 }
 
