@@ -1,7 +1,15 @@
 // Default (built-in) Daily Reflections resolution. Shown on /reflections when no
-// Circle has published an entry for the chosen day. The dataset covers 161 of the
-// 365 calendar days, so any day resolves to an exact entry or the nearest one by
-// circular calendar distance (wrapping across the year boundary).
+// Circle has published an entry for the chosen day. The dataset covers 359 of the
+// 365 calendar days (English, with full French and Spanish translations), so any
+// day resolves to an exact entry or the nearest one by circular calendar
+// distance (wrapping across the year boundary). The remaining handful sit at the
+// end of December.
+//
+// ⚠ WEIGHT. The generated module is ~2.5 MB and this is a client component, so
+// all of it reaches the browser. That was already true at 161 entries (~2.1 MB)
+// — the growth made an existing problem bigger rather than creating one. The
+// fix is the glossary's shape: move the data to `public/reflections.json` and
+// fetch the day that is actually being read. Tracked in BACKLOG.
 
 import {
   DEFAULT_REFLECTIONS,

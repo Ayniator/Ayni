@@ -3207,6 +3207,265 @@
       "args": []
     },
     {
+      "name": "give_karma",
+      "docs": [
+        "F100 — thank a fellow member of your Circle by giving them karma.",
+        "",
+        "The giver's balance drops, the receiver's rises, and after the Circle's",
+        "return period the giver may reclaim their own amount while the receiver",
+        "keeps theirs — so the thanks costs nothing in the end. Because that mints",
+        "karma, it is limited to ONCE PER ORDERED PAIR, EVER: A may thank B once",
+        "and B may thank A once. No overdraft; the cap per gift is votable."
+      ],
+      "discriminator": [
+        34,
+        180,
+        203,
+        219,
+        189,
+        16,
+        175,
+        221
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "giver_membership",
+            "receiver_membership"
+          ]
+        },
+        {
+          "name": "giver_membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "giver_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "receiver_membership",
+          "docs": [
+            "The receiver must be a membership OF THE SAME CIRCLE — `has_one = circle`",
+            "plus the seed binding. Karma is a Circle-local quantity; letting it cross",
+            "would make one Circle's group conscience spend another's."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "receiver_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "karma_params",
+          "docs": [
+            "The Circle's policy. `init_if_needed` for the same reason as",
+            "`establish_wing_peer`: an optional PDA whose bump constraint reads the",
+            "account cannot be both absent and checked."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  97,
+                  114,
+                  109,
+                  97,
+                  112,
+                  97,
+                  114,
+                  97,
+                  109,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "karma_gift",
+          "docs": [
+            "`init`, deliberately: creation fails if this pair has already used their",
+            "gift in this direction, which is the whole anti-mint guard."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  97,
+                  114,
+                  109,
+                  97,
+                  103,
+                  105,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "giver_membership.commitment",
+                "account": "Membership"
+              },
+              {
+                "kind": "account",
+                "path": "receiver_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "giver_karma",
+          "docs": [
+            "The giver must already have a karma account — you cannot give what you",
+            "have never earned, so this is NOT init_if_needed."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  97,
+                  114,
+                  109,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "giver_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "receiver_karma",
+          "docs": [
+            "The receiver may never have earned any, so this one is created on demand."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  97,
+                  114,
+                  109,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "receiver_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "docs": [
+            "A key the GIVER controls (owner or guardian)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Rent payer, separate from the authority — same F61 reasoning as",
+            "`establish_wing_peer`: a shielded membership's authority has never held a",
+            "lamport and must not need to."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "grant_level",
       "docs": [
         "Grant a shamanic level along an anonymous, ZK-verified lineage."
@@ -5787,6 +6046,203 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "reclaim_karma",
+      "docs": [
+        "F100 — return a gift's karma to the giver once its period has elapsed.",
+        "Permissionless: the destination is a seed-bound PDA, so nobody can",
+        "redirect it, and a member who has stopped using the app still gets their",
+        "karma back."
+      ],
+      "discriminator": [
+        137,
+        27,
+        131,
+        136,
+        234,
+        93,
+        190,
+        86
+      ],
+      "accounts": [
+        {
+          "name": "circle",
+          "relations": [
+            "giver_membership",
+            "receiver_membership"
+          ]
+        },
+        {
+          "name": "giver_membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "giver_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "receiver_membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "receiver_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "karma_params",
+          "docs": [
+            "Seed-bound to the Circle, so the return period cannot be swapped for",
+            "another Circle's shorter one."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  97,
+                  114,
+                  109,
+                  97,
+                  112,
+                  97,
+                  114,
+                  97,
+                  109,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "karma_gift",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  97,
+                  114,
+                  109,
+                  97,
+                  103,
+                  105,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "giver_membership.commitment",
+                "account": "Membership"
+              },
+              {
+                "kind": "account",
+                "path": "receiver_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "giver_karma",
+          "docs": [
+            "The destination is derived from the GIVER's commitment, so a caller",
+            "cannot redirect a reclaim to themselves."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  97,
+                  114,
+                  109,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "circle"
+              },
+              {
+                "kind": "account",
+                "path": "giver_membership.commitment",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "docs": [
+            "Anyone may trigger it. No account is created here, so this is a fee-payer",
+            "only — the relayer takes this slot with no program change."
+          ],
+          "signer": true
         }
       ],
       "args": []
@@ -8728,6 +9184,19 @@
       ]
     },
     {
+      "name": "KarmaGift",
+      "discriminator": [
+        85,
+        21,
+        26,
+        48,
+        108,
+        37,
+        60,
+        163
+      ]
+    },
+    {
       "name": "KarmaParams",
       "discriminator": [
         56,
@@ -9517,6 +9986,36 @@
       "code": 6071,
       "name": "InvalidKarmaRatio",
       "msg": "The sponsor's share must be between 0 and 10000 basis points (0-100%)"
+    },
+    {
+      "code": 6072,
+      "name": "CannotGiveToSelf",
+      "msg": "You cannot give karma to yourself"
+    },
+    {
+      "code": 6073,
+      "name": "InvalidGiftAmount",
+      "msg": "A gift must carry more than zero karma"
+    },
+    {
+      "code": 6074,
+      "name": "GiftTooLarge",
+      "msg": "That is more karma than this Circle allows in a single gift"
+    },
+    {
+      "code": 6075,
+      "name": "InsufficientKarma",
+      "msg": "You do not hold that much karma"
+    },
+    {
+      "code": 6076,
+      "name": "GiftAlreadyReturned",
+      "msg": "This gift has already been returned to the giver"
+    },
+    {
+      "code": 6077,
+      "name": "GiftNotYetReturnable",
+      "msg": "This gift cannot be reclaimed yet — its return period has not elapsed"
     }
   ],
   "types": [
@@ -10395,6 +10894,64 @@
       }
     },
     {
+      "name": "KarmaGift",
+      "docs": [
+        "F100 — one member's gift of karma to another, in recognition of help.",
+        "",
+        "WHAT A GIFT IS, and why it costs the giver nothing in the end. The giver's",
+        "balance drops by `amount` and the receiver's rises by it. After",
+        "`gift_return_secs` the giver may reclaim their `amount` — and the receiver",
+        "KEEPS theirs. So the giver is made whole and the thanks is real, which is",
+        "what \"only a gesture\" was asked to mean.",
+        "",
+        "THE CATCH THAT MAKES IT SAFE. Because the receiver keeps the karma, a gift",
+        "MINTS karma from nothing. Left open, two members would gift each other every",
+        "return period forever and both climb — the same farming shape that produced",
+        "a CRITICAL in F98 and had to be fixed there. So the PDA is seeded by the",
+        "ORDERED pair and created with `init`, never `init_if_needed`: A may thank B",
+        "exactly once, ever, and B may thank A exactly once, ever. Total karma a",
+        "member can ever receive this way is bounded by how many distinct people have",
+        "chosen to thank them, which is the property that makes it worth anything.",
+        "",
+        "NOTE THE DELIBERATE ASYMMETRY WITH `KarmaAward`, which is seeded by the",
+        "SORTED pair so both directions collide on one account. That is right there",
+        "and wrong here: a sponsorship is one relationship however you name the ends,",
+        "but \"A thanks B\" and \"B thanks A\" are two different acts and both should be",
+        "possible. Neither seeding is a mistake; they encode different things."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "given_at",
+            "docs": [
+              "When the gift was made. The giver may reclaim at",
+              "`given_at + gift_return_secs`, read from the params AT RECLAIM TIME."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "returned",
+            "docs": [
+              "True once the giver has taken their karma back. The record is kept",
+              "rather than closed: it is the proof that this pair has already used",
+              "their one gift in this direction, and closing it would restore the",
+              "ability to mint."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "KarmaParams",
       "docs": [
         "Per-Circle karma policy, editable only by an executed 4-of-7",
@@ -10433,6 +10990,24 @@
               "UI's hint has a governed source rather than a hardcoded constant."
             ],
             "type": "u8"
+          },
+          {
+            "name": "max_gift",
+            "docs": [
+              "The most karma one gift may carry. A cap per GIFT, not per giver: a",
+              "member may hold many gifts outstanding at once, bounded only by how many",
+              "distinct people they have thanked and by what they actually hold."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "gift_return_secs",
+            "docs": [
+              "How long a gift stays out before the giver may reclaim it, in seconds.",
+              "Seconds rather than days because `Clock` speaks seconds and a conversion",
+              "is one more place to be off by a factor."
+            ],
+            "type": "i64"
           },
           {
             "name": "bump",
@@ -11660,6 +12235,21 @@
               {
                 "name": "min_sponsors",
                 "type": "u8"
+              },
+              {
+                "name": "max_gift",
+                "docs": [
+                  "F100 — the most karma one gift may carry."
+                ],
+                "type": "u64"
+              },
+              {
+                "name": "gift_return_secs",
+                "docs": [
+                  "F100 — how long a gift stays out before the giver may reclaim it,",
+                  "in seconds."
+                ],
+                "type": "i64"
               }
             ]
           }

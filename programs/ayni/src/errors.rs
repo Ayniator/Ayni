@@ -151,4 +151,16 @@ pub enum AyniError {
     ClockUnavailable,
     #[msg("The sponsor's share must be between 0 and 10000 basis points (0-100%)")]
     InvalidKarmaRatio,
+    #[msg("You cannot give karma to yourself")]
+    CannotGiveToSelf,
+    #[msg("A gift must carry more than zero karma")]
+    InvalidGiftAmount,
+    #[msg("That is more karma than this Circle allows in a single gift")]
+    GiftTooLarge,
+    #[msg("You do not hold that much karma")]
+    InsufficientKarma,
+    #[msg("This gift has already been returned to the giver")]
+    GiftAlreadyReturned,
+    #[msg("This gift cannot be reclaimed yet — its return period has not elapsed")]
+    GiftNotYetReturnable,
 }

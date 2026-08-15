@@ -128,12 +128,19 @@ pub enum ProposalAction {
         gain_sponsee: u64,
         sponsor_ratio_bps: u16,
         min_sponsors: u8,
+        /// F100 — the most karma one gift may carry.
+        max_gift: u64,
+        /// F100 — how long a gift stays out before the giver may reclaim it,
+        /// in seconds.
+        gift_return_secs: i64,
     },
 }
 
 impl ProposalAction {
     /// borsh: 1-byte enum tag + largest variant. The largest is
-    /// `WithdrawTreasuryToken` (two pubkeys + a u64).
+    /// `WithdrawTreasuryToken` (two pubkeys + a u64) at 72 bytes;
+    /// `SetKarmaParams` is 8 + 2 + 1 + 8 + 8 = 27, comfortably under it.
+    /// Pinned by a test so adding a field cannot silently overrun the account.
     pub const MAX_SIZE: usize = 1 + 32 + 8 + 32;
 }
 

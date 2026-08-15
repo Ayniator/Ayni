@@ -24,6 +24,13 @@ ENV NEXT_PUBLIC_RPC_URL=$NEXT_PUBLIC_RPC_URL \
     NEXT_PUBLIC_AHA_EMAIL_DOMAIN=$NEXT_PUBLIC_AHA_EMAIL_DOMAIN \
     NEXT_TELEMETRY_DISABLED=1
 
+# This host has 3 GB of RAM shared with other stacks, and the Next build was
+# OOM-killed (exit 137) once the app grew. Capping V8's heap makes the collector
+# work sooner instead of the kernel reaping the process: slower, but it
+# finishes. Raise it if the machine ever gets more memory.
+# (Kept as its own ENV: a comment inside a line continuation is not valid here.)
+ENV NODE_OPTIONS=--max-old-space-size=1536
+
 RUN npm run build
 
 # 3) runner — minimal runtime

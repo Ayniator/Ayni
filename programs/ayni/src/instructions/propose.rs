@@ -34,7 +34,8 @@ pub fn propose(ctx: Context<Propose>, nonce: u64, action: ProposalAction) -> Res
         ProposalAction::SetTreasuryWallet { new_wallet } => {
             require!(*new_wallet != Pubkey::default(), AyniError::WalletMismatch);
         }
-        ProposalAction::SetKarmaParams { sponsor_ratio_bps, .. } => {
+        ProposalAction::SetKarmaParams { sponsor_ratio_bps, gift_return_secs, .. } => {
+            require!(*gift_return_secs >= 0, AyniError::InvalidGiftAmount);
             // Reject an impossible ratio at PROPOSE time, not only at apply
             // time: a Council should not spend a contest window approving a
             // figure the program will refuse. `set_karma_params` re-checks it

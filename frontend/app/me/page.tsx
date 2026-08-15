@@ -39,6 +39,7 @@ import QuipuNecklace from "../../components/QuipuNecklace";
 import { Cord } from "../../lib/quipu";
 import { MemberProposal, SeatElectionInfo, SEAT_ROLES, listCircleMembers, listMemberProposals, listSeatElections } from "../../lib/admin";
 import QRCode from "qrcode";
+import KarmaCard from "../../components/KarmaCard";
 import { activateFaucet, activateFaucetAnonymously, getFaucet, hasFaucetGrant, listMenteesOf, type Mentee } from "../../lib/faucet";
 import { flushLedgerQueue, recordGrantInLedger } from "../../lib/faucetLedger";
 import { attestAdmission, getTwoSponsorPolicy, hasAttestation, issueProvisionalMembership } from "../../lib/admission";
@@ -155,6 +156,7 @@ export default function Me() {
               }}
             />
             <MentorshipCard wallet={wallet ?? null} memberships={memberships} />
+            <KarmaCard wallet={wallet ?? null} memberships={memberships} />
             <VotesCard wallet={wallet ?? null} memberships={memberships} />
             <VisibilityCard wallet={wallet ?? null} memberships={memberships} />
             <ShieldCard wallet={wallet ?? null} memberships={memberships} />

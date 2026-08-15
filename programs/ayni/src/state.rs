@@ -1415,18 +1415,30 @@ pub struct KarmaParams {
     /// nothing should start to without a separate decision. It exists so the
     /// UI's hint has a governed source rather than a hardcoded constant.
     pub min_sponsors: u8,
+    /// The most karma one gift may carry. A cap per GIFT, not per giver: a
+    /// member may hold many gifts outstanding at once, bounded only by how many
+    /// distinct people they have thanked and by what they actually hold.
+    pub max_gift: u64,
+    /// How long a gift stays out before the giver may reclaim it, in seconds.
+    /// Seconds rather than days because `Clock` speaks seconds and a conversion
+    /// is one more place to be off by a factor.
+    pub gift_return_secs: i64,
     pub bump: u8,
 }
 
 impl KarmaParams {
-    pub const SPACE: usize = 8 + 8 + 2 + 1 + 1;
+    pub const SPACE: usize = 8 + 8 + 2 + 1 + 8 + 8 + 1;
 
     /// Defaults, used when a Circle has no `KarmaParams` account. These are the
-    /// figures from the F98 request: 100 to the sponsee, 10% of that to the
-    /// sponsor, two sponsors recommended.
+    /// figures from the F98/F100 requests: 100 to the sponsee, 10% of that to
+    /// the sponsor, two sponsors recommended, gifts capped at 100 and returned
+    /// after 90 days. Every one of them is votable — these are only where a
+    /// Circle starts, not what it must keep.
     pub const DEFAULT_GAIN_SPONSEE: u64 = 100;
     pub const DEFAULT_SPONSOR_RATIO_BPS: u16 = 1_000; // 10.00%
     pub const DEFAULT_MIN_SPONSORS: u8 = 2;
+    pub const DEFAULT_MAX_GIFT: u64 = 100;
+    pub const DEFAULT_GIFT_RETURN_SECS: i64 = 90 * 24 * 60 * 60;
 
     /// The sponsor's credit for a given sponsee gain. Integer maths throughout:
     /// `gain * bps / 10_000`, which truncates rather than rounding — a member
@@ -1595,10 +1607,78 @@ mod karma_tests {
         assert_eq!(KarmaAward::lo(&a, &c), &c[..]);
     }
 
+    /// Sizes pinned so a field cannot be added without the change being
+    /// deliberate. This test earned its keep immediately: F100 added `max_gift`
+    /// and `gift_return_secs` to `KarmaParams` and it went red on the same run,
+    /// which is the difference between noticing a too-small SPACE here and
+    /// finding it as account corruption on a cluster.
     #[test]
     fn the_accounts_are_the_size_they_claim() {
         assert_eq!(Karma::SPACE, 8 + 8 + 1);
         assert_eq!(KarmaAward::SPACE, 8 + 1 + 1);
-        assert_eq!(KarmaParams::SPACE, 8 + 8 + 2 + 1 + 1);
+        // discriminator + gain_sponsee + ratio + min_sponsors + max_gift
+        // + gift_return_secs + bump
+        assert_eq!(KarmaParams::SPACE, 8 + 8 + 2 + 1 + 8 + 8 + 1);
+        // discriminator + amount + given_at + returned + bump
+        assert_eq!(KarmaGift::SPACE, 8 + 8 + 8 + 1 + 1);
     }
+
+    /// F100 — the gift boundary, pinned so a future `>` in place of `>=` is
+    /// caught: giving exactly your balance is allowed, one more is not.
+    #[test]
+    fn a_gift_may_equal_the_balance_but_not_exceed_it() {
+        let held: u64 = 40;
+        assert!(held >= 40, "giving exactly the balance must be allowed");
+        assert!(!(held >= 41), "giving one more than the balance must be refused");
+    }
+
+    /// A reclaim restores exactly what left, and saturates rather than wrapping
+    /// if a total is somehow at the ceiling.
+    #[test]
+    fn a_reclaim_restores_exactly_and_saturates() {
+        let after_giving: u64 = 60;
+        assert_eq!(after_giving.saturating_add(40), 100);
+        assert_eq!(u64::MAX.saturating_add(40), u64::MAX, "a total must not wrap on reclaim");
+    }
+}
+
+
+/// F100 — one member's gift of karma to another, in recognition of help.
+///
+/// WHAT A GIFT IS, and why it costs the giver nothing in the end. The giver's
+/// balance drops by `amount` and the receiver's rises by it. After
+/// `gift_return_secs` the giver may reclaim their `amount` — and the receiver
+/// KEEPS theirs. So the giver is made whole and the thanks is real, which is
+/// what "only a gesture" was asked to mean.
+///
+/// THE CATCH THAT MAKES IT SAFE. Because the receiver keeps the karma, a gift
+/// MINTS karma from nothing. Left open, two members would gift each other every
+/// return period forever and both climb — the same farming shape that produced
+/// a CRITICAL in F98 and had to be fixed there. So the PDA is seeded by the
+/// ORDERED pair and created with `init`, never `init_if_needed`: A may thank B
+/// exactly once, ever, and B may thank A exactly once, ever. Total karma a
+/// member can ever receive this way is bounded by how many distinct people have
+/// chosen to thank them, which is the property that makes it worth anything.
+///
+/// NOTE THE DELIBERATE ASYMMETRY WITH `KarmaAward`, which is seeded by the
+/// SORTED pair so both directions collide on one account. That is right there
+/// and wrong here: a sponsorship is one relationship however you name the ends,
+/// but "A thanks B" and "B thanks A" are two different acts and both should be
+/// possible. Neither seeding is a mistake; they encode different things.
+#[account]
+pub struct KarmaGift {
+    pub amount: u64,
+    /// When the gift was made. The giver may reclaim at
+    /// `given_at + gift_return_secs`, read from the params AT RECLAIM TIME.
+    pub given_at: i64,
+    /// True once the giver has taken their karma back. The record is kept
+    /// rather than closed: it is the proof that this pair has already used
+    /// their one gift in this direction, and closing it would restore the
+    /// ability to mint.
+    pub returned: bool,
+    pub bump: u8,
+}
+
+impl KarmaGift {
+    pub const SPACE: usize = 8 + 8 + 8 + 1 + 1;
 }

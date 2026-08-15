@@ -46,9 +46,17 @@ pub fn establish_wing_peer(ctx: Context<EstablishWingPeer>) -> Result<()> {
         // practice, and `set_karma_params` always writes one.
         let params = &mut ctx.accounts.karma_params;
         if params.bump == 0 {
+            // EVERY field, not just the ones this instruction reads. A
+            // partially-materialised policy leaves the untouched fields at zero,
+            // and a zero `max_gift` silently forbids every gift the Circle has
+            // never voted on — which is exactly what happened when F100 added
+            // two fields and this block was not updated with them. If a field is
+            // added to KarmaParams, it belongs here too.
             params.gain_sponsee = KarmaParams::DEFAULT_GAIN_SPONSEE;
             params.sponsor_ratio_bps = KarmaParams::DEFAULT_SPONSOR_RATIO_BPS;
             params.min_sponsors = KarmaParams::DEFAULT_MIN_SPONSORS;
+            params.max_gift = KarmaParams::DEFAULT_MAX_GIFT;
+            params.gift_return_secs = KarmaParams::DEFAULT_GIFT_RETURN_SECS;
             params.bump = ctx.bumps.karma_params;
         }
         let (gain, ratio) = (params.gain_sponsee, params.sponsor_ratio_bps);

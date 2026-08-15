@@ -262,6 +262,25 @@ pub mod ayni {
         instructions::set_karma_params(ctx)
     }
 
+    /// F100 — thank a fellow member of your Circle by giving them karma.
+    ///
+    /// The giver's balance drops, the receiver's rises, and after the Circle's
+    /// return period the giver may reclaim their own amount while the receiver
+    /// keeps theirs — so the thanks costs nothing in the end. Because that mints
+    /// karma, it is limited to ONCE PER ORDERED PAIR, EVER: A may thank B once
+    /// and B may thank A once. No overdraft; the cap per gift is votable.
+    pub fn give_karma(ctx: Context<GiveKarma>, amount: u64) -> Result<()> {
+        instructions::give_karma(ctx, amount)
+    }
+
+    /// F100 — return a gift's karma to the giver once its period has elapsed.
+    /// Permissionless: the destination is a seed-bound PDA, so nobody can
+    /// redirect it, and a member who has stopped using the app still gets their
+    /// karma back.
+    pub fn reclaim_karma(ctx: Context<ReclaimKarma>) -> Result<()> {
+        instructions::reclaim_karma(ctx)
+    }
+
     /// Publish/replace a Circle's meeting calendar (recurring + sessions JSON).
     pub fn set_meetings(ctx: Context<SetMeetings>, data: String) -> Result<()> {
         instructions::set_meetings(ctx, data)

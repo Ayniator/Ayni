@@ -28,14 +28,23 @@ pub fn set_karma_params(ctx: Context<SetKarmaParams>) -> Result<()> {
     // effect here later.
     require!(!ctx.accounts.proposal.drained, AyniError::AlreadyExecuted);
 
-    let (gain_sponsee, sponsor_ratio_bps, min_sponsors) = match &ctx.accounts.proposal.action {
-        ProposalAction::SetKarmaParams {
-            gain_sponsee,
-            sponsor_ratio_bps,
-            min_sponsors,
-        } => (*gain_sponsee, *sponsor_ratio_bps, *min_sponsors),
-        _ => return err!(AyniError::WrongProposalAction),
-    };
+    let (gain_sponsee, sponsor_ratio_bps, min_sponsors, max_gift, gift_return_secs) =
+        match &ctx.accounts.proposal.action {
+            ProposalAction::SetKarmaParams {
+                gain_sponsee,
+                sponsor_ratio_bps,
+                min_sponsors,
+                max_gift,
+                gift_return_secs,
+            } => (
+                *gain_sponsee,
+                *sponsor_ratio_bps,
+                *min_sponsors,
+                *max_gift,
+                *gift_return_secs,
+            ),
+            _ => return err!(AyniError::WrongProposalAction),
+        };
 
     // A ratio above 100% would credit the sponsor more than the sponsee — not
     // obviously wrong, but certainly not what "the sponsor gets 10% of the
@@ -43,12 +52,19 @@ pub fn set_karma_params(ctx: Context<SetKarmaParams>) -> Result<()> {
     // than reached by a typo in a basis-point figure.
     require!(sponsor_ratio_bps <= 10_000, AyniError::InvalidKarmaRatio);
 
+    // A negative return period would make every gift reclaimable the instant it
+    // was made, quietly turning the gesture into a free mint. Zero is allowed as
+    // an explicit "no waiting period" for a Circle that votes for it.
+    require!(gift_return_secs >= 0, AyniError::InvalidGiftAmount);
+
     ctx.accounts.proposal.drained = true;
 
     let p = &mut ctx.accounts.params;
     p.gain_sponsee = gain_sponsee;
     p.sponsor_ratio_bps = sponsor_ratio_bps;
     p.min_sponsors = min_sponsors;
+    p.max_gift = max_gift;
+    p.gift_return_secs = gift_return_secs;
     p.bump = ctx.bumps.params;
     Ok(())
 }
