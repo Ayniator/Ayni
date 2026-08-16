@@ -928,3 +928,16 @@ so requiring it would deadlock the gate permanently.
   account layers but not driven end-to-end in a browser; the ~2.5MB
   reflections.json is now a one-time static fetch (off the bundle, the point of
   F101). None is a defect.
+
+- 947744d66b5373863a54f2f38a28b2c7aa496099 chore(sentinel): ui-batch round — PASS WITH WARNINGS (detached verification)
+  The ui-batch round's own bookkeeping commit, named here because it adds
+  scripts/sentinel-verify.sh — a real script, outside the bookkeeping path, so
+  the gate correctly requires it be reviewed rather than waved through. It is
+  the detached (setsid nohup, own session) verification harness that produced
+  this round's PASS: it runs every tests/sentinel/*.sh gate, cargo/node test
+  suites, tsc, extractor-idempotency, three source-mutation probes (each
+  asserted red-then-green), and the Playwright e2e, then writes a machine-
+  readable VERDICT line to ~/ayni-sentinel-verify.log. It deliberately does NOT
+  commit, push, or deploy — those stay judgement steps for the operator once the
+  log is read. Reviewed as tooling with no runtime effect on the app or program;
+  syntax-checked (bash -n) and run to completion (VERDICT: PASS) before commit.
