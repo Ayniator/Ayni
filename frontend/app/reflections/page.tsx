@@ -58,6 +58,12 @@ export default function Reflections() {
 
   const [display, setDisplay] = useState<Display | null>(null);
   const [loading, setLoading] = useState(false);
+  // The built-in dataset is fetched (frontend/public/reflections.json — it is
+  // deliberately not in the bundle), so the very first resolution is async and
+  // the hero has nothing to render yet. Two states rather than one, because
+  // "still arriving" and "did not arrive" must not look the same to a reader.
+  const [builtinPending, setBuiltinPending] = useState(true);
+  const [builtinFailed, setBuiltinFailed] = useState(false);
 
   // Discover Circles that publish reflections (published CID or a locally
   // composed collection). The page works with none — it falls back to built-ins.
@@ -90,10 +96,10 @@ export default function Reflections() {
       origin: "circle",
       nearest: false,
     });
-    const builtin = (): Display | null => {
+    const builtin = async (): Promise<Display | null> => {
       // Sourced texts are shown in the member's language where a translation
       // exists; English is the source of record and the fallback.
-      const res = defaultReflectionFor(key, lang);
+      const res = await defaultReflectionFor(key, lang);
       if (!res) return null;
       const e = res.entry;
       return {
@@ -109,7 +115,7 @@ export default function Reflections() {
       };
     };
 
-    // Instant paths first (built-in + local Circle entries are synchronous).
+    // Instant path first: a Circle's locally composed entry is synchronous.
     if (circle) {
       const local = localReflectionFor(circle.circle, key);
       if (local) {
@@ -118,15 +124,36 @@ export default function Reflections() {
         return;
       }
     }
-    // Show the built-in immediately so there's never a blank screen…
-    setDisplay(builtin());
-    // …then, if the Circle has a remote collection, upgrade to its entry.
+
+    // Both remaining sources are async, and the Circle's entry outranks the
+    // built-in whichever finishes first — without this flag a slow dataset
+    // fetch could land after the IPFS entry and demote it.
+    let upgraded = false;
+
+    // Show the built-in as soon as it resolves so there's never a blank screen…
+    setBuiltinPending(true);
+    builtin()
+      .then((d) => {
+        if (cancelled || upgraded) return;
+        setDisplay(d);
+        setBuiltinPending(false);
+        setBuiltinFailed(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setBuiltinPending(false);
+        setBuiltinFailed(true);
+      });
+    // …and, if the Circle has a remote collection, upgrade to its entry.
     if (circle?.dailyReflectionsCid) {
       setLoading(true);
       fetchDailyReflection(circle.dailyReflectionsCid, key)
         .then((r) => {
           if (cancelled) return;
-          if (r) setDisplay(asCircle(r));
+          if (r) {
+            upgraded = true;
+            setDisplay(asCircle(r));
+          }
           setLoading(false);
         })
         .catch(() => {
@@ -183,6 +210,16 @@ export default function Reflections() {
             ))}
           </select>
         </div>
+      )}
+
+      {/* Never a blank hero: while the built-in dataset is on its way (and it is
+          fetched, not bundled), say so; if it never arrives, say that instead of
+          leaving the reader looking at an empty page. */}
+      {!display && builtinPending && (
+        <p className="muted sm" style={{ marginBottom: 16 }}>{t("reflections.loading")}</p>
+      )}
+      {!display && !builtinPending && builtinFailed && (
+        <p className="muted sm" style={{ marginBottom: 16 }}>{t("reflections.loadFailed")}</p>
       )}
 
       {display && (

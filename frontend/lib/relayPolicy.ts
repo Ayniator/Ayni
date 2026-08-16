@@ -107,6 +107,14 @@ export interface AllowedIx {
    * preflight and never reaches the ledger, so it burns no rent.
    */
   authorityIndex?: number;
+  /**
+   * F59 — compute units the relayed transaction needs above the 200k default.
+   * When set, the route prepends a ComputeBudget SetComputeUnitLimit for
+   * exactly this figure. Declared HERE, per instruction, rather than accepted
+   * from the client: a caller-chosen limit is a knob for making the relayer
+   * pay for heavier transactions than the allowlist reviewed.
+   */
+  computeUnits?: number;
 }
 
 /** Anchor discriminator (hex) → allowed instruction. */
@@ -115,6 +123,22 @@ export const RELAY_ALLOWLIST: Record<string, AllowedIx> = {
   "14d40fbd45b44597": { name: "cast_vote", payerIndex: 2, accountCount: 4, dataLen: 8 + 1 + 32 + 64 + 128 + 64 },
   // attest_admission_zk(newcomer, root, nullifier, proofs)
   "10a45cd6d203ed97": { name: "attest_admission_zk", payerIndex: 5, accountCount: 7, dataLen: 8 + 32 + 32 + 32 + 64 + 128 + 64 },
+
+  // F59 — attest_presence_zk(subject_commitment, month, witness_root, 2 nullifiers, 2 proofs).
+  // TWO Groth16 verifications do not fit the 200k default; the docs/presence.md
+  // design REQUIRES the relayer (a self-paying wallet links itself to the
+  // attestation's timing), which is why this carries a computeUnits declaration
+  // rather than asking clients to prepend their own budget instruction.
+  // Accounts: circle, member_tree, recent_roots(optional slot), presence, payer, system.
+  "e03288b8bff02607": {
+    name: "attest_presence_zk", payerIndex: 4, accountCount: 6,
+    dataLen: 8 + 32 + 4 + 32 + 32 + 32 + (64 + 128 + 64) * 2,
+    computeUnits: 600_000,
+  },
+  // F59 — clear_presence(subject_commitment, nullifier, proof). One verification
+  // fits the default budget; rent from the closed record refunds to the payer,
+  // i.e. the relayer — the member's wallet must appear nowhere near an erasure.
+  "3f8285671a9e3447": { name: "clear_presence", payerIndex: 2, accountCount: 4, dataLen: 8 + 32 + 32 + 64 + 128 + 64 },
   // activate_faucet_zk(root, nullifier, proofs) — F35's anonymous first-gas
   // path. Relaying it is the point: the ZK proof hides WHICH member endorsed
   // the grant, and a self-paid fee would hand that back by naming a wallet at
@@ -203,7 +227,16 @@ export const RELAY_ALLOWLIST: Record<string, AllowedIx> = {
   // establish_wing_peer() —
   //   0 circle · 1 mentee_membership · 2 wing_membership · 3 wing_peer
   //   · 4 signer(sig) · 5 payer(sig,w) · 6 system
-  "91152f076c655741": { name: "establish_wing_peer", payerIndex: 5, accountCount: 7, dataLen: 8, authorityIndex: 4 },
+  // STALE ONCE, AND SILENTLY: this entry said 7 accounts long after F98 grew the
+  // instruction to 11 (four karma accounts), so every RELAYED sponsorship was
+  // being refused with "wrong account count" while the self-paying path worked —
+  // exactly the kind of break nothing surfaces, because the UI falls back. Found
+  // while adding F59's entries. If an instruction's accounts change, its row
+  // here changes in the same commit.
+  //   0 circle · 1 mentee_membership · 2 wing_membership · 3 wing_peer
+  //   · 4 karma_params · 5 karma_award · 6 mentee_karma · 7 wing_karma
+  //   · 8 signer(sig) · 9 payer(sig,w) · 10 system
+  "91152f076c655741": { name: "establish_wing_peer", payerIndex: 9, accountCount: 11, dataLen: 8, authorityIndex: 8 },
 
   // end_wing_peer() —
   //   0 circle · 1 wing_peer · 2 membership · 3 signer(sig)
@@ -223,7 +256,7 @@ export const RELAY_ALLOWLIST: Record<string, AllowedIx> = {
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export type RelayVerdict =
-  | { ok: true; name: string; authority: string | null }
+  | { ok: true; name: string; authority: string | null; computeUnits?: number }
   | { ok: false; reason: string };
 
 /** Decide whether `req` may be relayed with `relayerPubkey` as fee-payer.
@@ -294,5 +327,5 @@ export function validateRelayRequest(req: RelayRequest, relayerPubkey: string): 
   if (allowed.authorityIndex !== undefined && authority === null) {
     return { ok: false, reason: `${allowed.name}: authority signature missing` };
   }
-  return { ok: true, name: allowed.name, authority };
+  return { ok: true, name: allowed.name, authority , computeUnits: allowed.computeUnits };
 }

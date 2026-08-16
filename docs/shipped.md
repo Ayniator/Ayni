@@ -52,7 +52,8 @@ public* membership commitment — nothing secret, and no third-party request.
 Only the mentee may write a WingPeer link (`establish_wing_peer.rs`: "a member
 sets their own wing — never imposed"), so a one-tap invitation can only complete
 in the direction where the **scanner becomes the sponsee**. The copy now reads
-"take someone under your wing". The reverse handshake remains unbuilt.
+"take someone under your wing". The reverse handshake was unbuilt at the time of
+this round; it shipped later the same week — see *F97b* below.
 
 **Two pieces of coverage that could not fail, caught in the same commit.** Both
 new surfaces render only for a connected wallet, which no test here can be. An
@@ -65,6 +66,39 @@ being trusted.
 **Karma is now built — see F98 below.** At the time of this round it was not,
 and this paragraph used to say it awaited a waiver. The waiver was given on
 2026-08-15 and the feature shipped; nothing in *this* round introduced a counter.
+
+---
+
+## F97b — "I am looking for a sponsor", the reverse direction (2026-08-16)
+
+The missing half of F97, built out of the existing on-chain call and nothing
+else. Because only the mentee may write a WingPeer, a member reaching **up** for
+a sponsor cannot be served by one tap; it takes a **two-hop handshake**:
+
+1. `/me` gains **"Ask for a sponsor"** beside the existing share actions. It
+   opens the same modal with `/sponsor-request?circle=…&from=<my commitment>&mode=ask`
+   — QR drawn locally, link copyable.
+2. `/sponsor-request?mode=ask` treats the **opener as the prospective sponsor**
+   and says plainly that this member is looking for one. A connected member of
+   that Circle gets **"I am willing"**, which reveals the *ordinary* invitation
+   `?circle=…&to=<their own commitment>` as QR + copyable text, to send back.
+   The seeker accepts that, signs with their own key, and becomes the sponsee.
+
+**The ask page writes nothing on chain** — it reads (to decide whether the
+opener is a member) and draws a QR; there is no transaction on the path at all.
+Deliberate: an unanswered request must leave no trace, and consent is signed by
+the person it binds. Someone who is not a member, or not connected, is told so
+plainly instead of being shown a dead button; "Not at this time" stays the
+decline, and declining a request records nothing.
+
+**i18n**: the 18 new `me.spon.ask*` / `sponreq.ask*` keys are translated in
+**all 19 locales**, which the wording gate now enforces by count — the earlier
+English-only keys inherited via fallback, and a fallback reads as coverage it is
+not. `sponsor-wording-check.sh` grew three checks (all-locale presence, no blunt
+or judging vocabulary in the new strings, and "nothing was recorded" on the
+ask-decline path); `e2e/sponsor-request.spec.ts` gained two logged-out tests,
+including one pinning that a `mode=ask` link with `to=` instead of `from=` fails
+closed rather than silently rendering the forward direction.
 
 ---
 

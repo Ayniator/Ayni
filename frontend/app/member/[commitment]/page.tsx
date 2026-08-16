@@ -16,6 +16,7 @@ import Identicon from "../../../components/Identicon";
 import { useT } from "../../../components/SettingsProvider";
 import QuipuNecklace from "../../../components/QuipuNecklace";
 import { TrustPage, getTrustPage } from "../../../lib/trustpage";
+import { getPresence, monthLabel } from "../../../lib/presence";
 import { findMyMemberships } from "../../../lib/member";
 import { Viewer, mayView, viewerOwns } from "../../../lib/visibility";
 import { countryByCode } from "../../../lib/countries";
@@ -29,13 +30,22 @@ export default function MemberPage() {
   const commitment = String(params?.commitment ?? "");
   const [page, setPage] = useState<TrustPage | null>(null);
   const [viewer, setViewer] = useState<Viewer>({ circles: new Set(), commitments: new Set() });
+  // F59: the month this member last stood in circle, or null. Null renders
+  // NOTHING — docs/presence.md §5: an absent record and a member who never
+  // attested must look identical, so there is no "not yet attested" line.
+  const [presenceMonth, setPresenceMonth] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let live = true;
     setLoading(true);
     getTrustPage(commitment)
-      .then((p) => live && setPage(p))
+      .then((p) => {
+        if (!live) return;
+        setPage(p);
+        // Read by DERIVATION from (circle, commitment) — never enumeration.
+        if (p) getPresence(p.circle, commitment).then((m) => live && setPresenceMonth(m)).catch(() => {});
+      })
       .catch(() => live && setPage(null))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
@@ -119,15 +129,18 @@ export default function MemberPage() {
           element key. Nothing here consults `mayView` — decryption IS the
           decision, so a patched client gains nothing by ignoring a flag. */}
 
-      {/* Presence + bio arrive with the disclosure layer (Epic 5 / F59). Shown
-          as not-yet-attested rather than faked — the repo's honest-degradation
-          rule. */}
-      <div className="card">
-        <div className="sub muted">{t("member.presence")}</div>
-        <p className="muted" style={{ margin: "4px 0 0" }}>
-          {t("member.presenceNotWired")}
-        </p>
-      </div>
+      {/* F59 — the presence line: a month, or NOTHING. The earlier placeholder
+          rendered a "not yet attested" card, which docs/presence.md §5 forbids:
+          an absent record and a member who never attested must be
+          indistinguishable, and a permanent empty card is a signal. The wording
+          is the VOUCHING wording — two members attested the month; nobody
+          verified attendance. */}
+      {presenceMonth !== null && (
+        <div className="card">
+          <div className="sub muted">{t("member.presence")}</div>
+          <p style={{ margin: "4px 0 0" }}>{monthLabel(presenceMonth)}</p>
+        </div>
+      )}
 
       <p className="muted sm">
         {t("member.memberSince")} {day(page.issuedAt)}. {t("member.onlyVouched")}

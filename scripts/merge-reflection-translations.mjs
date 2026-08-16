@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Merges translated Daily Reflections from a translation-workflow journal into
-// REFLECTIONS_I18N in frontend/lib/daily-reflections-default.ts.
+// the `i18n` map of frontend/public/reflections.json (the dataset the app
+// fetches; it is deliberately not in the client bundle).
 //
 //   node scripts/merge-reflection-translations.mjs <journal.jsonl> [--partial]
 //
@@ -14,7 +15,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const TS = resolve(HERE, "../frontend/lib/daily-reflections-default.ts");
+const DATA = resolve(HERE, "../frontend/public/reflections.json");
 
 const journal = process.argv[2];
 const allowPartial = process.argv.includes("--partial");
@@ -23,10 +24,9 @@ if (!journal) {
   process.exit(1);
 }
 
-const src = readFileSync(TS, "utf8");
-const enMatch = src.match(/DEFAULT_REFLECTIONS: Record<string, DefaultReflection> = (\{[\s\S]*?\n\});/);
-if (!enMatch) throw new Error("DEFAULT_REFLECTIONS not found");
-const en = eval("(" + enMatch[1] + ")");
+const payload = JSON.parse(readFileSync(DATA, "utf8"));
+const en = payload.en;
+if (!en || !Object.keys(en).length) throw new Error("no English entries in " + DATA);
 const enKeys = Object.keys(en);
 
 // Collect per-locale entries; halves of the same locale merge together.
@@ -66,13 +66,11 @@ const ordered = {};
 for (const c of ORDER) if (merged[c]) ordered[c] = merged[c];
 for (const c of Object.keys(merged)) if (!ordered[c]) ordered[c] = merged[c];
 
-const body = JSON.stringify(ordered, null, 2);
-const out = src.replace(
-  /export const REFLECTIONS_I18N: Record<string, Record<string, TranslatedReflection>> = \{[\s\S]*?\};\s*$/,
-  `export const REFLECTIONS_I18N: Record<string, Record<string, TranslatedReflection>> = ${body};\n`
-);
-if (out === src) throw new Error("REFLECTIONS_I18N block not found / not replaced");
-writeFileSync(TS, out);
+// `keys` is rewritten from the English map rather than carried over, so the two
+// halves of the file can never disagree about which days exist.
+payload.i18n = ordered;
+payload.keys = enKeys.slice().sort();
+writeFileSync(DATA, JSON.stringify(payload, null, 2) + "\n", "utf8");
 
 console.log("coverage: " + report.sort().join("  "));
-console.log(`merged ${Object.keys(ordered).length} locale(s) into REFLECTIONS_I18N${allowPartial ? " (including partial)" : ""}`);
+console.log(`merged ${Object.keys(ordered).length} locale(s) into ${DATA}${allowPartial ? " (including partial)" : ""}`);

@@ -101,10 +101,18 @@ console.log("PASS — F92 blocks by replacing the wizard, and names which gate c
 node -e '
 const fs = require("fs");
 const raw = fs.readFileSync(process.argv[1] + "/app/get-app/page.tsx", "utf8");
-// JSX wraps prose across tags and newlines, so assert against a
-// whitespace-and-tag-normalised copy — otherwise a reflow silently "removes"
-// a disclosure that is still on screen.
-const src = raw.replace(/<\/?strong>/g, "").replace(/\s+/g, " ");
+// The page BODY was i18n-extracted (F93 debt closed): the disclosures now live
+// in the ENGLISH block of the generated dictionary, not in the JSX. So the
+// prose assertions read the dictionary; the store-URL check still reads the
+// page (a link would be added there). Only the en block is sliced — a
+// translated disclosure drifting is a translation-review problem, but the
+// ENGLISH one disappearing means the disclosure itself was dropped.
+const dict = fs.readFileSync(process.argv[1] + "/lib/i18n.generated.ts", "utf8");
+const enStart = dict.indexOf("  en: {");
+const enEnd = dict.indexOf("  fr: {", enStart);
+const enBlock = dict.slice(enStart, enEnd);
+const getapp = enBlock.split("\n").filter((l) => l.includes("\"getapp.")).join(" ");
+const src = (raw + " " + getapp).replace(/<\/?strong>/g, "").replace(/[*]/g, "").replace(/\s+/g, " ");
 let bad = [];
 
 const storeLink = /https?:\/\/(play\.google\.com|apps\.apple\.com|itunes\.apple\.com|testflight\.apple\.com)/i;

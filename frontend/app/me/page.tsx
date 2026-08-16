@@ -40,6 +40,7 @@ import { Cord } from "../../lib/quipu";
 import { MemberProposal, SeatElectionInfo, SEAT_ROLES, listCircleMembers, listMemberProposals, listSeatElections } from "../../lib/admin";
 import QRCode from "qrcode";
 import KarmaCard from "../../components/KarmaCard";
+import PresenceCard from "../../components/PresenceCard";
 import { activateFaucet, activateFaucetAnonymously, getFaucet, hasFaucetGrant, listMenteesOf, type Mentee } from "../../lib/faucet";
 import { flushLedgerQueue, recordGrantInLedger } from "../../lib/faucetLedger";
 import { attestAdmission, getTwoSponsorPolicy, hasAttestation, issueProvisionalMembership } from "../../lib/admission";
@@ -157,6 +158,7 @@ export default function Me() {
             />
             <MentorshipCard wallet={wallet ?? null} memberships={memberships} />
             <KarmaCard wallet={wallet ?? null} memberships={memberships} />
+            <PresenceCard wallet={wallet ?? null} memberships={memberships} />
             <VotesCard wallet={wallet ?? null} memberships={memberships} />
             <VisibilityCard wallet={wallet ?? null} memberships={memberships} />
             <ShieldCard wallet={wallet ?? null} memberships={memberships} />
@@ -341,9 +343,11 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
   // not — this is the Sponsees list (F97), distinct from `neophytes` above,
   // which is only the subset still eligible for the one-time first-gas grant.
   const [sponsees, setSponsees] = useState<Record<string, Mentee[]>>({});
-  // The sponsor-invitation modal: which membership's invite is open, plus the
+  // The sponsor-invitation modal: which membership's link is open, plus the
   // deep link and its QR data-URL, drawn locally (never sent anywhere).
-  const [invite, setInvite] = useState<{ m: MyMembership; url: string; qr: string } | null>(null);
+  // `kind` picks the direction: "invite" offers to sponsor the scanner, "ask"
+  // asks the scanner to sponsor me (F97's two-hop handshake).
+  const [invite, setInvite] = useState<{ m: MyMembership; url: string; qr: string; kind: "invite" | "ask" } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const t = useT();
@@ -505,19 +509,30 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
     return `${origin}/sponsor-request?${p.toString()}`;
   }
 
-  async function openInvite(m: MyMembership) {
-    const url = inviteUrl(m);
+  // The reverse direction (F97): "I am looking for a sponsor". Only the MENTEE
+  // may write a WingPeer on chain, so a member reaching UP cannot be served by
+  // one tap — this link opens a page where a willing member hands back their
+  // own ordinary invitation, which I then accept with my own signature. Nothing
+  // is written on chain by either the link or the page it opens.
+  function askUrl(m: MyMembership): string {
+    const origin = typeof window === "undefined" ? "" : window.location.origin;
+    const p = new URLSearchParams({ circle: m.circle, from: m.commitment, mode: "ask" });
+    return `${origin}/sponsor-request?${p.toString()}`;
+  }
+
+  async function openInvite(m: MyMembership, kind: "invite" | "ask") {
+    const url = kind === "ask" ? askUrl(m) : inviteUrl(m);
     let qr = "";
     try {
       qr = await QRCode.toDataURL(url, { width: 240, margin: 1, color: { dark: "#111111", light: "#ffffff" } });
     } catch { /* the modal still shows the copyable link if the QR cannot draw */ }
-    setInvite({ m, url, qr });
+    setInvite({ m, url, qr, kind });
   }
 
-  async function copyInvite(m: MyMembership) {
+  async function copyUrl(url: string, kind: "invite" | "ask") {
     try {
-      await navigator.clipboard.writeText(inviteUrl(m));
-      setNote({ kind: "ok", text: t("me.spon.linkCopied") });
+      await navigator.clipboard.writeText(url);
+      setNote({ kind: "ok", text: kind === "ask" ? t("me.spon.askLinkCopied") : t("me.spon.linkCopied") });
     } catch (e: any) { setNote({ kind: "err", text: String(e?.message || e) }); }
   }
 
@@ -532,6 +547,11 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
           become a Foundation-Council parameter under F98; until then it is the
           documented default of 2. */}
       <p className="muted sm" style={{ marginTop: 0 }}>{t("me.spon.softMinimum").replace("{n}", String(RECOMMENDED_MIN_SPONSORS))}</p>
+      {/* Say what the little coin next to each person IS. A member who is not
+          told will read the identicon as an avatar someone chose, and the hex
+          beside it as a username — the note stops both readings before they
+          start. */}
+      <p className="muted sm" style={{ marginTop: 0 }}>{t("me.spon.anonMark")}</p>
       {memberships.map((m) => {
         const w = wings[m.circle];
         const cs = chips[m.circle] ?? [];
@@ -549,12 +569,23 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
             {/* ---- Sponsors: the guide who sponsors me in this Circle ---- */}
             <div className="sub" style={{ marginTop: 10, fontWeight: 600 }}>{t("me.spon.sponsorsTitle")}</div>
             <div className="sub" style={{ marginTop: 4 }}>
-              {t("me.spon.yourSponsor")}: {w && w.active ? <span className="mono">{w.wing.slice(0, 8)}…</span> : <span className="muted">{t("me.spon.noSponsorYet")}</span>}
+              {/* The person, not the string: the identicon is the thing a member
+                  actually recognises, and the 8 chars stay only so two people can
+                  read a code aloud to each other. The full 64 hex never appears —
+                  a screenshot of this line must not hand over a whole commitment. */}
+              {t("me.spon.yourSponsor")}: {w && w.active ? (
+                <span className="mono">
+                  <Identicon seed={w.wing} size={18} className="inline-icon" title={t("me.spon.anonMark")} />
+                  {w.wing.slice(0, 8)}…
+                </span>
+              ) : <span className="muted">{t("me.spon.noSponsorYet")}</span>}
               {w && w.active && <button className="btn btn-sm btn-ghost" style={{ marginLeft: 8 }} disabled={busy === "end-" + m.circle} onClick={() => endWing(m)}>{busy === "end-" + m.circle ? t("me.spon.releasing") : t("me.spon.releaseLink")}</button>}
             </div>
             <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-              <button className="btn btn-sm" onClick={() => openInvite(m)}>{t("me.spon.shareQr")}</button>
-              <button className="btn btn-sm btn-ghost" onClick={() => copyInvite(m)}>{t("me.spon.copyLink")}</button>
+              <button className="btn btn-sm" onClick={() => openInvite(m, "invite")}>{t("me.spon.shareQr")}</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => copyUrl(inviteUrl(m), "invite")}>{t("me.spon.copyLink")}</button>
+              {/* The other direction: I ask someone to sponsor me. */}
+              <button className="btn btn-sm btn-ghost" onClick={() => openInvite(m, "ask")}>{t("me.spon.askSponsor")}</button>
             </div>
             <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
               <input className="mono" value={wingInput[m.circle] ?? ""} onChange={(e) => setWingInput((p) => ({ ...p, [m.circle]: e.target.value }))} placeholder={t("me.mentor.wingPlaceholder")} style={{ flex: 1, minWidth: 180 }} />
@@ -570,7 +601,7 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
               const eligible = (neophytes[m.circle] ?? []).some((n) => n.commitment === sp.commitment);
               return (
                 <div className="row" key={sp.commitment} style={{ gap: 6, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
-                  <span className="sub"><span className="mono">{sp.commitment.slice(0, 8)}…</span>{sp.establishedAt ? <span className="muted"> · {t("me.spon.since")} {new Date(sp.establishedAt * 1000).toLocaleDateString()}</span> : null}</span>
+                  <span className="sub"><span className="mono"><Identicon seed={sp.commitment} size={18} className="inline-icon" title={t("me.spon.anonMark")} />{sp.commitment.slice(0, 8)}…</span>{sp.establishedAt ? <span className="muted"> · {t("me.spon.since")} {new Date(sp.establishedAt * 1000).toLocaleDateString()}</span> : null}</span>
                   {eligible && (
                     <button className="btn btn-sm" disabled={busy === "gas-" + sp.commitment} onClick={() => firstGas(m, sp.commitment)}>
                       {busy === "gas-" + sp.commitment ? t("me.sending") : t("me.mentor.activateFaucet")}
@@ -594,21 +625,21 @@ function MentorshipCard({ wallet, memberships }: { wallet: any; memberships: MyM
       {note && <p className={note.kind === "err" ? "error" : "ok-note"} style={{ marginBottom: 0 }}>{note.text}</p>}
 
       {invite && (
-        <div className="mw-notice" role="dialog" aria-modal="true" aria-label={t("me.spon.qrTitle")} style={{ marginTop: 12 }}>
+        <div className="mw-notice" role="dialog" aria-modal="true" aria-label={t(invite.kind === "ask" ? "me.spon.askQrTitle" : "me.spon.qrTitle")} style={{ marginTop: 12 }}>
           <div className="mw-notice-body">
-            <strong>{t("me.spon.qrTitle")}</strong>
-            <p className="sm" style={{ margin: "4px 0" }}>{t("me.spon.qrHelp")}</p>
+            <strong>{t(invite.kind === "ask" ? "me.spon.askQrTitle" : "me.spon.qrTitle")}</strong>
+            <p className="sm" style={{ margin: "4px 0" }}>{t(invite.kind === "ask" ? "me.spon.askQrHelp" : "me.spon.qrHelp")}</p>
             {invite.qr && (
               <div style={{ background: "#fff", padding: 8, borderRadius: 8, width: "fit-content" }}>
                 {/* Drawn locally from the deep link; no network involved. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={invite.qr} alt={t("me.spon.qrTitle")} width={200} height={200} />
+                <img src={invite.qr} alt={t(invite.kind === "ask" ? "me.spon.askQrTitle" : "me.spon.qrTitle")} width={200} height={200} />
               </div>
             )}
             <input className="mono" readOnly value={invite.url} onFocus={(e) => e.currentTarget.select()} style={{ width: "100%", marginTop: 8 }} />
           </div>
           <div className="mw-notice-actions">
-            <button className="btn btn-sm" onClick={() => copyInvite(invite.m)}>{t("me.spon.copyLink")}</button>
+            <button className="btn btn-sm" onClick={() => copyUrl(invite.url, invite.kind)}>{t(invite.kind === "ask" ? "me.spon.copyAskLink" : "me.spon.copyLink")}</button>
             <button className="btn btn-sm btn-ghost" onClick={() => setInvite(null)}>{t("me.spon.close")}</button>
           </div>
         </div>

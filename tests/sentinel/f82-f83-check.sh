@@ -22,9 +22,18 @@ const fs = require("fs");
 const path = require("path");
 const root = process.argv[1];
 
-// Load DEFAULT_REFLECTIONS / REFLECTION_KEYS by isolating the object/array
-// literals out of the generated TS module (no runtime xlsx parse, no ts-node
-// dependency for this gate).
+// The dataset lives in public/reflections.json (fetched at runtime — it is
+// deliberately NOT bundled; see the header of lib/daily-reflections-default.ts),
+// so read it there. { en, i18n, keys } — plain JSON, no parse tricks needed.
+const payload = JSON.parse(fs.readFileSync(path.join(root, "public/reflections.json"), "utf8"));
+const DEFAULT_REFLECTIONS = payload.en || {};
+const REFLECTION_KEYS = payload.keys || [];
+
+// The date list is ALSO compiled into the TS module (the calendar needs it
+// synchronously to draw its dots). Both come from one generator run, so a
+// mismatch means one of the two outputs is stale — which would show as dots on
+// days that resolve to something else, or missing dots on days that have an
+// entry. Read it out of the module and compare.
 const ds = fs.readFileSync(path.join(root, "lib/daily-reflections-default.ts"), "utf8");
 
 function extractBalanced(src, startIdx, openCh, closeCh) {
@@ -37,18 +46,28 @@ function extractBalanced(src, startIdx, openCh, closeCh) {
   return src.slice(braceStart, end + 1);
 }
 
-const objStart = ds.indexOf("export const DEFAULT_REFLECTIONS");
-const objText = extractBalanced(ds, objStart, "{", "}");
-const DEFAULT_REFLECTIONS = eval("(" + objText + ")");
-
 const arrDeclStart = ds.indexOf("export const REFLECTION_KEYS");
 // Skip past the "REFLECTION_KEYS: string[] = " type annotation, which itself
 // contains a "[]" pair that would confuse a naive bracket search.
 const arrAssignStart = ds.indexOf("=", arrDeclStart);
-const arrText = extractBalanced(ds, arrAssignStart, "[", "]");
-const REFLECTION_KEYS = eval(arrText);
+const BUNDLED_KEYS = JSON.parse(extractBalanced(ds, arrAssignStart, "[", "]"));
 
 let bad = [];
+
+// 0. The bundled key list must match the shipped payload exactly.
+if (JSON.stringify([...BUNDLED_KEYS].sort()) !== JSON.stringify([...REFLECTION_KEYS].sort())) {
+  bad.push("REFLECTION_KEYS in lib/daily-reflections-default.ts != keys in public/reflections.json (one output is stale — re-run scripts/extract-reflections-xlsx.mjs)");
+}
+
+// 0b. The entries must NOT be back in the bundle: re-inlining them is the
+//     ~2.5 MB regression this split exists to prevent. Checked two ways, since
+//     the second catches a re-inlining under any other name.
+if (/export const (DEFAULT_REFLECTIONS|REFLECTIONS_I18N)\b/.test(ds)) {
+  bad.push("the reflections dataset is exported from lib/daily-reflections-default.ts again (~2.5 MB shipped to every browser) — it belongs in public/reflections.json");
+}
+if (ds.length > 64 * 1024) {
+  bad.push(`lib/daily-reflections-default.ts is ${Math.round(ds.length / 1024)} kB — it must stay a types+keys+loader stub (the data is fetched from public/reflections.json)`);
+}
 
 // 1. Set equality: every DEFAULT_REFLECTIONS key is in REFLECTION_KEYS and vice
 //    versa (the calendar dots and the nearest-day search both depend on this).
@@ -150,10 +169,19 @@ if (bad.length) {
 # Circle-precedence wiring: the page must still prefer a Circle's own local
 # entry, then its remote (IPFS) entry, over the built-in — this is the F82
 # no-regression requirement on the pre-existing Circle-published flow.
+#
+# The remote branch used to be one line (`if (r) setDisplay(asCircle(r))`). Since
+# the built-in dataset is fetched rather than bundled, BOTH sources are async and
+# the page carries an `upgraded` flag so a slow dataset fetch cannot land after
+# the Circle's entry and demote it. Asserting the flag as well as the setter is
+# strictly stronger than the old single-line grep: drop the flag and the Circle's
+# entry can silently lose a race it must always win.
 grep -q "localReflectionFor(circle.circle, key)" "$FRONTEND/app/reflections/page.tsx" \
   && grep -q "setDisplay(asCircle(local))" "$FRONTEND/app/reflections/page.tsx" \
-  && grep -q "if (r) setDisplay(asCircle(r))" "$FRONTEND/app/reflections/page.tsx" \
-  || { echo "FAIL — Circle-precedence wiring (local + remote Circle entry beating the built-in) not found in reflections/page.tsx"; fail=1; }
+  && grep -q "setDisplay(asCircle(r))" "$FRONTEND/app/reflections/page.tsx" \
+  && grep -q "upgraded = true" "$FRONTEND/app/reflections/page.tsx" \
+  && grep -q "cancelled || upgraded" "$FRONTEND/app/reflections/page.tsx" \
+  || { echo "FAIL — Circle-precedence wiring (local + remote Circle entry beating the built-in, incl. the async race guard) not found in reflections/page.tsx"; fail=1; }
 # The built-in fallback must still be called with the resolved day key. Since the
 # reflections-localisation round the call also threads the active locale, so this
 # asserts BOTH (strictly stronger than the original key-only check): drop the
@@ -165,6 +193,18 @@ grep -q "defaultReflectionFor(key, lang)" "$FRONTEND/app/reflections/page.tsx" \
 # to the English entry rather than render blank.
 grep -q "translated: false" "$FRONTEND/lib/reflections.ts" \
   || { echo "FAIL — English fallback path missing from lib/reflections.ts"; fail=1; }
+
+# The dataset is fetched, so the first paint has no reflection to show. The page
+# must say something — a blank hero reads as "the fellowship has nothing for you
+# today", which is the opposite of the truth — and must distinguish "arriving"
+# from "did not arrive", in every locale.
+grep -q 't("reflections.loading")' "$FRONTEND/app/reflections/page.tsx" \
+  && grep -q 't("reflections.loadFailed")' "$FRONTEND/app/reflections/page.tsx" \
+  || { echo "FAIL — /reflections has no loading / load-failed state while the fetched dataset is on its way"; fail=1; }
+for k in reflections.loading reflections.loadFailed; do
+  n=$(grep -c "\"$k\":" "$FRONTEND/lib/i18n.generated.ts")
+  [ "$n" -eq 19 ] || { echo "FAIL — \"$k\" present in $n/19 locales in i18n.generated.ts"; fail=1; }
+done
 
 # ---- F83: slogan + stealth link ---------------------------------------------
 grep -q "https://www.shamanism.org/core-shamanism/" "$FRONTEND/app/page.tsx" \

@@ -54,7 +54,7 @@ export const I18N_NAMESPACES = [
   // these were absent until the e2e-smoke gate caught them: "glossary" since
   // F94, "sponreq" since F97 (mine). Add a namespace here in the same commit
   // that introduces it.
-  "getapp", "glossary", "sponreq",
+  "getapp", "glossary", "sponreq", "mw",
 ];
 
 /**

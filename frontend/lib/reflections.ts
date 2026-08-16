@@ -5,17 +5,17 @@
 // distance (wrapping across the year boundary). The remaining handful sit at the
 // end of December.
 //
-// ⚠ WEIGHT. The generated module is ~2.5 MB and this is a client component, so
-// all of it reaches the browser. That was already true at 161 entries (~2.1 MB)
-// — the growth made an existing problem bigger rather than creating one. The
-// fix is the glossary's shape: move the data to `public/reflections.json` and
-// fetch the day that is actually being read. Tracked in BACKLOG.
+// WEIGHT (fixed). The ~2.5 MB dataset used to be a module import, so every
+// browser downloaded all 359 days in 19 locales to read one. It now lives in
+// `public/reflections.json` and is fetched on demand — which is why resolution
+// is async. Only the date list (REFLECTION_KEYS, a few kB) is still bundled,
+// because the calendar draws its dots on the first render.
 
 import {
-  DEFAULT_REFLECTIONS,
   REFLECTION_KEYS,
-  REFLECTIONS_I18N,
+  loadReflections,
   DefaultReflection,
+  ReflectionData,
 } from "./daily-reflections-default";
 
 export type { DefaultReflection } from "./daily-reflections-default";
@@ -51,9 +51,14 @@ export interface DefaultResolution {
  *  partially-translated entry still renders complete rather than blank. Fields
  *  that carry no prose (author, source, step) always keep their English form —
  *  they are citations, not copy. */
-function localise(en: DefaultReflection, key: string, lang?: string): { entry: DefaultReflection; translated: boolean } {
+function localise(
+  data: ReflectionData,
+  en: DefaultReflection,
+  key: string,
+  lang?: string
+): { entry: DefaultReflection; translated: boolean } {
   if (!lang || lang === "en") return { entry: en, translated: false };
-  const tr = REFLECTIONS_I18N?.[lang]?.[key];
+  const tr = data.i18n?.[lang]?.[key];
   if (!tr) return { entry: en, translated: false };
   return {
     entry: {
@@ -69,18 +74,27 @@ function localise(en: DefaultReflection, key: string, lang?: string): { entry: D
 
 /** Resolve the built-in reflection for a "MM-DD" key: exact if present, else the
  *  nearest available day. Pass `lang` to get the localised text where one exists
- *  (English is the source of record and the fallback). Null only if empty. */
-export function defaultReflectionFor(key: string, lang?: string): DefaultResolution | null {
-  if (!REFLECTION_KEYS.length) return null;
+ *  (English is the source of record and the fallback). Null only if empty.
+ *
+ *  Async because the dataset is fetched (see the header). The search runs over
+ *  the FETCHED keys rather than the bundled REFLECTION_KEYS, so a stale bundle
+ *  can never resolve to a day the payload does not contain. */
+export async function defaultReflectionFor(key: string, lang?: string): Promise<DefaultResolution | null> {
+  const data = await loadReflections();
+  // Sorted, so a tie in circular distance (a day with a neighbour on each side)
+  // always resolves to the earlier date, as it did when the keys were a sorted
+  // constant. Object key order is insertion order and would be a silent change.
+  const keys = Object.keys(data.en).sort();
+  if (!keys.length) return null;
 
   let resolvedKey = key;
   let exact = true;
-  if (!DEFAULT_REFLECTIONS[key]) {
+  if (!data.en[key]) {
     exact = false;
     const want = keyToOrdinal(key);
-    let best = REFLECTION_KEYS[0];
+    let best = keys[0];
     let bestDist = Infinity;
-    for (const k of REFLECTION_KEYS) {
+    for (const k of keys) {
       const dist = ringDistance(want, keyToOrdinal(k));
       if (dist < bestDist) {
         bestDist = dist;
@@ -90,6 +104,6 @@ export function defaultReflectionFor(key: string, lang?: string): DefaultResolut
     resolvedKey = best;
   }
 
-  const { entry, translated } = localise(DEFAULT_REFLECTIONS[resolvedKey], resolvedKey, lang);
+  const { entry, translated } = localise(data, data.en[resolvedKey], resolvedKey, lang);
   return { entry, key: resolvedKey, exact, translated };
 }

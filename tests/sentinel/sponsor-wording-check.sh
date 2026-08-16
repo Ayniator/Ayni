@@ -91,6 +91,48 @@ for k in me.spon.confirmReleaseSponsor me.spon.confirmReleaseSponsee; do
   fi
 done
 
+# --- the reverse direction: "I am looking for a sponsor" (?mode=ask) ---------
+#
+# The ask page is opened by a PROSPECTIVE SPONSOR — often someone who has never
+# seen this product — so its strings are the first thing a stranger reads. They
+# are also the ones most likely to be added in English only and left that way.
+
+# 8. The ask-direction keys must exist in EVERY locale, not just English. The
+#    fallback chain would hide a missing translation behind English, which
+#    reads as shipped coverage and is not.
+LOCALES=19
+for k in me.spon.askSponsor me.spon.askQrTitle me.spon.askQrHelp \
+         me.spon.askLinkCopied me.spon.copyAskLink \
+         sponreq.askTitle sponreq.askIntro sponreq.asker sponreq.askConnectFirst \
+         sponreq.askNotMember sponreq.askSelf sponreq.askAlreadySponsee \
+         sponreq.willing sponreq.askDeclined sponreq.returnTitle \
+         sponreq.returnHelp sponreq.copyReturn sponreq.returnCopied; do
+  n="$(grep -c "\"$k\":" "$DICT")"
+  if [ "$n" -eq "$LOCALES" ]; then ok "$k is translated in all $LOCALES locales"
+  else bad "$k exists in $n/$LOCALES locales (a locale falls back to English)"; fi
+done
+
+# 9. Same compassion contract as the forward direction. "I am willing" is an
+#    offer, not a verdict on the person asking — nothing here may read as a
+#    judgement, and the decline affordance is the shared "Not at this time".
+for k in sponreq.willing sponreq.askIntro sponreq.askAlreadySponsee me.spon.askSponsor; do
+  v="$(en_value "$k")"
+  if printf '%s' "$v" | grep -qiE '\b(reject|deny|refuse|unworthy|qualif|approve|worthy)\b'; then
+    bad "$k uses blunt or judging wording: \"$v\""
+  else
+    ok "$k reads compassionately: \"$v\""
+  fi
+done
+
+# 10. Nothing an unanswered request leaves behind. The ask page writes nothing
+#     on chain, and its decline path must say so as plainly as the forward one.
+v="$(en_value sponreq.askDeclined)"
+if printf '%s' "$v" | grep -qi 'nothing was recorded'; then
+  ok "declining a request states plainly that nothing was recorded"
+else
+  bad "the ask-decline message no longer says nothing was recorded: \"$v\""
+fi
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "RESULT: F97 wording contract holds."

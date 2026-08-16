@@ -11,12 +11,18 @@
 // The card says so plainly, because a member should learn that from the app
 // before they learn it from someone else.
 //
-// Members are shown by the short form of their commitment, never by wallet:
-// the commitment is the anonymous identity this whole program is built around,
-// and putting a wallet address next to a score would undo it.
+// Members are shown by an identicon drawn from their commitment plus the first
+// 8 hex characters, never by wallet: the commitment is the anonymous identity
+// this whole program is built around, and putting a wallet address next to a
+// score would undo it. The mark carries the recognition (a coin is read at a
+// glance; 64 hex characters are not) and the 8 characters stay only so two
+// members can confirm a code out loud. The full commitment is never rendered —
+// not as text, not as a tooltip — so a screenshot of this card cannot hand over
+// anyone's whole identity.
 
 import { useCallback, useEffect, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
+import Identicon from "./Identicon";
 import { useT } from "./SettingsProvider";
 import { MyMembership } from "../lib/member";
 import { listCircleMembers } from "../lib/admin";
@@ -31,6 +37,20 @@ import {
 } from "../lib/karma";
 
 type Row = { commitment: string; points: number; isMe: boolean };
+
+const short = (c: string) => c.slice(0, 8) + "…";
+
+// One member, one mark. `title` is passed explicitly on every Identicon here
+// because the component defaults its tooltip to the seed — which would put the
+// whole 64-hex commitment one hover (and one screenshot) away.
+function Mark({ commitment, label }: { commitment: string; label: string }) {
+  return (
+    <span className="mono">
+      <Identicon seed={commitment} size={18} className="inline-icon" title={label} />
+      {short(commitment)}
+    </span>
+  );
+}
 
 export default function KarmaCard({
   wallet,
@@ -118,7 +138,7 @@ export default function KarmaCard({
 
   if (memberships.length === 0) return null;
   const now = Date.now() / 1000;
-  const short = (c: string) => c.slice(0, 8) + "…";
+  const mark = t("me.spon.anonMark");
   const days = (secs: number) => Math.round(secs / 86400);
 
   return (
@@ -152,8 +172,8 @@ export default function KarmaCard({
                 <div className="muted" style={{ marginBottom: 4 }}>{t("me.karma.circleTitle")}</div>
                 {list.slice(0, 25).map((r) => (
                   <div key={r.commitment} className="row" style={{ gap: 8, justifyContent: "space-between" }}>
-                    <span className="mono">
-                      {short(r.commitment)}
+                    <span>
+                      <Mark commitment={r.commitment} label={mark} />
                       {r.isMe ? ` (${t("me.karma.you")})` : ""}
                     </span>
                     <span style={{ fontVariantNumeric: "tabular-nums" }}>{r.points}</span>
@@ -164,7 +184,15 @@ export default function KarmaCard({
 
             {/* Thank someone. */}
             {canGiveTo.length > 0 && (
-              <div className="row" style={{ gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+              <div className="row" style={{ gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {/* A native <option> cannot hold an image, so the picker keeps
+                    the short code and the chosen member's mark is drawn beside
+                    the control — the one place it matters, because sending karma
+                    to the wrong person is the mistake a row of look-alike hex
+                    invites. */}
+                {pick[m.circle] && (
+                  <Identicon seed={pick[m.circle]} size={22} title={mark} />
+                )}
                 <select
                   value={pick[m.circle] ?? ""}
                   onChange={(e) => setPick((p) => ({ ...p, [m.circle]: e.target.value }))}
@@ -213,7 +241,7 @@ export default function KarmaCard({
                   const ready = now >= x.returnableAt;
                   return (
                     <div key={x.other} className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                      <span className="mono">{short(x.other)}</span>
+                      <Mark commitment={x.other} label={mark} />
                       <span style={{ fontVariantNumeric: "tabular-nums" }}>{x.amount}</span>
                       {ready ? (
                         <button
@@ -240,7 +268,7 @@ export default function KarmaCard({
                 <div className="muted" style={{ marginBottom: 4 }}>{t("me.karma.inTitle")}</div>
                 {g.received.map((x) => (
                   <div key={x.other} className="row" style={{ gap: 8 }}>
-                    <span className="mono">{short(x.other)}</span>
+                    <Mark commitment={x.other} label={mark} />
                     <span style={{ fontVariantNumeric: "tabular-nums" }}>{x.amount}</span>
                   </div>
                 ))}

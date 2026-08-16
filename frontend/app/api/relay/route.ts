@@ -36,7 +36,7 @@
 // anything leaves the process, so a forged co-signature costs nothing.
 
 import { NextRequest, NextResponse } from "next/server";
-import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { ComputeBudgetProgram, Connection, Keypair, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
 import idl from "../../../lib/ayni.json";
 import { validateRelayRequest, RelayRequest } from "../../../lib/relayPolicy";
 
@@ -238,7 +238,15 @@ export async function POST(req: NextRequest) {
       ({ blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed"));
     }
 
-    const tx = new Transaction({ blockhash, lastValidBlockHeight, feePayer: kp.publicKey }).add(ix);
+    const tx = new Transaction({ blockhash, lastValidBlockHeight, feePayer: kp.publicKey });
+    // F59 — some allowlisted instructions (two Groth16 verifications) exceed the
+    // 200k default. The figure comes from the ALLOWLIST, never from the client:
+    // a caller-chosen limit would be a knob for making the relayer pay for
+    // heavier work than was reviewed.
+    if (verdict.computeUnits) {
+      tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: verdict.computeUnits }));
+    }
+    tx.add(ix);
     if (verdict.authority && body.authority) {
       tx.addSignature(new PublicKey(verdict.authority), Buffer.from(body.authority.signature, "base64"));
     }

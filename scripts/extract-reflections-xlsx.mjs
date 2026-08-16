@@ -1,13 +1,22 @@
 #!/usr/bin/env node
-// Regenerates frontend/lib/daily-reflections-default.ts FROM
+// Regenerates the built-in Daily Reflections FROM
 // daily_reflexions/daily_reflexions.xlsx — the direction a human edit travels.
 //
 //   node scripts/extract-reflections-xlsx.mjs
 //
-// The workbook is the source of record for the content; the TS module is what
-// the app reads. `build-reflections-xlsx.mjs` goes the other way (TS -> xlsx) to
+// Two outputs, because the data is ~2.5 MB and must NOT sit in the client
+// bundle (see the header of frontend/lib/daily-reflections-default.ts):
+//
+//   frontend/public/reflections.json    the data — fetched at runtime, cached
+//                                       by the browser, same shape as the
+//                                       glossary's public/glossary.json
+//   frontend/lib/daily-reflections-default.ts
+//                                       types + the tiny key list + the loader
+//
+// The workbook is the source of record for the content; the JSON is what the
+// app reads. `build-reflections-xlsx.mjs` goes the other way (JSON -> xlsx) to
 // refresh the human-readable mirror. Keep both, and be clear which you are
-// running: the xlsx wins when a person has edited it, the TS wins when a
+// running: the xlsx wins when a person has edited it, the JSON wins when a
 // translation pass has merged into it.
 //
 // COLUMNS ARE MATCHED BY HEADER NAME, never by position. The glossary extractor
@@ -26,6 +35,7 @@ import { inflateRawSync } from "node:zlib";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const XLSX = resolve(HERE, "../daily_reflexions/daily_reflexions.xlsx");
 const TS = resolve(HERE, "../frontend/lib/daily-reflections-default.ts");
+const JSON_OUT = resolve(HERE, "../frontend/public/reflections.json");
 
 // Sheet name -> app locale. English is the source of record; the rest land in
 // REFLECTIONS_I18N. Sheets not listed here are ignored rather than guessed at.
@@ -219,8 +229,6 @@ function main() {
     for (const d of extra) delete map[d];
   }
 
-  const j = (o) => JSON.stringify(o, null, 2).split("\n").map((l, i) => (i ? "  " + l : l)).join("\n");
-
   // Translations carry only the PROSE fields. author / source / step are
   // citations — "John 1:1" is the same reference in every language, and a
   // "translated" citation is either identical (noise in the diff) or wrong (a
@@ -245,6 +253,14 @@ function main() {
     i18n[loc] = out;
   }
 
+  const keys = Object.keys(en).sort();
+
+  // The data file. Everything the page can show lives here and NOWHERE in the
+  // bundle: `keys` is duplicated into it (the TS module carries the same list)
+  // so a consumer that has only the JSON — the Sentinel gate, the workbook
+  // rebuild — needs no second source.
+  writeFileSync(JSON_OUT, JSON.stringify({ en, i18n, keys }, null, 2) + "\n", "utf8");
+
   const out = `// GENERATED from daily_reflexions/daily_reflexions.xlsx — the platform's built-in
 // Daily Reflections, shown on /reflections when no Circle has published an entry
 // for the chosen day. Content is sourced material (scripture, philosophy,
@@ -254,7 +270,16 @@ function main() {
 // Regenerate with:  node scripts/extract-reflections-xlsx.mjs
 // Do not hand-edit — edit the workbook and re-run.
 //
-// Keyed "MM-DD". ${Object.keys(en).length} dated entries across all 12 months. When a day has no
+// ⚠ WEIGHT — why the entries are not in this file. The dataset is ~2.5 MB and
+// /reflections is a client component, so an inlined \`DEFAULT_REFLECTIONS\`
+// object shipped all of it to every browser on every visit, including the ~99.7%
+// of days nobody asked for and the 18 locales the reader does not speak. The
+// data now lives in \`frontend/public/reflections.json\` and is fetched once, on
+// demand, exactly as the glossary does it. What stays here is what is cheap and
+// what the render path needs synchronously: the types and the date list (the
+// calendar's dots). Do not re-inline the entries.
+//
+// Keyed "MM-DD". ${keys.length} dated entries across all 12 months. When a day has no
 // exact entry, the page falls back to the nearest available date (circular
 // distance), so a partial year still shows something every day.
 
@@ -268,11 +293,6 @@ export interface DefaultReflection {
   step?: string;
 }
 
-export const DEFAULT_REFLECTIONS: Record<string, DefaultReflection> = ${j(en)};
-
-/** Every date that has an entry, sorted. */
-export const REFLECTION_KEYS: string[] = ${JSON.stringify(Object.keys(en).sort())};
-
 /** What a translation may carry. Citation fields (author, source, step) are
  *  deliberately absent: a reference reads the same in every language, and a
  *  "translated" citation is either identical or unusable. */
@@ -280,11 +300,39 @@ export type TranslatedReflection = Partial<
   Pick<DefaultReflection, "title" | "quote" | "reflection" | "denomination">
 >;
 
-/** Per-locale translations, keyed by locale then "MM-DD". A missing locale,
- *  date or field falls back to the English entry above — so a partial
- *  translation is safe to ship and degrades field by field rather than all at
- *  once. A field identical to English is omitted rather than duplicated. */
-export const REFLECTIONS_I18N: Record<string, Record<string, TranslatedReflection>> = ${j(i18n)};
+/** Every date that has an entry, sorted. Small enough to ship (a few kB), and
+ *  the calendar needs it during the first render to draw its dots — fetching it
+ *  would make the grid flicker for no saving worth having. */
+export const REFLECTION_KEYS: string[] = ${JSON.stringify(keys)};
+
+/** The fetched payload: English entries, plus per-locale translations keyed by
+ *  locale then "MM-DD". A missing locale, date or field falls back to the
+ *  English entry — so a partial translation is safe to ship and degrades field
+ *  by field rather than all at once. A field identical to English is omitted
+ *  rather than duplicated. */
+export interface ReflectionData {
+  en: Record<string, DefaultReflection>;
+  i18n: Record<string, Record<string, TranslatedReflection>>;
+}
+
+// One in-flight/settled promise per page load: every caller shares the single
+// fetch, and the browser cache handles repeat visits. A failure clears the
+// cache so the next attempt retries rather than inheriting a dead promise.
+let pending: Promise<ReflectionData> | null = null;
+
+/** Load the built-in Daily Reflections dataset (once). */
+export async function loadReflections(): Promise<ReflectionData> {
+  if (!pending) {
+    pending = fetch("/reflections.json")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("reflections.json: " + r.status))))
+      .then((d) => ({ en: d?.en ?? {}, i18n: d?.i18n ?? {} }))
+      .catch((e) => {
+        pending = null;
+        throw e;
+      });
+  }
+  return pending;
+}
 `;
 
   writeFileSync(TS, out, "utf8");
@@ -299,6 +347,7 @@ export const REFLECTIONS_I18N: Record<string, Record<string, TranslatedReflectio
     );
   }
   console.log(`\n  English is the source of record: ${Object.keys(en).length} dates.`);
+  console.log(`  Wrote ${JSON_OUT}`);
   console.log(`  Wrote ${TS}`);
 }
 

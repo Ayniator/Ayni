@@ -23,11 +23,16 @@
 // Renders nothing on desktop, and nothing inside a wallet's own browser where
 // the ordinary Connect button is the right answer.
 //
-// Copy is English-only for now, matching the F93 /get-app precedent; the nav
-// chrome around it is translated. Queued for the next i18n pass — see BACKLOG.
+// The three tones live in mw.* and are translated into all 19 locales. Their
+// MEANINGS are the thing under translation, not their words: "broken" must
+// still say connecting will fail here, "only-route" that the wallet's own
+// browser is the sole path on iOS, "alternative" that Connect works and the
+// in-app browser is merely a fallback. Softening one into another reintroduces
+// the exact bug this component was written to fix.
 
 import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { useT } from "./SettingsProvider";
 import {
   noticeTone,
   shouldOfferWalletBrowser,
@@ -38,6 +43,7 @@ import {
 
 export default function MobileWalletNotice() {
   const { connected } = useWallet();
+  const t = useT();
   // Everything below reads the user agent and window.location, so it must be
   // decided after mount: deciding during render would differ between the server
   // and the first client pass and trip hydration.
@@ -76,26 +82,17 @@ export default function MobileWalletNotice() {
       <div className="mw-notice-body">
         {state.tone === "broken" && (
           <>
-            <strong>Connecting will not work in this browser.</strong> Firefox for
-            Android cannot complete the Solana wallet handshake — tapping Connect
-            opens your wallet on its account screen, and this tab keeps spinning.
-            It is not your wallet or your phone. Chrome and Samsung Internet
-            connect normally.
+            <strong>{t("mw.brokenStrong")}</strong> {t("mw.brokenBody")}
           </>
         )}
         {state.tone === "only-route" && (
           <>
-            <strong>On iPhone and iPad, connecting needs your wallet&apos;s own
-            browser.</strong> No iOS browser can reach a Solana wallet directly —
-            not Safari, not Chrome, not Firefox. Opening this site inside your
-            wallet is the only way, and it works normally there.
+            <strong>{t("mw.onlyStrong")}</strong> {t("mw.onlyBody")}
           </>
         )}
         {state.tone === "alternative" && (
           <>
-            <strong>On a phone?</strong> Connect should work here. If it does
-            not, opening this site inside your wallet&apos;s own browser is the
-            reliable fallback.
+            <strong>{t("mw.altStrong")}</strong> {t("mw.altBody")}
           </>
         )}
       </div>
@@ -105,26 +102,24 @@ export default function MobileWalletNotice() {
           // on mobile, and a real href is what lets the OS offer the installed
           // app rather than the web page.
           <a key={l.id} className="mw-notice-btn" href={l.href} rel="noreferrer">
-            Open in {l.name}
+            {/* The wallet name is data from wallets.json, so it is substituted
+                rather than concatenated: several locales put it first. */}
+            {t("mw.openIn").replace("{wallet}", l.name)}
           </a>
         ))}
         <button
           type="button"
           className="mw-notice-dismiss"
           onClick={() => setDismissed(true)}
-          aria-label="Dismiss"
+          aria-label={t("mw.dismissAria")}
         >
-          Not now
+          {t("mw.dismiss")}
         </button>
       </div>
       {/* Says why the list is short, so a two-item list does not read as a
           recommendation. The order is shuffled on every load; these are simply
           the wallets that publish a link we can open. */}
-      <div className="mw-notice-foot">
-        Listed in random order — these are the wallets that publish a link we can
-        open, not a recommendation. Any wallet works once you are inside it.
-        Nothing here is stored or sent anywhere.
-      </div>
+      <div className="mw-notice-foot">{t("mw.foot")}</div>
     </div>
   );
 }

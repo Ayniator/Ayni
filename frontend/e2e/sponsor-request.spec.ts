@@ -1,4 +1,8 @@
-// F97 — the sponsorship invitation landing page.
+// F97 — the sponsorship landing page, in both directions: the ordinary
+// invitation (?to=…, someone offers to sponsor the opener) and the request
+// (?from=…&mode=ask, someone is looking for a sponsor and the opener may
+// become one). The ask direction writes nothing on chain at all; it hands a
+// willing member their own invitation to send back.
 //
 // This page is reachable WITHOUT a connected wallet (it must explain itself to
 // someone who just scanned a QR code), so unlike the /me Sponsors & Sponsees
@@ -17,6 +21,9 @@ import { watchForErrors, expectNoPageErrors, isExpectedHost } from "./helpers";
 const CIRCLE = "DH6uDzb77mZuF8TP2ucdHUkwyW6wyZkJj8nm3i79EAUo";
 const COMMIT = "ab".repeat(32); // a well-formed 64-hex commitment
 const GOOD = `/sponsor-request?circle=${CIRCLE}&to=${COMMIT}`;
+// The reverse direction (F97): the OPENER is the prospective sponsor, and the
+// link carries the seeker's commitment as `from`. Also reachable logged-out.
+const ASK = `/sponsor-request?circle=${CIRCLE}&from=${COMMIT}&mode=ask`;
 
 test.describe("sponsor-request landing", () => {
   test("a well-formed invitation explains itself and offers connect", async ({ page }) => {
@@ -41,6 +48,34 @@ test.describe("sponsor-request landing", () => {
     expect(body).toContain("incomplete");
     // A bad link must NOT surface accept/decline controls.
     expect(body).not.toContain("accept this link");
+  });
+
+  test("an ask link explains that a member is looking for a sponsor", async ({ page }) => {
+    const diag = watchForErrors(page);
+    await page.goto(ASK, { waitUntil: "networkidle" });
+
+    const body = (await page.locator("body").innerText()).toLowerCase();
+    // The opener is the prospective SPONSOR here, so the page must lead with
+    // what is being asked of them rather than with an offer to them.
+    expect(body).toContain("looking for a sponsor");
+    // The seeker is named by their commitment, never by a wallet address.
+    expect(body).toContain(COMMIT.slice(0, 8));
+    // Without a wallet the page asks to connect instead of dangling a dead
+    // "I am willing" button.
+    expect(body).toContain("connect your wallet");
+    // Nothing on this path is written on chain, and nothing is offered until a
+    // member says they are willing — the return link must stay hidden here.
+    expect(body).not.toContain("send this back to them");
+
+    expectNoPageErrors(diag, ASK);
+  });
+
+  test("an ask link with no from= is treated as malformed", async ({ page }) => {
+    // `mode=ask` reads `from`, not `to`: a link carrying the wrong parameter
+    // must fail closed rather than silently render the forward direction.
+    await page.goto(`/sponsor-request?circle=${CIRCLE}&to=${COMMIT}&mode=ask`, { waitUntil: "networkidle" });
+    const body = (await page.locator("body").innerText()).toLowerCase();
+    expect(body).toContain("incomplete");
   });
 
   // NOTE ON WHAT IS *NOT* TESTED HERE. The accept/decline controls render only
