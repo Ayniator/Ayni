@@ -14,21 +14,12 @@ map. Vendored into `frontend/public/` and served from our own origin: the map
 must never fetch an icon from a third-party host, because a request for a marker
 asset carries the viewer's IP and a `Referer` naming the page.
 
-**Source:** supplied as raw SVG path data, described as coming from
-[SVG Repo](https://www.svgrepo.com/).
-
-**Licence: NOT VERIFIED — attribution given anyway.** SVG Repo does not use a
-single licence; its collections are variously CC0, MIT and Creative Commons
-Attribution, and only the last requires credit (see
-[SVG Repo licensing](https://www.svgrepo.com/page/licensing/)). The asset
-reached this repo as bare path data rather than a collection URL, so the
-specific licence could not be identified. Attribution is recorded here
-regardless, because crediting an asset that did not require it costs a line,
-while omitting credit from a CC BY asset is a licence breach.
-
-**To close this properly:** supply the SVG Repo page URL for the icon, and this
-entry can name the collection, the author and the exact licence — or record that
-none is required. Until then, treat the credit above as provisional.
+**Author: Ancestral Humanity Anonymous (this project).** Confirmed by the user
+on 2026-08-16: the pin is the fellowship's own asset, not a third-party icon, so
+there is **no external attribution obligation** — no CC BY author to credit and
+no upstream licence to honour. (An earlier draft of this entry hedged it as
+possibly-SVG-Repo and gave a provisional credit; that hedge is retired — the
+source is us.)
 
 The file is our own copy: 525 bytes, no script, no external reference, no
 network request of any kind.
