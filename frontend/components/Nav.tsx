@@ -33,13 +33,21 @@ export default function Nav() {
       </span>
       <nav>
         <Link href="/">{t("nav.find")}</Link>
-        {/* The inverse of the member surfaces below: "Start Here" is the
+        {/* My Circle and My Messages sit FIRST after "Find your Circle" (user
+            request): a connected member reaches their own two surfaces without
+            scanning past the newcomer chrome. Both are wallet-gated — `/me` by
+            the `connected` guard here, My Messages by InboxNavLink itself, which
+            renders null without a publicKey. `connected` is false on the server
+            and the first client render, so the two agree and there is no
+            hydration mismatch; the links appear once the adapter reports a
+            wallet. */}
+        {connected && <Link href="/me">{t("nav.me")}</Link>}
+        <InboxNavLink />
+        {/* The inverse of the member surfaces above: "Start Here" is the
             newcomer's entry point, so it retires once a wallet is connected. */}
         {!connected && <Link href="/onboarding">{t("nav.start")}</Link>}
         <Link href="/reflections">{t("nav.reflections")}</Link>
         <ResourcesMenu />
-        {connected && <Link href="/me">{t("nav.me")}</Link>}
-        <InboxNavLink />
         {connected && <Link href="/documents">{t("nav.documents")}</Link>}
         {connected && <Link href="/board">{t("nav.board")}</Link>}
         <Link href="/create">{t("nav.create")}</Link>
