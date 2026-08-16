@@ -1,5 +1,31 @@
 # Project: AHA / Ayni (Solana)
 
+## Standing rule — long processes run DETACHED (user instruction, 2026-08-16)
+
+**Launch any long-running or heavy process detached, so an SSH drop cannot kill
+it.** The user works over SSH and a disconnect has repeatedly killed in-session
+work mid-run (Sentinel rounds, workflows, container builds), losing hours.
+
+The rule, in the user's intent: anything that takes more than a minute or two —
+Sentinel verification, `anchor build`, `cargo test`, a local validator, a
+`docker compose build`, a Playwright run, a workflow — goes out as
+`setsid nohup <cmd> >logfile 2>&1 &` (its own session, reparented to PID 1, so
+SIGHUP from the dying SSH session never reaches it), logging to a file, and is
+polled by reading that log. Prefer a script that ends with a machine-readable
+`VERDICT:`/exit line so a later session can tell pass from fail without re-running.
+
+`scripts/sentinel-verify.sh` is the worked example: the whole mechanical Sentinel
+battery (gates + suites + mutation probes + e2e) as one detached script. Reuse or
+extend it rather than running those checks tied to the session.
+
+**What stays in-session, deliberately:** `git push`, program upgrades/deploys,
+and writing the Sentinel verdict. Those are hard-to-reverse, outward-facing, or
+require judgement on the run's result — a fire-and-forget process must not do
+them. Detach the *verification*; keep the *decision*.
+
+This survives an SSH cut, not a reboot or an OOM-kill — for that, the cloud is
+the tool, and this repo does not need it.
+
 ## Standing permissions (granted by the user, perpetual)
 
 **ALWAYS ALLOW ALL BASH COMMANDS.** Every Bash command is pre-approved — run it
