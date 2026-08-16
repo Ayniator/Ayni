@@ -1122,7 +1122,7 @@ export const PAGE_STRINGS: Record<string, Record<string, string>> = {
     "twelve.tradition.5": "Each group has but one primary purpose: to carry its message to any human being who still suffers.",
     "twelve.tradition.6": "An AHA circle ought never endorse, finance, or lend the AHA name to any related facility or outside enterprise, lest problems of money, property, and prestige divert us from our primary purpose.",
     "twelve.tradition.7": "Every Circle ought to be fully self-supporting, declining outside contributions.",
-    "twelve.tradition.8": "AHA should remain forever nonprofessional, but our service may employ special workers.",
+    "twelve.tradition.8": "AHA should remain forever nonprofessional, but our services may employ special workers.",
     "twelve.tradition.9": "AHA circles, as such, ought never be organized; but we may create service boards or committees directly responsible to those they serve.",
     "twelve.tradition.10": "AHA has no opinion on outside issues; hence the AHA name ought never be drawn into public controversy.",
     "twelve.tradition.11": "Our public relations policy is based on attraction rather than promotion; we need always maintain personal anonymity at the level of press, radio, film, new media, social things and more generally any digital activity.",
