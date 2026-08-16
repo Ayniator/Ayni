@@ -33,6 +33,16 @@ export default function Twelve() {
             <span className="twelve-door-sub">{t("twelve.hub.traditionsSub")}</span>
           </span>
         </Link>
+        {/* The glossary is reference material, not a path to walk, so it sits as
+            a third door rather than in the hero pair — but it is reachable here
+            as well as under Resources in the nav, at the user's request. */}
+        <Link href="/glossary" className="card twelve-door twelve-door-ref">
+          <span className="twelve-door-num twelve-door-az" aria-hidden="true">A–Z</span>
+          <span className="twelve-door-body">
+            <span className="twelve-door-title">{t("nav.glossary")}</span>
+            <span className="twelve-door-sub">{t("twelve.hub.glossarySub")}</span>
+          </span>
+        </Link>
       </div>
     </div>
   );

@@ -442,6 +442,16 @@ pre.doc { white-space: pre-wrap; word-break: break-word; background: var(--bg-2)
   background: var(--panel); border: 1px solid var(--border-strong);
   border-radius: 11px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
 }
+/* Transparent bridge across the 4px gap between the trigger and the panel.
+   Without it, moving the cursor from "Resources" down toward "Glossary" crosses
+   dead space that belongs to neither element, the wrapper's mouseleave fires,
+   and the panel closes before the pointer arrives — reported in Chrome. The
+   bridge is a child of the panel (so it exists only while open) and covers the
+   gap plus a hair, keeping the hover region continuous. Pointer-events are left
+   default (it must be hoverable); it is invisible. */
+.nav-drop::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -6px; height: 6px;
+}
 .nav-drop.is-open { display: flex; }
 .nav-drop a { display: block; padding: 8px 10px; border-radius: 8px; font-size: 14px; }
 [dir="rtl"] .nav-drop { left: auto; right: 0; }
@@ -495,6 +505,11 @@ pre.doc { white-space: pre-wrap; word-break: break-word; background: var(--bg-2)
   color: var(--accent); font-variant-numeric: tabular-nums;
 }
 .twelve-door-alt .twelve-door-num { color: var(--accent-2); }
+/* The glossary is a reference door, not a numbered path — its emblem is "A–Z",
+   so it is set smaller than the 34px "12" numerals to sit level with them. */
+.twelve-door-ref:hover { border-color: var(--muted); }
+.twelve-door-ref .twelve-door-num { color: var(--muted); }
+.twelve-door-az { font-size: 22px; letter-spacing: 0; white-space: nowrap; }
 .twelve-door-body { display: flex; flex-direction: column; gap: 3px; }
 .twelve-door-title { font-weight: 700; font-size: 17px; }
 .twelve-door-sub { color: var(--muted); font-size: 13.5px; line-height: 1.45; }
