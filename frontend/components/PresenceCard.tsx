@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { useT } from "./SettingsProvider";
+import QrScanner from "./QrScanner";
 import { MyMembership } from "../lib/member";
 import {
   SubjectHandoff,
@@ -206,6 +207,11 @@ export default function PresenceCard({
                 {busy === "vouch-" + m.circle ? t("me.sending") : t("me.presence.vouch")}
               </button>
             </div>
+            {/* Camera scan is offered ALONGSIDE paste, never instead of it: the
+                scanner renders nothing on a browser without BarcodeDetector, so
+                paste is the guaranteed path. A scan fills the same field the
+                witness then submits, so the flow after it is identical. */}
+            <QrScanner label={t("me.presence.scanCode")} onScan={(v) => setPaste((p) => ({ ...p, [m.circle]: v }))} />
           </div>
         );
       })}
