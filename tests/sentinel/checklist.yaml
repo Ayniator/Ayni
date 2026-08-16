@@ -4875,3 +4875,31 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
       - "Same as F100-KARMA-GIFT above, except me.karma.* i18n presence is
          now closed (structure verified); fidelity of the 18 non-English
          translations still needs a native-speaker pass."
+
+  - id: UI-BATCH-2026-08-16
+    name: "fe9acdb — five UI features: F59 presence ceremony (/me + /member),
+      F97 reverse sponsor invite (?mode=ask), anonymous Identicon display of
+      sponsor/sponsee/karma, F93/F95 i18n body extraction (get-app +
+      MobileWalletNotice ×19), F101 reflections moved off the client bundle
+      (2.5MB TS -> 8KB loader + public/reflections.json)."
+    shipped_round: ui-batch (2026-08-16)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-16-ui-batch.md (PASS WITH WARNINGS)"
+      - "tests/presence-client-vectors.test.mjs (5) — the browser's external
+         nullifier derivation pinned to the program's frozen vectors; a drift
+         makes every presence proof verify against nothing."
+      - "tests/sentinel/presence-ui-check.sh (11) — month-or-nothing on the
+         member page, vouching wording (comments stripped), handoff discloses
+         the commitment BEFORE the scan, relay prefers the relayer, the self-pay
+         fallback budgets the same compute the allowlist grants, and
+         establish_wing_peer's relay entry is accountCount 11 not the stale 7."
+      - "Verified by scripts/sentinel-verify.sh — a DETACHED (setsid nohup)
+         battery, SSH-cut-proof, after two in-session agents died on restart.
+         18/18 gates, 47/47 rust, 71/71 e2e, 3/3 mutation probes red-then-green."
+    checks:
+      - cmd: "node tests/presence-client-vectors.test.mjs"
+      - cmd: "bash tests/sentinel/presence-ui-check.sh"
+      - cmd: "bash tests/sentinel/idl-sync-check.sh"
+      - cmd: "bash tests/sentinel/f82-f83-check.sh"
+      - cmd: "bash tests/sentinel/f92-f93-check.sh"
+      - cmd: "node scripts/extract-reflections-xlsx.mjs && git diff --quiet -- frontend/lib/daily-reflections-default.ts frontend/public/reflections.json"

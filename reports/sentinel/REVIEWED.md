@@ -908,3 +908,23 @@ so requiring it would deadlock the gate permanently.
   which fails on a masterSecret import introduced in fe750cd and verified
   failing at HEAD~1 — widening a recovery-surface gate to clean up my own round
   is what that gate exists to prevent.
+
+- fe9acdb57ca0a5ce99ed185fe85177adb6b0f58c feat(F59,F97,F101): presence ceremony UI, reverse sponsor invite, anonymous display, i18n bodies, reflections off the bundle
+  Covered by NRR-2026-08-16-ui-batch.md (PASS WITH WARNINGS). Verified by a
+  DETACHED battery (scripts/sentinel-verify.sh under setsid nohup, its own
+  session/PID-1, SSH-cut-proof) after two in-session agent attempts died on
+  process restart. Result: 18/18 sentinel gates, cargo 47/47, presence-zk 12/12,
+  presence-client-vectors 5/5 (the browser↔program nullifier byte-pin),
+  pda-sort 8/8, badge 5/5, tsc clean, extractor idempotent, Playwright 71/71,
+  tree clean. THREE mutation probes each fired red then restored green: the
+  presence mask (0x1f→0x3f breaks the vector pin), the get-app store disclosure
+  (softening it trips f92-f93), and the relay wing_peer account count (11→7
+  trips presence-ui-check — the exact stale-allowlist defect this commit fixed).
+  Source-reviewed by reading, not a gate: the presence account orders match the
+  IDL, and the relay compute budget is allowlist-derived, never client-supplied.
+  No program code changed, so the deployed devnet binary and frontend/lib/ayni.json
+  are unaffected (idl-sync green). Warnings: unverified non-English machine
+  translations; the two-wallet presence handoff is proven at the derivation and
+  account layers but not driven end-to-end in a browser; the ~2.5MB
+  reflections.json is now a one-time static fetch (off the bundle, the point of
+  F101). None is a defect.
