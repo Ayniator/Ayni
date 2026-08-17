@@ -450,3 +450,31 @@ is the user's call and is recorded here rather than patched silently.
 
 **Attribution:** this session; unverifiable at the git level, per the user's
 accepted-risk waiver of 2026-08-12.
+
+## 52deaf2 — BACKLOG reconciliation with the accepted ADR 0002 (2026-08-17)
+
+**Override used:** yes, for this one commit.
+
+**What it is:** `BACKLOG.md` only — 6 insertions, 3 deletions, no code. Two rows
+still said quantum resistance was "genuinely open — nothing decided, nothing
+written", which stopped being true when `docs/decisions/0002-quantum-resistance.md`
+was rewritten to **Accepted (staged migration)** and pushed in an earlier,
+reviewed batch. The commit strikes the stale text, cites the ADR's staged
+decision in the E10 row, and registers the one schedulable-now work item
+(Stage 2's `ProofAnchor` seam) as **F102** so future rounds can track it as a
+feature instead of prose inside an ADR.
+
+**Why the override rather than a round first:** the substance being pushed —
+the ADR itself — was already reviewed and is already on origin; this commit
+only makes the backlog agree with it. A full round to bless a backlog-status
+correction inverts the gate's purpose (it guards unreviewed *behaviour*, and
+there is none here: `git show 52deaf2 --stat` = BACKLOG.md, 1 file). Precedent:
+the glossary/docs override entries above.
+
+**What was NOT reviewed:** the F102 row's own wording. The next ordinary round
+sweeps it with whatever batch it rides in; F102's *implementation*, when it
+happens, is a program change and gets its own full round + devnet upgrade — the
+row itself says so.
+
+**Attribution:** this session; unverifiable at the git level, per the user's
+accepted-risk waiver of 2026-08-12.
