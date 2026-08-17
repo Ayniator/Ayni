@@ -478,3 +478,28 @@ row itself says so.
 
 **Attribution:** this session; unverifiable at the git level, per the user's
 accepted-risk waiver of 2026-08-12.
+
+## 7f77195, ebc18e3 — F103 hybrid PQ sealing, pushed at the user's explicit direction (2026-08-17)
+
+**Override used:** yes, for the F103 feature commit (`7f77195`) and the
+nav-qr round's own bookkeeping commit (`ebc18e3`) riding in the same push.
+
+**What it is:** F103 — hybrid X25519+ML-KEM-768 sealing for the F63 mailbox
+(ADR 0002 Stage 1). Frontend + tests + docs only; `programs/` untouched, so no
+devnet implication. Locally verified before the push: 16/16 tests/mailbox.ts
+(7 new hybrid properties), 27/27 mailbox-mixing, tsc clean, production build
+green, all 7 F103 checklist gates pass.
+
+**Why the override:** a full Sentinel round on this exact working tree WAS
+convened and is still running; the user directed "go commit push upgrade"
+before its verdict. Same precedent as the 2026-08-14 entry above ("push at the
+user's explicit direction"). The round's verdict lands after the push; if it
+returns a CRITICAL, the finding gets fixed forward immediately and this entry
+is the record that the push preceded the verdict knowingly.
+
+**What was NOT reviewed at push time:** the round's independent verification of
+the downgrade-resistance and no-version-oracle claims — the implementing
+session's own tests cover them, but no second pair of eyes had reported yet.
+
+**Attribution:** this session; unverifiable at the git level, per the user's
+accepted-risk waiver of 2026-08-12.
