@@ -1019,14 +1019,14 @@ so requiring it would deadlock the gate permanently.
   OVERRIDES.md entries this round's push relied on (46a83c3, df8741e) were
   reviewed for honesty — no overclaim found in either.
 
-- (working tree at HEAD e4d1fc0, commit to follow) feat(F102): the
+- 9f81cde3639e0d4215c6f138b6922920ca04ce45 feat(F102): the
   `ProofAnchor` seam — one verifier boundary over every Groth16 site (ADR
   0002 Stage 2)
-  Covered by NRR-2026-08-17-f102-proof-anchor.md (PASS WITH WARNINGS). This
-  entry precedes the commit it describes — the round reviewed the uncommitted
-  working tree per instruction, with the commit to follow immediately; if the
-  landed SHA differs from what this note anticipates, the next round
-  reconciles it. Independently verified, not taken on the implementer's own
+  Covered by NRR-2026-08-17-f102-proof-anchor.md (PASS WITH WARNINGS). The
+  round reviewed the uncommitted working tree at HEAD e4d1fc0; the landed
+  commit 9f81cde was verified content-identical to that reviewed tree
+  (`git diff 9f81cde` against it is empty) before this placeholder was
+  resolved to the real SHA — the reconciliation the entry itself anticipated. Independently verified, not taken on the implementer's own
   claims: `grep -rn "Groth16Verifier::new" programs/ayni/src | grep -v
   proof_anchor` empty (own run); all 12 rewired call sites diffed against
   `git show HEAD` confirming identical VK/error pairs, not just code-read;
