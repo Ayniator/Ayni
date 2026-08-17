@@ -529,3 +529,16 @@ goes to Sentinel immediately after the push; its addendum supersedes this note.
 
 **Attribution:** this session; unverifiable at the git level, per the user's
 accepted-risk waiver of 2026-08-12.
+
+## 6e15126 — F102 devnet-upgrade signature recorded in BACKLOG (2026-08-17)
+
+**Override used:** yes, for this one commit — BACKLOG.md only, one sentence:
+the devnet upgrade signature (slot 484678469, sig 7RvzdT31…a1k) and the
+byte-for-byte sha256 match between the deployed program and the build the
+F102 round reviewed. The deploy it records followed a PASS WITH WARNINGS
+round (NRR-2026-08-17-f102-proof-anchor) for exactly this binary; the commit
+adds the audit trail every other shipped row is expected to carry. Same
+precedent as the 52deaf2 BACKLOG-reconciliation entry above.
+
+**Attribution:** this session; unverifiable at the git level, per the user's
+accepted-risk waiver of 2026-08-12.
