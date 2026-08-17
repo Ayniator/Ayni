@@ -1,6 +1,6 @@
 # Non-Regression Report — 2026-08-17 — Round f103-hybrid-pq
 
-Verdict: **FAIL**
+Verdict: **FAIL at first run; superseded below — see ADDENDUM: PASS WITH WARNINGS**
 
 Scope: uncommitted working tree on top of HEAD `7f77195d4469fb6c66b62b7db7d940b0ef455021`
 (branch `solana`), i.e. F103 — hybrid post-quantum mailbox sealing (X25519 +
@@ -263,3 +263,203 @@ correct cryptography around it. The fix is a one-line change to
 from the validated envelope instead of hardcoding `v: 1`), plus a v2 fixture
 added to `tests/mailbox-mixing.test.mjs`'s relay-e2e section so this exact
 failure mode cannot silently return.
+
+---
+
+## ADDENDUM (2026-08-17, same day) — re-verification of the fix; superseding verdict
+
+**Superseding verdict: PASS WITH WARNINGS** (was: FAIL)
+
+Re-run at commit `df8741e0fe45f6c9385fdae90b792519638d43f9` (branch `solana`,
+pushed, working tree clean). This addendum documents an independent
+re-verification — nothing below is taken on the fix commit's own say-so.
+
+### What was independently re-checked (not just re-read)
+
+1. **The fix itself** (`frontend/app/api/mailbox/route.ts:364-374`, commit
+   `35f5641`): `case "put"`'s field-allowlist now branches on `e.v === 2` and
+   preserves `kct`; the `v:1` branch is byte-identical to before. Read against
+   `badEnvelope`'s existing validation (unchanged) — the fix does not weaken
+   any bound, it only stops discarding fields `badEnvelope` already validated.
+2. **Full battery re-run by this session:** `npx ts-mocha tests/mailbox.ts` →
+   **16/16**; `node tests/mailbox-mixing.test.mjs` → **28/28** (the new case,
+   *"relay e2e: a HYBRID (v2) envelope survives the relay intact"*, included);
+   `cd frontend && npx tsc --noEmit` → clean.
+3. **Red/green independently reproduced, not trusted from the commit message.**
+   This session copied the pre-fix `route.ts` from `7f77195` over the working
+   file, leaving every other file (including the new test) at HEAD, and re-ran
+   `tests/mailbox-mixing.test.mjs`:
+   ```
+   FAIL  relay e2e: a HYBRID (v2) envelope survives the relay intact —
+         kct is not dropped, v is not relabeled — the relay relabeled a
+         v2 envelope (got 1, want 2)
+   1 test(s) FAILED.
+   ```
+   The fixed file was then restored (`git diff` on the file returned empty —
+   byte-identical to HEAD) and the suite re-run: **28/28**, the new case
+   included. This confirms the "red-proven" claim in commit `35f5641` and in
+   `reports/sentinel/OVERRIDES.md`'s entry for it, independently rather than
+   by trusting the message.
+4. **The original repro script re-run against the fixed code** (same script
+   left at `/tmp/claude-1000/-home-alkia-Ayni/d86dbd26-cd9f-4ac2-a888-6c46d6fa2a90/scratchpad/repro-v2-relay-bug.mjs`,
+   unmodified): stored envelope is now `{"v":2,...,"kct":"<1452 chars>",...}`;
+   `get` returns it unchanged; `openSealed()` now returns the full inner
+   envelope (`from`, `ts`, `body: "hello from the post-quantum future"`,
+   `sig`) instead of `null`. **The mail survives.**
+5. **The WARNING's closure, read at source:** `docs/messaging-migration.md`
+   §F103 now reads *"'uniform' holds per client build — during a rolling
+   deploy a stale cached client still pads to the old 2 KiB block, so the
+   relay can tell old-build from new-build requests until caches turn
+   over... it is the unavoidable cost of any wire-format change"* — this
+   states the residual plainly, matches what this round found, and does not
+   claim the skew is mitigated (it isn't, and doesn't need to be — it is a
+   deploy-window property, not a design flaw). Closed.
+6. **The checklist gap's closure, read at source:**
+   `tests/sentinel/checklist.yaml`'s `F103` entry gained
+   `- cmd: node tests/mailbox-mixing.test.mjs` and a grep for the new case
+   name as `checks:`, a `cases:` line naming the relay round-trip regression,
+   and an `uncovered:` section (previously absent) naming the two remaining
+   gaps honestly (no browser-level Playwright hybrid send; the transitional
+   padding skew disclosed-not-mitigated). Closed as claimed.
+7. **Privacy/traditions:** unchanged from the original round's findings —
+   `tests/sentinel/privacy-sweep.sh` re-run, 5/5. The fix touches only which
+   fields are preserved on an already-validated, already-length-bounded
+   envelope; it introduces no new storage-amplification or content-exposure
+   vector (confirmed by re-reading `badEnvelope`, unchanged, still bounds
+   `kct` to exactly `MLKEM_CT_LEN` before either code path runs).
+
+### Not independently re-verified this addendum (scope note, not a finding)
+
+- **Live container serving the fix, HTTP 200** — the coordinator's message
+  states this; this session has no known deployment URL in scope to curl
+  independently and did not chase one down. Recorded as *reported, not
+  independently confirmed* rather than silently treated as verified.
+- **Browser-level (Playwright) hybrid send/receive between two real wallet
+  sessions** — does not exist yet, honestly named in the checklist's new
+  `uncovered:` section. Same gap class F63v2 already carries; not a new
+  omission introduced by this fix.
+
+### Review of the two OVERRIDES.md entries added this session
+
+Both entries (`46a83c3`, for `7f77195`+`ebc18e3`; `df8741e`, for `35f5641`)
+were read in full. Nothing dishonest found:
+
+- The `7f77195, ebc18e3` entry accurately scopes what was locally verified
+  before that push (16/16, 27/27 — the **pre-F103v2-relay-fixture** count,
+  correct for what existed then — tsc clean, 7/7 checklist gates) and, notably,
+  **does not claim** the relay round-trip was verified for v2 — which matches
+  reality (it wasn't, that's the CRITICAL). It states plainly that "the round's
+  independent verification... had no second pair of eyes reported yet." No
+  overclaim found.
+- The `35f5641` entry's claim that the regression test "fails on the pre-fix
+  code and passes on the fix, run in this session both ways" is now
+  **independently confirmed** by this addendum (§3 above), not merely taken on
+  trust.
+- Both entries correctly invoke the 2026-08-12 accepted-risk waiver for
+  attribution and correctly scope what was/was not reviewed at push time. No
+  finding.
+
+**Process observation (not a technical regression, not blocking PASS given the
+standing waiver):** this is the second time in one round that code was pushed
+and deployed to the live container ahead of a Sentinel verdict on the same
+working tree (`7f77195`/`ebc18e3` before the first verdict; the live container
+rebuilt again after `35f5641` before this addendum). CLAUDE.md's accepted-risk
+waiver explicitly covers pushing ahead of a verdict and fixing forward — this
+is exactly that pattern, twice, and both times correctly logged in
+`OVERRIDES.md` before Sentinel was asked to re-look. Naming it here because the
+pattern is worth the user's attention even though no rule was broken: a round
+that finds a CRITICAL after the code is already live is real user-facing
+exposure for the gap between deploy and fix, however short. Not a finding
+against this round.
+
+### Updated summary table (this addendum)
+
+| Layer | Tests | Pass | Fail |
+|-------|------:|-----:|-----:|
+| E (build health) | tsc --noEmit (frontend) | 1 | 0 |
+| B/C | `tests/mailbox.ts` | 16 | 0 |
+| B/C | `tests/mailbox-mixing.test.mjs` | 28 | 0 |
+| D (privacy sweep) | `tests/sentinel/privacy-sweep.sh` | 5 | 0 |
+| Checklist F103 `checks:` | 9 | 9 | 0 |
+| Red/green independent re-proof of the new regression case | 2 (red + green) | 2 | 0 |
+
+### Updated regressions list
+
+The CRITICAL from the original round (`route.ts:364`, v2 envelopes silently
+destroyed) is **RESOLVED**, independently confirmed. No new regression found
+in the fix. The WARNING (transitional padding-size distinguisher undisclosed)
+is **RESOLVED** (now disclosed). No CRITICAL remains open.
+
+### Updated coverage gaps
+
+1. Browser-level (Playwright) e2e of an actual hybrid send between two real
+   wallet sessions — still absent, honestly disclosed in the checklist's
+   `uncovered:` section. Carried forward.
+2. The transitional padding-size distinguisher during a rolling deploy —
+   disclosed, not mitigated (by design; it is a deploy-window property). Not
+   expected to shrink; it is not a standing gap so much as an accepted,
+   temporary, self-closing residual — but flagged again here so it does not
+   quietly stop being named in a future round.
+3. Everything else carried forward unchanged from the original round (docs
+   route-table reconciliation; F63v2's traffic-analysis statistical suite gap;
+   the pre-existing `checklist.yaml` YAML-parse issue) — none introduced or
+   worsened by this fix.
+
+### REVIEWED.md updates
+
+Per `reports/sentinel/REVIEWED.md`'s own stated convention (top of that file):
+*"Commits touching nothing but Sentinel's own bookkeeping
+(`reports/sentinel/**`, `tests/sentinel/checklist.yaml`) are exempt"* from
+needing an entry, because such a commit cannot cite its own SHA. Checked all
+five commits named by the coordinator against that rule:
+
+- **`7f77195`** (the F103 feature) and **`35f5641`** (the fix) touch real
+  application code — entries added below.
+- **`ebc18e3`**, **`46a83c3`**, **`df8741e`** touch *only*
+  `reports/sentinel/**` (two are pure `OVERRIDES.md` additions; `ebc18e3` is a
+  prior round's own report + `REVIEWED.md` + `latest.md` bookkeeping commit) —
+  **exempt under the file's own rule**, so no entry was added for these three.
+  Noting this as a deviation from the coordinator's literal request rather
+  than silently complying: adding spurious entries for bookkeeping-only
+  commits would contradict the registry's stated purpose (it exists so a
+  commit cannot launder itself via a prose mention; a bookkeeping-only commit
+  has no code to review in the first place) and would set a precedent of
+  entries for commits that, by the file's own definition, need none. If the
+  intent was specifically to have the push-gate *see* these SHAs mentioned
+  somewhere under `reports/sentinel/`, they already are — in this addendum,
+  in the OVERRIDES.md entries themselves, and in `df8741e`'s own commit
+  message — which is what the exemption rule anticipates.
+
+REVIEWED.md entries appended for the two substantive commits:
+
+```
+- 7f77195d4469fb6c66b62b7db7d940b0ef455021 feat(F103): hybrid post-quantum mailbox sealing — X25519 + ML-KEM-768 (ADR 0002 Stage 1)
+  Covered by NRR-2026-08-17-f103-hybrid-pq.md, original round: FAIL (one
+  CRITICAL — route.ts's put handler hardcoded v:1 and dropped kct, silently
+  destroying every hybrid envelope; found by driving the real relay handler,
+  not the crypto-only unit tests). The crypto layer itself (mailboxCrypto.ts)
+  was independently sound at this commit: downgrade-resistant signatures
+  (spkSignedBytesV2 covers spk+pqk together), hybrid key binding both shared
+  secrets + full transcript, ML-KEM implicit rejection confirmed to yield
+  null never garbage, no network sink, no forbidden identifier. 16/16
+  tests/mailbox.ts, 27/27 tests/mailbox-mixing.test.mjs (all v1 fixtures —
+  the gap that let the CRITICAL ship), tsc clean, lockfile diff clean (one
+  MIT dependency, @noble/post-quantum, matching the ADR's audited-library
+  rule). Superseded by the 35f5641 entry below.
+
+- 35f564122793e4d44eb7fd90c4e6f370d48ecf1a fix(F103 CRITICAL): the relay preserved v1 shape only — hybrid mail was silently destroyed
+  Covered by the addendum to NRR-2026-08-17-f103-hybrid-pq.md
+  (superseding verdict: PASS WITH WARNINGS). Independently re-verified in
+  that session, not taken on the commit's own claims: reverted route.ts to
+  the pre-fix (7f77195) version with every other file at HEAD and confirmed
+  the new relay-e2e test (tests/mailbox-mixing.test.mjs) fails with "the
+  relay relabeled a v2 envelope (got 1, want 2)"; restored the fixed file
+  (git diff empty against HEAD) and confirmed 28/28 green. Re-ran the
+  original repro script against the fixed code: a v2 envelope now survives
+  put→get with kct intact and openSealed() returns the real message instead
+  of null. tsc clean. docs/messaging-migration.md's transitional
+  padding-skew disclosure and tests/sentinel/checklist.yaml's new gate +
+  uncovered: section both read and confirmed present and accurate. The two
+  OVERRIDES.md entries this round's push relied on (46a83c3, df8741e) were
+  reviewed for honesty — no overclaim found in either.
+```

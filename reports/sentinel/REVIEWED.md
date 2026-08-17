@@ -989,3 +989,32 @@ so requiring it would deadlock the gate permanently.
   blocks — the English fix now agrees with them rather than introducing a new
   inconsistency. Live deployment (container built 2026-08-16T11:26:29Z,
   immediately after this commit) confirmed already serving the corrected text.
+- 7f77195d4469fb6c66b62b7db7d940b0ef455021 feat(F103): hybrid post-quantum mailbox sealing — X25519 + ML-KEM-768 (ADR 0002 Stage 1)
+  Covered by NRR-2026-08-17-f103-hybrid-pq.md, original round: FAIL (one
+  CRITICAL — route.ts's put handler hardcoded v:1 and dropped kct, silently
+  destroying every hybrid envelope; found by driving the real relay handler,
+  not the crypto-only unit tests). The crypto layer itself (mailboxCrypto.ts)
+  was independently sound at this commit: downgrade-resistant signatures
+  (spkSignedBytesV2 covers spk+pqk together), hybrid key binding both shared
+  secrets + full transcript, ML-KEM implicit rejection confirmed to yield
+  null never garbage, no network sink, no forbidden identifier. 16/16
+  tests/mailbox.ts, 27/27 tests/mailbox-mixing.test.mjs (all v1 fixtures —
+  the gap that let the CRITICAL ship), tsc clean, lockfile diff clean (one
+  MIT dependency, @noble/post-quantum, matching the ADR's audited-library
+  rule). Superseded by the 35f5641 entry below.
+
+- 35f564122793e4d44eb7fd90c4e6f370d48ecf1a fix(F103 CRITICAL): the relay preserved v1 shape only — hybrid mail was silently destroyed
+  Covered by the addendum to NRR-2026-08-17-f103-hybrid-pq.md
+  (superseding verdict: PASS WITH WARNINGS). Independently re-verified in
+  that session, not taken on the commit's own claims: reverted route.ts to
+  the pre-fix (7f77195) version with every other file at HEAD and confirmed
+  the new relay-e2e test (tests/mailbox-mixing.test.mjs) fails with "the
+  relay relabeled a v2 envelope (got 1, want 2)"; restored the fixed file
+  (git diff empty against HEAD) and confirmed 28/28 green. Re-ran the
+  original repro script against the fixed code: a v2 envelope now survives
+  put→get with kct intact and openSealed() returns the real message instead
+  of null. tsc clean. docs/messaging-migration.md's transitional
+  padding-skew disclosure and tests/sentinel/checklist.yaml's new gate +
+  uncovered: section both read and confirmed present and accurate. The two
+  OVERRIDES.md entries this round's push relied on (46a83c3, df8741e) were
+  reviewed for honesty — no overclaim found in either.
