@@ -941,3 +941,51 @@ so requiring it would deadlock the gate permanently.
   commit, push, or deploy — those stay judgement steps for the operator once the
   log is read. Reviewed as tooling with no runtime effect on the app or program;
   syntax-checked (bash -n) and run to completion (VERDICT: PASS) before commit.
+
+- 7bce86a7d0091ae23228e945092e8292dca9e2b8 docs(CLAUDE): standing rule — long processes run detached (SSH-cut-proof)
+  CLAUDE.md only, 26 lines added, no application code. Covered by
+  NRR-2026-08-16-nav-qr-batch.md (PASS WITH WARNINGS). Read for sense; records
+  a user instruction already in effect. No test surface.
+- 7c82e985b7cebda2ef0ef81ecb769d7f16c91f03 docs(credits): the map pin is AHA's own asset — no external attribution
+  docs/credits.md only, no application code. Covered by the same report. Read
+  for sense; retires a provisional CC-BY hedge per the user's 2026-08-16
+  confirmation that the asset is first-party. No test surface.
+- f8f0fa554a40c3bfc40dc17a1b345369addca998 feat(F59): camera QR scan for the presence handoff; reconcile stale backlog rows
+  Covered by NRR-2026-08-16-nav-qr-batch.md (PASS WITH WARNINGS). QrScanner.tsx
+  source-reviewed: onScan hands the BarcodeDetector's raw string straight to
+  the caller, which only sets it into the same text field paste already fills
+  (identical downstream flow); decodeHandoff() then does base64 + JSON.parse
+  with a v/kind shape check and throws on anything malformed — no
+  eval/Function/innerHTML, no injection surface from a hostile QR payload.
+  Grepped clean for fetch/XHR/sendBeacon/WebSocket/localStorage/sessionStorage/
+  indexedDB/console.log; the video frame only ever reaches an in-memory
+  <canvas>. Stream stopped on decode/stop/unmount. Renders null with no
+  BarcodeDetector (paste stays the guaranteed path, no dead button). Touches no
+  Presence PDA / on-chain state, so it neither worsens nor is covered by the
+  existing docs/presence.md per-person-count waiver, and introduces no new
+  enumeration surface. i18n-key-check and tsc clean; qr namespace correctly
+  registered in e2e/helpers.ts. Does not touch programs/ or circuits/.
+- 6a7575bc037998fa8b9a24a7dee9e7117975ebd1 feat(nav): My Circle + My Messages first after "Find your Circle", wallet-gated
+  Covered by the same report. Nav.tsx only, +11/-3. /me kept its pre-existing
+  `connected &&` guard (same pattern already used for /documents, /board, just
+  reordered — connected is false on server and first client render, so no
+  hydration mismatch and no flash to a disconnected wallet); InboxNavLink
+  (unchanged by this commit) independently returns null with no publicKey. No
+  new getProgramAccounts / enumeration path introduced — verified by reading,
+  since this repo's e2e suite has no wallet-connected fixture to drive it live
+  (pre-existing, disclosed gap, carried forward in checklist.yaml
+  NAV-QR-BATCH-2026-08-16).
+- 7503546d5772b2055be33efafe16480e4f2c814b fix(nav): bridge Resources dropdown hover-gap (Chrome); add Glossary door to /twelve
+  Covered by the same report. twelve.spec.ts rewrite confirmed NOT gutted:
+  still asserts an exact door count (3), exact href order, and the raw-key
+  sweep; ran green 7/7 against the live deployment, and the full e2e-smoke
+  battery (71/71) and glossary-check.sh (10/10) also passed. The CSS hover-gap
+  bridge itself has no dedicated regression test (Playwright cannot reproduce
+  a real mouse-path-through-dead-space bug) — WARNING, carried in
+  checklist.yaml.
+- 0e786092e670a9fd2a291ae7444c482bfcca83d5 fix(traditions): Tradition 8 — 'our services may employ special workers'
+  Covered by the same report. Single i18n string. Cross-checked against the
+  already-plural French ("nos services") and Spanish ("nuestros servicios")
+  blocks — the English fix now agrees with them rather than introducing a new
+  inconsistency. Live deployment (container built 2026-08-16T11:26:29Z,
+  immediately after this commit) confirmed already serving the corrected text.

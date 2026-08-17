@@ -1,1 +1,1 @@
-NRR-2026-08-15-f100-karma-ui.md
+NRR-2026-08-16-nav-qr-batch.md
