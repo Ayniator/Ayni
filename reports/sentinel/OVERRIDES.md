@@ -503,3 +503,29 @@ session's own tests cover them, but no second pair of eyes had reported yet.
 
 **Attribution:** this session; unverifiable at the git level, per the user's
 accepted-risk waiver of 2026-08-12.
+
+## 35f5641 — closure of the F103 CRITICAL the round just found (2026-08-17)
+
+**Override used:** yes, for this one commit.
+
+**What it is:** the fix for NRR-2026-08-17-f103-hybrid-pq's CRITICAL — the
+relay's put handler hardcoded `v: 1` and dropped `kct`, silently destroying
+every hybrid envelope. The broken build was pushed AND deployed to the live
+container minutes before the verdict landed (see the entry above); every hour
+it stays live, enrolled clients rotate to hybrid bundles and their mail is
+eaten. The fix preserves v/kct, adds a red-proven relay-e2e regression case,
+closes the round's WARNING (transitional padding distinguisher now disclosed),
+and adds the checklist `uncovered:` section the round flagged as missing.
+
+**Why the override rather than a re-round first:** same reasoning as the
+b10bae9 entry above — this is the closure of a live hole that the round itself
+identified and reproduced; waiting for a second round to bless the exact fix
+the first round prescribed leaves the hole open for the duration. The
+regression test fails on the pre-fix code and passes on the fix, run in this
+session both ways.
+
+**What was NOT reviewed:** the fix commit itself. A re-verification request
+goes to Sentinel immediately after the push; its addendum supersedes this note.
+
+**Attribution:** this session; unverifiable at the git level, per the user's
+accepted-risk waiver of 2026-08-12.
