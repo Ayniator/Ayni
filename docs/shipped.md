@@ -18,6 +18,47 @@
 
 ---
 
+## F103 — hybrid post-quantum mailbox sealing, ADR 0002 Stage 1 (2026-08-17)
+
+The one quantum threat that acts backward in time is harvest-now-decrypt-later:
+ciphertext recorded today is decrypted the day a CRQC exists. ADR 0002 ranks it
+first, and the F63 mailbox — live since v1 — was sealing every envelope to a
+single x25519 prekey. This round makes the sealing layer **hybrid**:
+
+- **v2 prekey bundles** carry an ML-KEM-768 (FIPS 203) encapsulation key beside
+  the x25519 SPK, wallet-signed **together** (`spkSignedBytesV2`) — stripping or
+  swapping the KEM key to force a downgrade breaks the signature. v1 bundles
+  carrying a smuggled `pqk` are refused outright.
+- **v2 envelopes** seal under SHA-512(domain ‖ x25519-ECDH ‖ ML-KEM shared
+  secret ‖ full public transcript), truncated to a `nacl.secretbox` key: the
+  plaintext stays confidential if EITHER assumption survives, and mixing parts
+  of two envelopes never yields a valid key. Same `MBX_CT_LEN` ciphertext as v1
+  — no size signal.
+- **ML-KEM from the audited `@noble/post-quantum`** (0.4.1), never hand-rolled —
+  the ADR's own rule. Sizes (1184/2400/1088) are pinned as constants so a
+  drifting dependency fails loudly, and a test asserts them.
+- **Rollout without breakage:** a sender seals v2 exactly when the recipient's
+  bundle advertises the KEM key; v1 bundles keep receiving v1 envelopes, and a
+  device's mixed secret list opens both. An SPK stored without KEM halves forces
+  a rotation at the next enrollment touch instead of waiting out the 7-day
+  clock, so the fleet converges fast.
+- **The mixing layer keeps its guarantee:** dummies mirror the target bundle's
+  version (`buildCoverEnvelope(pqk?)`) — otherwise the relay could split cover
+  from real mail by the version field. All request/reply pads grew uniformly
+  (2 KiB → 4 KiB blocks; bundle replies 1 KiB → 4 KiB; get-rows bound 3400 B)
+  so every op is still exactly one size on the wire.
+- **Forward secrecy unchanged in shape:** deleting an old epoch deletes both
+  its secrets; the KEM key rotates with the SPK under the same epoch counter
+  and the same monotonic-epoch rule at the relay.
+
+Deliberately NOT a ratchet: per-message forward secrecy and post-compromise
+healing still land with the v2 libsignal adapter (full PQXDH); this puts that
+work on an already-hybrid base. Frontend-only — no program change, no devnet
+upgrade. `exec`: 16/16 `tests/mailbox.ts` (7 new hybrid properties: both-keys-
+required, downgrade refusal, tamper/mix-and-match nulls, rollout compat, size
+invariance), 27/27 `tests/mailbox-mixing.test.mjs` unchanged, `tsc --noEmit`
+clean, checklist gates 7/7 (`F103` entry).
+
 ## F97 — Sponsors & Sponsees on /me, the invitation page, the messages badge (2026-08-15)
 
 Verification: `code` + `built` (tsc clean, container rebuilt and serving) +

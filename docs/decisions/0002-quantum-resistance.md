@@ -86,6 +86,14 @@ table. This is the baseline Sentinel and future ADRs measure drift against.
 
 ### Stage 1: F63 v2 messaging goes hybrid — the only urgent stage
 
+> **Status 2026-08-17 — first half SHIPPED as F103.** The v1 prekey sealing
+> layer is hybrid now: v2 bundles carry a wallet-co-signed ML-KEM-768 key,
+> v2 envelopes seal under a KDF of both shared secrets (either assumption
+> surviving keeps the plaintext safe), via the audited `@noble/post-quantum`.
+> See `docs/messaging-migration.md` (F103 note) and `tests/mailbox.ts`. The
+> PQXDH-through-libsignal half still lands with the v2 ratchet, as below —
+> F103 means the ratchet arrives on an already-hybrid base.
+
 When F63 delivery is built, its session establishment is **hybrid from the
 start**: X25519 **and** ML-KEM-768, combined so that the session secret is
 secure if *either* survives. This is precisely what libsignal's **PQXDH** does

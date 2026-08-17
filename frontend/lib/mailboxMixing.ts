@@ -75,15 +75,25 @@ export const MBX_GLOBAL_LIMIT = 240;
 // 3. Size padding — requests and responses
 // ---------------------------------------------------------------------------
 
-/** Every mailbox request body is padded up to a multiple of this. */
-export const MBX_REQ_BLOCK = 2048;
+/** Every mailbox request body is padded up to a multiple of this. Raised
+ *  2048 → 4096 for F103: a hybrid (v2) put carries an ML-KEM-768 ciphertext
+ *  (+1452 base64 chars) and must still fit ONE block — two-block hybrid puts
+ *  beside one-block v1 puts would hand the relay a version oracle per
+ *  request. Uniform for every op, so the property "all ops are one size"
+ *  survives the upgrade. */
+export const MBX_REQ_BLOCK = 4096;
 /** Hard bound the relay enforces on the `pad` field (anti-amplification). */
 export const MBX_REQ_MAX_PAD = 8192;
-/** Fixed size of a `bundle` reply, so "enrolled" and "not enrolled" match. */
-export const MBX_BUNDLE_RESP_BYTES = 1024;
-/** Upper bound on one serialised `{id, ts, envelope}` row (ct is 1040 B → 1388
- *  base64 chars; the rest is fixed keys). Used to size response classes. */
-export const MBX_RESP_ROW_BYTES = 1700;
+/** Fixed size of a `bundle` reply, so "enrolled" and "not enrolled" match.
+ *  Raised 1024 → 4096 for F103: a v2 bundle carries the 1184-byte ML-KEM key
+ *  (1580 base64 chars) and every reply — bundle or not, error or ok — must
+ *  stay one size. */
+export const MBX_BUNDLE_RESP_BYTES = 4096;
+/** Upper bound on one serialised `{id, ts, envelope}` row. v1: ct 1040 B →
+ *  1388 base64 chars + fixed keys. F103 v2 adds the ML-KEM ciphertext
+ *  (1088 B → 1452 chars); 3400 bounds both. Used to size response classes —
+ *  a class is a ROW COUNT, so mixed v1/v2 mailboxes stay in one class. */
+export const MBX_RESP_ROW_BYTES = 3400;
 
 const PAD_CHAR = "A"; // JSON-safe: never escaped, so 1 char === 1 byte of body
 
@@ -257,8 +267,14 @@ export function coverExpiresAt(nowSecs: number, r: number = mixRand()): number {
  * same menu the compose form offers — so every field the relay can read agrees
  * with the distribution real mail produces.
  */
-export function buildCoverEnvelope(spkB64: string, epoch: number, nowSecs: number): SealedEnvelope {
-  const bundle: PrekeyBundle = { v: 1, wallet: "", ik: "", spk: spkB64, epoch, sig: "" };
+export function buildCoverEnvelope(spkB64: string, epoch: number, nowSecs: number, pqkB64?: string): SealedEnvelope {
+  // F103: a dummy MIRRORS the target's bundle version. If the recipient
+  // published a hybrid (v2) bundle, real mail to them is a v2 envelope with an
+  // ML-KEM ciphertext — a v1 dummy would let the relay separate cover from
+  // real by the envelope version field alone, undoing the mixing guarantee.
+  const bundle: PrekeyBundle = pqkB64
+    ? { v: 2, wallet: "", ik: "", spk: spkB64, pqk: pqkB64, epoch, sig: "" }
+    : { v: 1, wallet: "", ik: "", spk: spkB64, epoch, sig: "" };
   return sealToBundle(bundle, makeCoverInner(nowSecs), coverExpiresAt(nowSecs));
 }
 
@@ -268,6 +284,9 @@ export interface CoverTarget {
   to: string;
   /** Recipient's current signed prekey, base64. */
   spk: string;
+  /** F103: their ML-KEM-768 key when the bundle is hybrid (v2) — dummies must
+   *  match the envelope version real mail to this mailbox would carry. */
+  pqk?: string;
   /** Its epoch, so the recipient picks the right secret and drops it. */
   epoch: number;
 }

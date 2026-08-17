@@ -31,6 +31,7 @@ import {
   InnerEnvelope,
   PrekeyBundle,
   SealedEnvelope,
+  SpkSecretSet,
   ackSignedBytes,
   getSignedBytes,
   mailboxGetWindow,
@@ -44,6 +45,7 @@ import {
   verifyInner,
   MBX_MAX_BODY,
 } from "./mailboxCrypto";
+import { ml_kem768 } from "@noble/post-quantum/ml-kem.js";
 import {
   CoverTarget,
   MixState,
@@ -70,7 +72,22 @@ interface StoredSpk {
   epoch: number;
   pub: string; // base64
   sec: string; // base64
+  /** F103 hybrid (ADR 0002 Stage 1): ML-KEM-768 halves, present from the
+   *  first post-upgrade rotation on. Deleting the tail entry deletes BOTH
+   *  secrets — the forward-secrecy act covers the KEM key too. */
+  pqPub?: string; // base64, 1184 bytes
+  pqSec?: string; // base64, 2400 bytes
   createdAt: number; // unix secs
+}
+
+/** Stored SPK → the opener's secret set (both halves when hybrid). */
+function toSecretSet(s: StoredSpk): SpkSecretSet {
+  return {
+    sec: mbxUnb64(s.sec),
+    pub: mbxUnb64(s.pub),
+    pqSec: s.pqSec ? mbxUnb64(s.pqSec) : undefined,
+    pqPub: s.pqPub ? mbxUnb64(s.pqPub) : undefined,
+  };
 }
 
 function loadSpks(wallet: string): StoredSpk[] {
@@ -150,6 +167,9 @@ function rememberCoverPeer(b: PrekeyBundle): void {
     coverPeers.set(b.wallet, {
       to: mailboxIdForWallet(new PublicKey(b.wallet).toBytes()),
       spk: b.spk,
+      // F103: dummies to a hybrid peer are sealed hybrid too — otherwise the
+      // relay could split cover from real mail by envelope version alone.
+      pqk: b.v === 2 ? b.pqk : undefined,
       epoch: b.epoch,
     });
   } catch {
@@ -162,7 +182,12 @@ function selfCoverTarget(me: string): CoverTarget | null {
   const mine = loadSpks(me)[0];
   if (!mine) return null;
   try {
-    return { to: mailboxIdForWallet(new PublicKey(me).toBytes()), spk: mine.pub, epoch: mine.epoch };
+    return {
+      to: mailboxIdForWallet(new PublicKey(me).toBytes()),
+      spk: mine.pub,
+      pqk: mine.pqPub,
+      epoch: mine.epoch,
+    };
   } catch {
     return null;
   }
@@ -187,7 +212,7 @@ async function sendCoverPut(me: string): Promise<void> {
   const target = pickCoverTarget(me);
   if (!target) return;
   try {
-    const envelope = buildCoverEnvelope(target.spk, target.epoch, Math.floor(Date.now() / 1000));
+    const envelope = buildCoverEnvelope(target.spk, target.epoch, Math.floor(Date.now() / 1000), target.pqk);
     await post("put", { to: target.to, envelope });
   } catch {
     /* cover is best-effort and must never surface to the member */
@@ -209,7 +234,7 @@ async function silentPoll(me: string): Promise<void> {
   try {
     const j = await post("get", { to: getAuth.to, wallet: me, sig: getAuth.sig, window: getAuth.window });
     const rows: { id: string; envelope: SealedEnvelope }[] = j.messages ?? [];
-    const secrets = loadSpks(me).map((s) => mbxUnb64(s.sec));
+    const secrets: SpkSecretSet[] = loadSpks(me).map(toSecretSet);
     const { coverIds } = partitionCover(rows.map((r) => ({ id: r.id, inner: openSealed(r.envelope, secrets) })));
     for (const id of coverIds) if (!pendingCoverAck.includes(id)) pendingCoverAck.push(id);
   } catch {
@@ -290,7 +315,11 @@ export async function publishMailboxBundle(
   const now = Math.floor(Date.now() / 1000);
   let spks = loadSpks(me);
 
-  const needNew = spks.length === 0 || now - spks[0].createdAt > SPK_ROTATE_SECS;
+  // Rotate when stale, missing — or PRE-HYBRID (F103): an SPK without ML-KEM
+  // halves forces a rotation now rather than in up to 7 days, so the
+  // harvest-now-decrypt-later window closes at the member's next enrollment
+  // touch, not a rotation period later.
+  const needNew = spks.length === 0 || now - spks[0].createdAt > SPK_ROTATE_SECS || !spks[0].pqSec;
   if (needNew) {
     // Advance past BOTH the local newest epoch AND whatever the directory last
     // published. A fresh/reset device has no local SPKs; without consulting the
@@ -302,8 +331,19 @@ export async function publishMailboxBundle(
     const dirEpoch = Number(dir?.bundle?.epoch) || 0;
     const localEpoch = spks[0]?.epoch ?? 0;
     const kp = nacl.box.keyPair();
+    const pq = ml_kem768.keygen();
     const epoch = Math.max(localEpoch, dirEpoch) + 1;
-    spks = [{ epoch, pub: mbxB64(kp.publicKey), sec: mbxB64(kp.secretKey), createdAt: now }, ...spks];
+    spks = [
+      {
+        epoch,
+        pub: mbxB64(kp.publicKey),
+        sec: mbxB64(kp.secretKey),
+        pqPub: mbxB64(pq.publicKey),
+        pqSec: mbxB64(pq.secretKey),
+        createdAt: now,
+      },
+      ...spks,
+    ];
     saveSpks(me, spks);
   } else {
     // Already current — see if the directory has it.
@@ -312,16 +352,31 @@ export async function publishMailboxBundle(
   }
 
   const spkPub = mbxUnb64(spks[0].pub);
-  const { spkSignedBytes } = await import("./mailboxCrypto");
-  const sig = await signMessage(spkSignedBytes(spkPub, spks[0].epoch));
-  const bundle: PrekeyBundle = {
-    v: 1,
-    wallet: me,
-    ik: mbxB64(ik.publicKey),
-    spk: spks[0].pub,
-    epoch: spks[0].epoch,
-    sig: mbxB64(sig),
-  };
+  const { spkSignedBytes, spkSignedBytesV2 } = await import("./mailboxCrypto");
+  const hybrid = !!spks[0].pqPub;
+  const sig = await signMessage(
+    hybrid
+      ? spkSignedBytesV2(spkPub, mbxUnb64(spks[0].pqPub!), spks[0].epoch)
+      : spkSignedBytes(spkPub, spks[0].epoch)
+  );
+  const bundle: PrekeyBundle = hybrid
+    ? {
+        v: 2,
+        wallet: me,
+        ik: mbxB64(ik.publicKey),
+        spk: spks[0].pub,
+        pqk: spks[0].pqPub!,
+        epoch: spks[0].epoch,
+        sig: mbxB64(sig),
+      }
+    : {
+        v: 1,
+        wallet: me,
+        ik: mbxB64(ik.publicKey),
+        spk: spks[0].pub,
+        epoch: spks[0].epoch,
+        sig: mbxB64(sig),
+      };
   await post("publish", { bundle });
 }
 
@@ -403,7 +458,7 @@ export async function fetchMailboxMessages(
   getAuth = { wallet: me, to, sig: sigB64, window };
   const j = await post("get", { to, wallet: me, sig: sigB64, window });
   const rows: { id: string; ts: number; envelope: SealedEnvelope }[] = j.messages ?? [];
-  const secrets = loadSpks(me).map((s) => mbxUnb64(s.sec));
+  const secrets: SpkSecretSet[] = loadSpks(me).map(toSecretSet);
   const now = Math.floor(Date.now() / 1000);
   const out: MailboxMessage[] = [];
   // COVER TRAFFIC (F63 v2 §2): decrypt first, then split. `partitionCover` is

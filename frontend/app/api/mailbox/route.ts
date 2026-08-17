@@ -54,6 +54,8 @@ import nacl from "tweetnacl";
 import { PublicKey } from "@solana/web3.js";
 import {
   MBX_CT_LEN,
+  MLKEM_CT_LEN,
+  MLKEM_PUB_LEN,
   PrekeyBundle,
   SealedEnvelope,
   ackSignedBytes,
@@ -197,7 +199,7 @@ function badPad(body: any): boolean {
 }
 
 function badEnvelope(env: any): boolean {
-  if (!env || env.v !== 1) return true;
+  if (!env || (env.v !== 1 && env.v !== 2)) return true;
   if (typeof env.eph !== "string" || typeof env.nonce !== "string" || typeof env.ct !== "string") return true;
   if (!Number.isInteger(env.spkEpoch) || env.spkEpoch < 0) return true;
   if (typeof env.expiresAt !== "number") return true;
@@ -205,6 +207,13 @@ function badEnvelope(env: any): boolean {
     if (mbxUnb64(env.eph).length !== 32) return true;
     if (mbxUnb64(env.nonce).length !== 24) return true;
     if (mbxUnb64(env.ct).length !== MBX_CT_LEN) return true;
+    // F103 hybrid: a v2 envelope carries exactly one ML-KEM-768 ciphertext;
+    // a v1 envelope must not carry one at all (no smuggled fields).
+    if (env.v === 2) {
+      if (typeof env.kct !== "string" || mbxUnb64(env.kct).length !== MLKEM_CT_LEN) return true;
+    } else if (env.kct !== undefined) {
+      return true;
+    }
   } catch {
     return true;
   }
@@ -259,6 +268,13 @@ export async function POST(req: NextRequest) {
       if (typeof b.ik !== "string" || b.ik.length > 64 || typeof b.spk !== "string" || b.spk.length > 64) {
         return reply({ error: "bad bundle" }, 400);
       }
+      // F103 hybrid (v2): the ML-KEM-768 key is 1184 bytes → 1580 base64
+      // chars; bound it before verifying so a garbage field cannot balloon
+      // storage. verifyBundle enforces the exact decoded length and that the
+      // wallet signature covers spk AND pqk together (no strip/swap).
+      if (b.v === 2 && (typeof b.pqk !== "string" || b.pqk.length > Math.ceil(MLKEM_PUB_LEN / 3) * 4 + 4)) {
+        return reply({ error: "bad bundle" }, 400);
+      }
       if (!verifyBundle(b, walletPk.toBytes())) {
         return reply({ error: "bundle signature invalid" }, 400);
       }
@@ -273,7 +289,10 @@ export async function POST(req: NextRequest) {
         /* first publish */
       }
       await ensureDir(path.dirname(bundlePath(b.wallet)));
-      const clean: PrekeyBundle = { v: 1, wallet: b.wallet, ik: b.ik, spk: b.spk, epoch: b.epoch, sig: b.sig };
+      const clean: PrekeyBundle =
+        b.v === 2
+          ? { v: 2, wallet: b.wallet, ik: b.ik, spk: b.spk, pqk: b.pqk, epoch: b.epoch, sig: b.sig }
+          : { v: 1, wallet: b.wallet, ik: b.ik, spk: b.spk, epoch: b.epoch, sig: b.sig };
       await fs.writeFile(bundlePath(b.wallet), JSON.stringify(clean));
       return reply({ ok: true });
     }

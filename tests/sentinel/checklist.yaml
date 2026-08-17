@@ -1514,6 +1514,35 @@ features:
       - cmd: grep -q "getSignedBytes" frontend/app/api/mailbox/route.ts
       - cmd: grep -q "no network sink" tests/mailbox.ts
 
+  - id: F103
+    name: Hybrid post-quantum mailbox sealing (ADR 0002 Stage 1) — X25519 + ML-KEM-768
+    shipped_round: f103-hybrid-pq
+    covered_by: [tests/mailbox.ts]
+    checks:
+      # the hybrid describe block exists and is not gutted
+      - cmd: grep -q "F103 hybrid post-quantum sealing" tests/mailbox.ts
+      - cmd: grep -q "NEITHER secret alone opens a hybrid envelope" tests/mailbox.ts
+      # the KEM comes from the audited library, never hand-rolled
+      - cmd: grep -q "@noble/post-quantum" frontend/lib/mailboxCrypto.ts
+      - cmd: "! grep -qiE 'function (kyber|mlkem|ntt|cbd)' frontend/lib/mailboxCrypto.ts"
+      # the v2 signature covers spk AND pqk together (downgrade = sig break)
+      - cmd: grep -q "spkSignedBytesV2" frontend/lib/mailboxCrypto.ts
+      # cover traffic mirrors the bundle version (no version oracle at the relay)
+      - cmd: grep -q "pqkB64" frontend/lib/mailboxMixing.ts
+      # sizes pinned so a drifting dependency fails loudly
+      - cmd: grep -q "MLKEM_PUB_LEN = 1184" frontend/lib/mailboxCrypto.ts
+    cases:
+      - "hybrid: a v2 envelope opens only with BOTH the x25519 SPK secret and
+         the ML-KEM decapsulation key; either alone (or a wrong one) yields
+         null — the confidentiality claim is 'either assumption survives'"
+      - "downgrade: relabeling a v2 bundle as v1, stripping/swapping pqk, or
+         relabeling a v2 envelope as v1 all fail verification/opening"
+      - "rollout: v1 bundles keep receiving v1 envelopes and a mixed secret
+         list opens both — mail never stops during the upgrade"
+      - "shape: v2 ciphertext is the same MBX_CT_LEN as v1; the KEM ciphertext
+         is one fixed size; request/reply pads grew uniformly (4 KiB) so every
+         op is still one size on the wire"
+
   - id: F63v2
     name: Mailbox metadata mixing (E7 v2) — jitter/buckets, cover traffic, padding, constant-rate polling
     shipped_round: f35-f63v2
@@ -4903,3 +4932,81 @@ previous_baseline_report: reports/sentinel/NRR-2026-08-14-glossary.md
       - cmd: "bash tests/sentinel/f82-f83-check.sh"
       - cmd: "bash tests/sentinel/f92-f93-check.sh"
       - cmd: "node scripts/extract-reflections-xlsx.mjs && git diff --quiet -- frontend/lib/daily-reflections-default.ts frontend/public/reflections.json"
+
+  - id: NAV-QR-BATCH-2026-08-16
+    name: "6-commit frontend-only batch: 7bce86a (docs, CLAUDE.md detached-process
+      rule), 7c82e98 (docs/credits.md, map pin is first-party), f8f0fa5 (F59
+      camera QR scan via QrScanner.tsx + PresenceCard.tsx wiring, backlog
+      reconciliation), 6a7575b (Nav.tsx: My Circle + My Messages moved first,
+      wallet-gated), 7503546 (Resources dropdown hover-gap CSS bridge + Glossary
+      door on /twelve), 0e78609 (Tradition 8 wording fix, singular->plural
+      'services')."
+    shipped_round: nav-qr-batch (2026-08-16)
+    covered_by:
+      - "reports/sentinel/NRR-2026-08-16-nav-qr-batch.md (PASS WITH WARNINGS)"
+      - "Confirmed none of the 6 commits touch programs/ or circuits/ (git show
+         --stat, all six)."
+      - "QrScanner.tsx source-read: onScan hands the RAW BarcodeDetector string
+         straight to the caller; no eval/Function/innerHTML; the caller
+         (PresenceCard) only sets it into the same text field paste already
+         fills, then decodeHandoff() does base64 + JSON.parse with a
+         v/kind check and throws on malformed input -- no injection surface
+         from a malicious QR payload. Grepped QrScanner.tsx for
+         fetch/XMLHttpRequest/sendBeacon/WebSocket/localStorage/sessionStorage/
+         indexedDB/console.log -- none present; the video frame only ever
+         reaches an in-memory <canvas>, matching the file's own 'never parses,
+         validates, or transmits' comment. Camera stream is stopped on
+         decode/stop/unmount (privacy tell avoided). Renders null with no
+         BarcodeDetector, so paste stays the guaranteed path -- no dead button.
+         Does not touch any Presence PDA / on-chain state, so the existing
+         docs/presence.md per-person-count waiver (F59 ledger residual) is
+         unaffected and no NEW enumeration surface is introduced."
+      - "Nav.tsx reorder verified by source read: /me kept its pre-existing
+         `connected &&` guard (server and first client render both read
+         connected=false, so no hydration mismatch -- this pattern was already
+         used for /documents and /board, just reordered), and InboxNavLink
+         (unchanged by this commit) independently returns null with no
+         publicKey. No new getProgramAccounts / enumeration call added."
+      - "twelve.spec.ts rewrite confirmed NOT gutted: still asserts an exact
+         door count (3), exact href order (MENU_DESTINATIONS), and the raw-key
+         sweep on /twelve; ran green (7/7) against the live deployment."
+      - "Tradition 8 wording cross-checked against the French ('nos services')
+         and Spanish ('nuestros servicios') blocks in i18n.generated.ts, both
+         already plural -- the English fix now agrees with them rather than
+         introducing a new inconsistency."
+      - "docs/credits.md and CLAUDE.md diffs read for sense; no application
+         code affected."
+      - "grep sweep of all 6 commits' added lines for forbidden ranking
+         identifiers (score/rating/rank/karma/tier/badge/count) and for
+         telemetry/console.log-of-identity patterns: zero hits."
+      - "Live deployment (frontend-frontend-1, container created
+         2026-08-16T11:26:29Z, i.e. right after the last of these 6 commits)
+         confirmed to already be serving this exact code -- curl of
+         /twelve-traditions shows 'our services may employ special workers'."
+    checks:
+      - cmd: "cd frontend && node_modules/.bin/tsc --noEmit"
+      - cmd: "bash tests/sentinel/i18n-key-check.sh"
+      - cmd: "bash tests/sentinel/glossary-check.sh"
+      - cmd: "bash tests/sentinel/presence-ui-check.sh"
+      - cmd: "bash tests/sentinel/e2e-smoke-check.sh"
+      - cmd: "cd frontend && node_modules/.bin/playwright test e2e/twelve.spec.ts"
+    coverage_gaps:
+      - "No Playwright coverage exists (repo-wide, long-standing, disclosed
+         since F59-PRESENCE/F59-DOC entries above) for a WALLET-CONNECTED
+         session, so the Nav.tsx reorder's 'no flash of My Circle/My Messages
+         to a disconnected wallet' and the QrScanner's actual camera-permission
+         + BarcodeDetector decode path are verified this round by source
+         review only, not by a rendered, wallet-connected browser test. This
+         is the same class of gap already carried by F59-PRESENCE ('camera
+         BarcodeDetector against a real video feed... never run anywhere') --
+         widened now to also include the nav order/gating behavior. WARNING
+         this round; becomes a FAIL next round if still uncovered when this
+         area next changes."
+      - "The Chrome hover-gap CSS bridge (.nav-drop::before) has no dedicated
+         regression test -- Playwright's synthetic pointer events do not
+         reproduce the real mouse-path-through-dead-space bug it fixes.
+         Existing twelve.spec.ts assertions (menu opens, keyboard-reachable,
+         clicking the label lands on the hub) still pass but do not exercise
+         this specific fix. Carried as a WARNING; low severity since a
+         regression here fails silently only as a UX annoyance, not a
+         privacy or functional break."

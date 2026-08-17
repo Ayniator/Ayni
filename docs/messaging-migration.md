@@ -18,11 +18,29 @@ ratchet is the remaining v2 work.** What shipped as **F63 v1**:
 - **No enumeration at the relay** (exact-id lookups only, recipient-signed
   deletion, TTL) and **no logging** — same custody rules as the shard layer.
 
-What v1 does NOT deliver (deliberately, per §2.5): X3DH/double-ratchet
+**F103 (2026-08-17) — hybrid post-quantum sealing (ADR 0002 Stage 1).** The
+prekey model itself went hybrid: a v2 bundle carries an ML-KEM-768 (FIPS 203)
+encapsulation key beside the x25519 SPK, wallet-signed **together** so a
+downgrade (stripping or swapping the KEM key) breaks the signature; a v2
+envelope seals under SHA-512(x25519-ECDH ‖ ML-KEM shared secret ‖ full public
+transcript) via `nacl.secretbox` — confidential if EITHER assumption survives,
+which is the PQXDH hybrid principle applied to v1's prekey layer. ML-KEM comes
+from the audited `@noble/post-quantum`, never hand-rolled (the ADR's own
+rule). Rollout is version-negotiated per recipient bundle (v1 bundles keep
+getting v1 envelopes — mail never stops), an SPK without KEM halves forces
+rotation at the next enrollment touch, cover traffic mirrors the target's
+bundle version so the relay cannot split dummies from real mail by version,
+and all request/reply pads grew uniformly (2 KiB → 4 KiB blocks) so ops stay
+one size. Forward secrecy still prekey-granular; deleting an old epoch deletes
+BOTH its secrets.
+
+What v1(+F103) does NOT deliver (deliberately, per §2.5): X3DH/double-ratchet
 per-message forward secrecy and post-compromise healing — that lands with the
-libsignal adapter (v2), which ADR 0002 additionally requires to be PQXDH
-(hybrid X25519+ML-KEM) for harvest-now-decrypt-later resistance. The relay
-still observes recipient pull patterns and IPs; mixing/batching remains open.
+libsignal adapter (v2), which ADR 0002 requires to be full PQXDH. F103 closes
+the harvest-now-decrypt-later window at the sealing layer now, so v2's ratchet
+adds per-message granularity to an already-hybrid base rather than being the
+first PQ line of defence. The relay still observes recipient pull patterns and
+IPs; batching/PIR remains open.
 
 The rest of this document is the v2 target design, unchanged.
 

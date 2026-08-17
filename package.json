@@ -19,6 +19,7 @@
     }
   },
   "devDependencies": {
+    "@noble/post-quantum": "^0.4.1",
     "@solana/spl-token": "^0.4.9",
     "@types/bn.js": "^5.1.0",
     "@types/chai": "^4.3.20",
