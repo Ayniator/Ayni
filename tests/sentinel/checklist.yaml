@@ -1531,6 +1531,11 @@ features:
       - cmd: grep -q "pqkB64" frontend/lib/mailboxMixing.ts
       # sizes pinned so a drifting dependency fails loudly
       - cmd: grep -q "MLKEM_PUB_LEN = 1184" frontend/lib/mailboxCrypto.ts
+      # the RELAY round trip preserves v2 (the first build silently destroyed
+      # hybrid mail by relabeling v:1 and dropping kct — the round's CRITICAL);
+      # this runs the real route e2e, red-proven against the broken build
+      - cmd: node tests/mailbox-mixing.test.mjs
+      - cmd: grep -q "a HYBRID (v2) envelope survives the relay intact" tests/mailbox-mixing.test.mjs
     cases:
       - "hybrid: a v2 envelope opens only with BOTH the x25519 SPK secret and
          the ML-KEM decapsulation key; either alone (or a wrong one) yields
@@ -1542,6 +1547,18 @@ features:
       - "shape: v2 ciphertext is the same MBX_CT_LEN as v1; the KEM ciphertext
          is one fixed size; request/reply pads grew uniformly (4 KiB) so every
          op is still one size on the wire"
+      - "relay: the put handler's field-allowlist re-serialization preserves
+         v and kct (regression for the round-1 CRITICAL: hardcoded v:1
+         silently destroyed all hybrid mail); the directory serves pqk back
+         intact; a v2 cover dummy is accepted like real v2 mail"
+    uncovered:
+      - "no browser-level e2e (Playwright) of a hybrid send between two real
+         wallet sessions — the relay e2e drives route.ts in-process, same gap
+         class as F63v2's own disclosure"
+      - "the transitional 2-vs-4 KiB request-block distinguisher during a
+         rolling deploy is disclosed in docs/messaging-migration.md, not
+         mitigated (stale cached clients pad to the old block until caches
+         turn over)"
 
   - id: F63v2
     name: Mailbox metadata mixing (E7 v2) — jitter/buckets, cover traffic, padding, constant-rate polling

@@ -1,1 +1,1 @@
-NRR-2026-08-16-nav-qr-batch.md
+NRR-2026-08-17-f103-hybrid-pq.md

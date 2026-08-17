@@ -361,7 +361,18 @@ export async function POST(req: NextRequest) {
         }
       }
       const e = body.envelope as SealedEnvelope;
-      const clean: SealedEnvelope = { v: 1, eph: e.eph, nonce: e.nonce, spkEpoch: e.spkEpoch, ct: e.ct, expiresAt: e.expiresAt };
+      // Field-allowlist re-serialization — but PRESERVE the version and, for a
+      // hybrid (v2) envelope, the ML-KEM ciphertext. The first F103 build
+      // hardcoded `v: 1` here and dropped `kct`, so the relay silently
+      // destroyed every hybrid message it accepted (Sentinel CRITICAL,
+      // NRR-2026-08-17-f103-hybrid-pq): badEnvelope validated the kct, this
+      // line threw it away, and the recipient's openSealed() returned null —
+      // indistinguishable from "sealed to a deleted prekey". badEnvelope has
+      // already enforced v ∈ {1,2} and the exact kct length for v2.
+      const clean: SealedEnvelope =
+        e.v === 2
+          ? { v: 2, eph: e.eph, nonce: e.nonce, kct: e.kct, spkEpoch: e.spkEpoch, ct: e.ct, expiresAt: e.expiresAt }
+          : { v: 1, eph: e.eph, nonce: e.nonce, spkEpoch: e.spkEpoch, ct: e.ct, expiresAt: e.expiresAt };
       const id = crypto.randomBytes(12).toString("hex");
       // DELIVERY BUCKET (F63 v2 §1): the envelope is stored now but becomes
       // readable only at the next grid boundary, so the moment a `get` returns

@@ -591,6 +591,61 @@ await test("relay e2e: a dummy put is authenticated and shaped exactly like a re
   eq(bad.status, 403, "a stranger read a mailbox");
 });
 
+await test("relay e2e: a HYBRID (v2) envelope survives the relay intact — kct is not dropped, v is not relabeled", async () => {
+  // Regression for the F103 CRITICAL (NRR-2026-08-17-f103-hybrid-pq): the
+  // put handler's field-allowlist re-serialization hardcoded `v: 1` and
+  // dropped `kct`, so every hybrid message was silently destroyed at the
+  // relay — accepted with {ok:true}, undeliverable on fetch, mistaken by the
+  // client for "sealed to a deleted prekey". This test drives the REAL route
+  // end to end with a v2 bundle and asserts the stored-and-served envelope
+  // still opens with both secrets.
+  const { ml_kem768 } = requireDep("@noble/post-quantum/ml-kem.js");
+  const hyb = nacl.sign.keyPair();
+  const hybB58 = new web3.PublicKey(hyb.publicKey).toBase58();
+  const hybBox = C.mailboxIdForWallet(hyb.publicKey);
+  const hybSpk = nacl.box.keyPair();
+  const hybPq = ml_kem768.keygen();
+  const HYB_EPOCH = 1;
+  const hybBundle = {
+    v: 2,
+    wallet: hybB58,
+    ik: C.mbxB64(nacl.box.keyPair().publicKey),
+    spk: C.mbxB64(hybSpk.publicKey),
+    pqk: C.mbxB64(hybPq.publicKey),
+    epoch: HYB_EPOCH,
+    sig: C.mbxB64(nacl.sign.detached(C.spkSignedBytesV2(hybSpk.publicKey, hybPq.publicKey, HYB_EPOCH), hyb.secretKey)),
+  };
+  assert((await call({ op: "publish", bundle: hybBundle })).body.ok, "v2 bundle publish failed");
+  // The directory must serve the pqk back — a sender needs it to seal hybrid.
+  const served = (await call({ op: "bundle", wallet: hybB58 })).body.bundle;
+  eq(served.v, 2, "the directory dropped the bundle version");
+  eq(served.pqk, hybBundle.pqk, "the directory dropped or altered the KEM key");
+
+  const tsSec = Math.floor(Date.now() / 1000);
+  const bodyText = "post-quantum, end to end";
+  const env = C.sealToBundle(hybBundle, { v: 3, from: hybB58, ts: tsSec, body: bodyText, sig: C.mbxB64(nacl.sign.detached(C.innerSignedBytes(C.mbxUnb64(hybBundle.ik), tsSec, bodyText), hyb.secretKey)) }, 0);
+  eq(env.v, 2, "sealToBundle did not go hybrid for a v2 bundle");
+  assert((await call({ op: "put", to: hybBox, envelope: env })).body.ok, "v2 put refused");
+  // A v2 COVER envelope must be accepted the same way (version-mirrored dummy).
+  assert((await call({ op: "put", to: hybBox, envelope: M.buildCoverEnvelope(hybBundle.spk, HYB_EPOCH, tsSec, hybBundle.pqk) })).body.ok, "v2 cover put refused");
+
+  await sleepMs(BUCKET * 1000 + 250);
+  const w = C.mailboxGetWindow(Math.floor(Date.now() / 1000));
+  const got = await call({ op: "get", to: hybBox, wallet: hybB58, window: w, sig: C.mbxB64(nacl.sign.detached(C.getSignedBytes(hybBox, w), hyb.secretKey)) });
+  eq(got.body.messages.length, 2, "the relay lost hybrid mail");
+  for (const m of got.body.messages) {
+    eq(m.envelope.v, 2, "the relay relabeled a v2 envelope");
+    assert(typeof m.envelope.kct === "string" && m.envelope.kct.length > 0, "the relay dropped the ML-KEM ciphertext");
+  }
+  const secretSet = { sec: hybSpk.secretKey, pub: hybSpk.publicKey, pqSec: hybPq.secretKey, pqPub: hybPq.publicKey };
+  const opened = got.body.messages.map((m) => ({ id: m.id, inner: C.openSealed(m.envelope, [secretSet]) }));
+  assert(opened.every((o) => o.inner !== null), "a hybrid envelope came back undecryptable after the relay round trip");
+  const { mail, coverIds } = M.partitionCover(opened);
+  eq(mail.length, 1, "the real hybrid message did not survive");
+  eq(coverIds.length, 1, "the hybrid dummy was not recognised as cover");
+  eq(mail[0].inner.body, bodyText, "the hybrid body came back wrong");
+});
+
 // ---------------------------------------------------------------------------
 try {
   const fs = await import("node:fs/promises");

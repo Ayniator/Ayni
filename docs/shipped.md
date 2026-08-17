@@ -56,8 +56,23 @@ healing still land with the v2 libsignal adapter (full PQXDH); this puts that
 work on an already-hybrid base. Frontend-only — no program change, no devnet
 upgrade. `exec`: 16/16 `tests/mailbox.ts` (7 new hybrid properties: both-keys-
 required, downgrade refusal, tamper/mix-and-match nulls, rollout compat, size
-invariance), 27/27 `tests/mailbox-mixing.test.mjs` unchanged, `tsc --noEmit`
-clean, checklist gates 7/7 (`F103` entry).
+invariance), 28/28 `tests/mailbox-mixing.test.mjs`, `tsc --noEmit` clean,
+checklist gates 9/9 (`F103` entry).
+
+**Round-1 CRITICAL, found by Sentinel and fixed the same day
+(NRR-2026-08-17-f103-hybrid-pq):** the first build's relay `put` handler
+re-serialized every envelope with a hardcoded `v: 1`, dropping the ML-KEM
+ciphertext — `badEnvelope` validated the `kct`, the very next line threw it
+away, and the recipient's `openSealed()` returned null, indistinguishable from
+"sealed to a deleted prekey". Every hybrid message was accepted with `{ok:true}`
+and silently destroyed. The unit tests couldn't see it (they test
+`mailboxCrypto.ts` in isolation); the relay e2e suite had only v1 fixtures.
+Fixed by preserving `v`/`kct` in the allowlist re-serialization, with a new
+relay-e2e regression case **red-proven against the broken build** (it fails on
+the pre-fix route, passes on the fix) and wired into the F103 checklist gates.
+A WARNING-grade honesty gap (the transitional 2-vs-4 KiB request-block
+distinguisher during a rolling deploy) is now disclosed in
+`docs/messaging-migration.md` rather than papered over by the word "uniform".
 
 ## F97 — Sponsors & Sponsees on /me, the invitation page, the messages badge (2026-08-15)
 

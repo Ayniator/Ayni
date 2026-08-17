@@ -31,8 +31,13 @@ getting v1 envelopes — mail never stops), an SPK without KEM halves forces
 rotation at the next enrollment touch, cover traffic mirrors the target's
 bundle version so the relay cannot split dummies from real mail by version,
 and all request/reply pads grew uniformly (2 KiB → 4 KiB blocks) so ops stay
-one size. Forward secrecy still prekey-granular; deleting an old epoch deletes
-BOTH its secrets.
+one size. **Honest transitional caveat** (Sentinel WARNING,
+NRR-2026-08-17-f103-hybrid-pq): "uniform" holds per client build — during a
+rolling deploy a stale cached client still pads to the old 2 KiB block, so the
+relay can tell old-build from new-build requests until caches turn over. That
+window reveals client version, not identity or content, and closes on its own;
+it is the unavoidable cost of any wire-format change. Forward secrecy still
+prekey-granular; deleting an old epoch deletes BOTH its secrets.
 
 What v1(+F103) does NOT deliver (deliberately, per §2.5): X3DH/double-ratchet
 per-message forward secrecy and post-compromise healing — that lands with the
