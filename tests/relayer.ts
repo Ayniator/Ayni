@@ -58,7 +58,10 @@ describe("ayni — F55 relayer policy + third-party fee-payer contract", () => {
     // `authority: null` is the F61 addition: a sole-signer instruction reports
     // that nobody but the relayer signed it, which is what the route relies on
     // to refuse a co-signature it was not expecting.
-    assert.deepEqual(v, { ok: true, name: "cast_vote", authority: null });
+    // `computeUnits` joined the ok-shape in F59 (presence attestation needs a
+    // declared budget); cast_vote declares none, and the key is materialised
+    // as undefined — the expectation must carry it for deepEqual to hold.
+    assert.deepEqual(v, { ok: true, name: "cast_vote", authority: null, computeUnits: undefined });
   });
 
   it("refuses everything outside the boundary", () => {

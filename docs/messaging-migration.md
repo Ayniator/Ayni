@@ -137,6 +137,19 @@ store.** Write only the thin adapters: (a) an IK provider backed by
 `deriveBoxKeypair`, and (b) our own prekey directory + transport. Do NOT
 hand-implement the ratchet.
 
+> **Blocker, verified 2026-08-17:** `@signalapp/libsignal-client` is a Node
+> native module (Rust + neon) with **no official browser/WASM build**, and the
+> old `libsignal-protocol-javascript` is archived, unaudited-in-years, and has
+> no PQXDH. This app's messaging runs client-side in the browser, so the
+> ratchet is genuinely blocked until an audited browser-capable libsignal (or
+> equivalent) exists. The rule above still holds — hand-rolling is NOT the
+> fallback. What was executable now shipped as **F103** (hybrid X25519 +
+> ML-KEM-768 prekey sealing), which closes the harvest-now-decrypt-later
+> window at the layer v1 actually has; the ratchet adds per-message forward
+> secrecy on top when its dependency unblocks. Revisit triggers: an official
+> libsignal WASM target, or an audited third-party PQXDH/double-ratchet
+> implementation that compiles for the browser.
+
 ---
 
 ## 3. Delivery: relay service vs. "libsignal on chain"

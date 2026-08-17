@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
-use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
+use crate::proof_anchor::{verify_anchored_proof, ProofKind};
 use crate::merkle;
 use crate::state::{Circle, CircleRootAnchor, VisitPass};
-use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 
 /// F56 — verify a VISITING member: a Groth16 proof that the prover's identity
 /// commitment is in `home_circle`'s anchored member set, checked by
@@ -55,10 +54,14 @@ pub fn verify_fellow_member(
         merkle::field_from_u8(1),
     ];
 
-    let mut verifier =
-        Groth16Verifier::new(&proof_a, &proof_b, &proof_c, &public_inputs, &VERIFYING_KEY_VOTE)
-            .map_err(|_| error!(AyniError::VoteProofInvalid))?;
-    verifier.verify().map_err(|_| error!(AyniError::VoteProofInvalid))?;
+    verify_anchored_proof(
+        ProofKind::MemberVote,
+        &proof_a,
+        &proof_b,
+        &proof_c,
+        &public_inputs,
+        AyniError::VoteProofInvalid,
+    )?;
 
     let pass = &mut ctx.accounts.visit_pass;
     pass.host_circle = ctx.accounts.host_circle.key();

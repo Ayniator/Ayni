@@ -1018,3 +1018,33 @@ so requiring it would deadlock the gate permanently.
   uncovered: section both read and confirmed present and accurate. The two
   OVERRIDES.md entries this round's push relied on (46a83c3, df8741e) were
   reviewed for honesty — no overclaim found in either.
+
+- (working tree at HEAD e4d1fc0, commit to follow) feat(F102): the
+  `ProofAnchor` seam — one verifier boundary over every Groth16 site (ADR
+  0002 Stage 2)
+  Covered by NRR-2026-08-17-f102-proof-anchor.md (PASS WITH WARNINGS). This
+  entry precedes the commit it describes — the round reviewed the uncommitted
+  working tree per instruction, with the commit to follow immediately; if the
+  landed SHA differs from what this note anticipates, the next round
+  reconciles it. Independently verified, not taken on the implementer's own
+  claims: `grep -rn "Groth16Verifier::new" programs/ayni/src | grep -v
+  proof_anchor` empty (own run); all 12 rewired call sites diffed against
+  `git show HEAD` confirming identical VK/error pairs, not just code-read;
+  fresh `anchor build` reproduced the claimed 1,645,680-byte `.so` and a
+  byte-identical IDL against the committed `frontend/lib/ayni.json`; fresh
+  `anchor test` reproduced 168 passing / 0 failing (read from the log before
+  a known, still-unresolved teardown hang required killing the process tree —
+  see the report's Regression 2); `node tests/zk-e2e.test.mjs` 23/23; `cargo
+  test` 47/47 including `karma_tests::the_award_pair_seed_is_order_independent`
+  corroborating the epic3/epic5/faucet karma-account test repairs against the
+  program's own `KarmaAward::lo/hi`; `tests/sentinel/{privacy-sweep,
+  zk-integrity,gate-check,idl-sync-check,f35r2-wing-gate,
+  no-third-party-assets-check}.sh` all green. One WARNING found and NOT
+  caused by this diff: `tests/vote.ts` and `tests/f28-election.ts` (both
+  excluded from `Anchor.toml`'s declared test list) are broken by an
+  unrelated, three-day-older drift (commit 2f5a7c4) — `f28-election.ts`'s
+  failure is additionally swallowed by a self-executing IIFE rather than
+  surfaced as a mocha failure. Consequence: no currently-passing test
+  exercises a genuinely successful real-proof call to `cast_vote` specifically
+  (other `ProofKind::MemberVote` call sites DO get real-proof positive
+  coverage in the passing suite). Full detail in the report.

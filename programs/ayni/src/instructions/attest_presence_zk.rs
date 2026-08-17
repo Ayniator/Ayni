@@ -1,11 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::hash::hashv;
-use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
+use crate::proof_anchor::{verify_anchored_proof, ProofKind};
 use crate::month;
 use crate::state::{Circle, MemberTree, Presence, RecentRoots};
-use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 
 /// Canonical external nullifier for a presence attestation.
 ///
@@ -141,27 +140,25 @@ pub fn attest_presence_zk(
     // the caller cannot substitute a tree they control.
     let subject_root = crate::merkle::single_leaf_root(&subject_commitment)?;
     let subject_inputs: [[u8; 32]; 4] = [subject_nullifier, subject_root, external, choice];
-    let mut v = Groth16Verifier::new(
+    verify_anchored_proof(
+        ProofKind::MemberVote,
         &subject_proof_a,
         &subject_proof_b,
         &subject_proof_c,
         &subject_inputs,
-        &VERIFYING_KEY_VOTE,
-    )
-    .map_err(|_| error!(AyniError::VoteProofInvalid))?;
-    v.verify().map_err(|_| error!(AyniError::VoteProofInvalid))?;
+        AyniError::VoteProofInvalid,
+    )?;
 
     // Witness: membership of the Circle, under the SAME external nullifier.
     let witness_inputs: [[u8; 32]; 4] = [witness_nullifier, witness_root, external, choice];
-    let mut v = Groth16Verifier::new(
+    verify_anchored_proof(
+        ProofKind::MemberVote,
         &witness_proof_a,
         &witness_proof_b,
         &witness_proof_c,
         &witness_inputs,
-        &VERIFYING_KEY_VOTE,
-    )
-    .map_err(|_| error!(AyniError::VoteProofInvalid))?;
-    v.verify().map_err(|_| error!(AyniError::VoteProofInvalid))?;
+        AyniError::VoteProofInvalid,
+    )?;
 
     // --- the whole of the state change --------------------------------------
     //

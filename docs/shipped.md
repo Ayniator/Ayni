@@ -18,6 +18,43 @@
 
 ---
 
+## F102 — the ProofAnchor seam, ADR 0002 Stage 2 (2026-08-17)
+
+A proof-system swap (the day BN254 falls, or a transparent successor becomes
+viable) was a program-wide rewrite: the ADR counted six on-chain Groth16 sites,
+and by ship time the codebase had grown to **eleven instruction files with
+twelve verify calls**, each constructing its own `Groth16Verifier::new(...)`
+against one of three embedded verifying keys. Now:
+
+- `programs/ayni/src/proof_anchor.rs` is the ONE seam:
+  `verify_anchored_proof::<N>(kind, proof_a, proof_b, proof_c, inputs, err)`,
+  dispatching `ProofKind::{MemberVote, LineageGrant, AckDisclose}` to its VK.
+  Zero direct verifier constructions remain outside the module (grep-provable,
+  and gated in the F102 checklist entry).
+- **Behaviour-preserving by construction:** same VKs, same per-site error
+  codes, const-generic input arity checked at compile time. The regenerated
+  IDL is **byte-identical** to the committed `frontend/lib/ayni.json` —
+  clients cannot tell the seam happened.
+- `PROOF_SYSTEM_GROTH16_BN254: u8 = 0` — the version byte every NEW
+  proof-carrying account records from now on, so a successor system can
+  coexist during a migration window instead of a flag-day. Existing accounts
+  stay as they are (absence == Groth16-BN254); resizing them is a migration
+  the byte does not justify. Sentinel rule going forward: a new proof-carrying
+  account without the byte is a finding.
+- What a swap costs now: re-express the circuits, re-run (or skip, if
+  transparent) the ceremony, replace one module's dispatch. Poseidon
+  commitments, nullifiers and Merkle trees survive unchanged.
+
+Also in this round: repaired pre-existing test drift that had been masking on
+fresh builds — `tests/{epic3,epic5,faucet}.ts` called `establishWingPeer`
+without the karma accounts F98 wired in (fails against a freshly generated
+IDL), and `tests/relayer.ts`'s ok-shape expectation predated F59's
+`computeUnits` field. `exec`: full anchor suite **168 passing / 0 failing** on
+a fresh local validator (previous best 157 — the 4 drift failures fixed, the
+epic2 flake gone), zk-e2e roundtrips green, F102 checklist gates 6/6. Program
+change ⇒ devnet upgrade required (F102 is inert to clients; the .so must still
+match the reviewed source).
+
 ## F103 — hybrid post-quantum mailbox sealing, ADR 0002 Stage 1 (2026-08-17)
 
 The one quantum threat that acts backward in time is harvest-now-decrypt-later:

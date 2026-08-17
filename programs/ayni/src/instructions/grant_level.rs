@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
-use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
+use crate::proof_anchor::{verify_anchored_proof, ProofKind};
 use crate::merkle;
 use crate::state::{Circle, Lineage, LevelGrant, Membership, Nullifier};
-use crate::verifying_key::VERIFYING_KEY;
 
 /// Grant a shamanic level to a student along an anonymous, ZK-verified lineage.
 ///
@@ -34,12 +33,14 @@ pub fn grant_level(
         grantee_commitment,
     ];
 
-    let mut verifier =
-        Groth16Verifier::new(&proof_a, &proof_b, &proof_c, &public_inputs, &VERIFYING_KEY)
-            .map_err(|_| error!(AyniError::InvalidLineageProof))?;
-    verifier
-        .verify()
-        .map_err(|_| error!(AyniError::InvalidLineageProof))?;
+    verify_anchored_proof(
+        ProofKind::LineageGrant,
+        &proof_a,
+        &proof_b,
+        &proof_c,
+        &public_inputs,
+        AyniError::InvalidLineageProof,
+    )?;
 
     // The `nullifier_record` account is created with `init` in the context, so a
     // replayed nullifier makes the transaction fail before reaching here.

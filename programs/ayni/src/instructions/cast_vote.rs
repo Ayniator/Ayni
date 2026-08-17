@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
-use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
 use crate::merkle;
+use crate::proof_anchor::{verify_anchored_proof, ProofKind};
 use crate::state::{MemberProposal, Nullifier};
-use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 
 /// Cast one anonymous ballot. A ZK proof shows the voter's identity commitment
 /// is in the proposal's snapshotted member set and emits a per-proposal
@@ -31,10 +30,14 @@ pub fn cast_vote(
         merkle::field_from_u8(if choice { 1 } else { 0 }),
     ];
 
-    let mut verifier =
-        Groth16Verifier::new(&proof_a, &proof_b, &proof_c, &public_inputs, &VERIFYING_KEY_VOTE)
-            .map_err(|_| error!(AyniError::VoteProofInvalid))?;
-    verifier.verify().map_err(|_| error!(AyniError::VoteProofInvalid))?;
+    verify_anchored_proof(
+        ProofKind::MemberVote,
+        &proof_a,
+        &proof_b,
+        &proof_c,
+        &public_inputs,
+        AyniError::VoteProofInvalid,
+    )?;
 
     // `vote_nullifier` is created with `init`, so a second ballot from the same
     // member (same nullifier) fails here.

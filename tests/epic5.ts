@@ -319,12 +319,19 @@ describe("ayni — per-element visibility (Epic 5)", () => {
 
   it("a shielded member is still a usable sponsor: wing, cord, and admission attestation", async () => {
     // The viewer (unshielded) takes the shielded member as their wing.
+    // F98 wired the karma accounts into establish_wing_peer; the award PDA is
+    // seeded by the SORTED commitment pair (mirrors KarmaAward::lo/hi).
+    const [kLo, kHi] = Buffer.compare(cViewer, cShielded) <= 0 ? [cViewer, cShielded] : [cShielded, cViewer];
     await program.methods.establishWingPeer()
       .accounts({
         circle,
         menteeMembership: membershipPda(cViewer),
         wingMembership: membershipPda(cShielded),
         wingPeer: wingPeerPda(cViewer),
+        karmaParams: pda(Buffer.from("karmaparams"), circle.toBuffer()),
+        karmaAward: pda(Buffer.from("karmaaward"), circle.toBuffer(), kLo, kHi),
+        menteeKarma: pda(Buffer.from("karma"), circle.toBuffer(), cViewer),
+        wingKarma: pda(Buffer.from("karma"), circle.toBuffer(), cShielded),
         signer: viewerOwner.publicKey,
         payer: payer.publicKey,
       })

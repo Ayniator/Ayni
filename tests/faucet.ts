@@ -158,19 +158,28 @@ describe("ayni — gas faucet (Epic 0)", () => {
       .rpc();
 
   // The neophyte designates their parrain (wing) — signed by a key the neophyte holds.
-  const designateWing = (menteeCommitment: Buffer, signer: anchor.web3.Keypair) =>
-    program.methods
+  // F98 wired the karma accounts into establish_wing_peer; the award PDA is
+  // seeded by the SORTED commitment pair (mirrors KarmaAward::lo/hi).
+  const designateWing = (menteeCommitment: Buffer, signer: anchor.web3.Keypair) => {
+    const [kLo, kHi] =
+      Buffer.compare(menteeCommitment, cParrain) <= 0 ? [menteeCommitment, cParrain] : [cParrain, menteeCommitment];
+    return program.methods
       .establishWingPeer()
       .accounts({
         circle: circleA,
         menteeMembership: membershipPda(menteeCommitment),
         wingMembership: membershipPda(cParrain),
         wingPeer: wingPeerPda(menteeCommitment),
+        karmaParams: pda(Buffer.from("karmaparams"), circleA.toBuffer()),
+        karmaAward: pda(Buffer.from("karmaaward"), circleA.toBuffer(), kLo, kHi),
+        menteeKarma: pda(Buffer.from("karma"), circleA.toBuffer(), menteeCommitment),
+        wingKarma: pda(Buffer.from("karma"), circleA.toBuffer(), cParrain),
         signer: signer.publicKey,
         payer: signer.publicKey,
       })
       .signers([signer])
       .rpc();
+  };
 
   const activate = (
     neophyteCommitment: Buffer,

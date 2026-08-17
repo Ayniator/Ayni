@@ -108,6 +108,15 @@ that pre-F63 messages carry this exposure.
 
 ### Stage 2: the ProofAnchor seam
 
+> **Status 2026-08-17 — SHIPPED as F102.** `programs/ayni/src/proof_anchor.rs`
+> is the seam: all Groth16 verification (twelve calls across eleven
+> instructions — the six sites below had grown to eleven files by ship time)
+> dispatches through `verify_anchored_proof(kind, …)`, and
+> `PROOF_SYSTEM_GROTH16_BN254 = 0` is the version byte for new proof-carrying
+> accounts (absence == Groth16-BN254 for pre-existing ones). Behaviour-
+> preserving; IDL byte-identical. The *swap* behind the seam still waits on
+> this ADR's triggers.
+
 Today all six on-chain Groth16 verification sites — `cast_vote`,
 `attest_admission_zk`, `prove_personhood`, `grant_level`,
 `issue_acknowledgment`, `verify_disclosure` — each construct

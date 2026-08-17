@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::hash::hashv;
-use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
+use crate::proof_anchor::{verify_anchored_proof, ProofKind};
 use crate::state::{Circle, Presence};
-use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 
 /// Canonical external nullifier for erasing a presence record.
 ///
@@ -85,10 +84,14 @@ pub fn clear_presence(
     // secret `s` with `Poseidon(s) == subject_commitment`.
     let root = crate::merkle::single_leaf_root(&subject_commitment)?;
     let inputs: [[u8; 32]; 4] = [nullifier, root, external, choice];
-    let mut v = Groth16Verifier::new(&proof_a, &proof_b, &proof_c, &inputs, &VERIFYING_KEY_VOTE)
-        .map_err(|_| error!(AyniError::VoteProofInvalid))?;
-    v.verify()
-        .map_err(|_| error!(AyniError::VoteProofInvalid))?;
+    verify_anchored_proof(
+        ProofKind::MemberVote,
+        &proof_a,
+        &proof_b,
+        &proof_c,
+        &inputs,
+        AyniError::VoteProofInvalid,
+    )?;
 
     // The `close = payer` constraint does the erasure. Nothing is written first:
     // a "cleared" flag, a tombstone, or a zeroed-but-live account would each be

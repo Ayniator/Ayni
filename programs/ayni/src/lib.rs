@@ -14,6 +14,7 @@ pub mod errors;
 pub mod instructions;
 pub mod merkle;
 pub mod month;
+pub mod proof_anchor;
 pub mod state;
 pub mod verifying_key;
 pub mod verifying_key_ack;

@@ -86,10 +86,18 @@ describe("ayni — the quipu (Epic 3)", () => {
     await issue(cSponsor, sponsorOwner.publicKey);
     await issue(cStranger, strangerOwner.publicKey);
     // The member designates their sponsor as their wing.
+    // F98 wired the karma accounts into establish_wing_peer; the award PDA is
+    // seeded by the SORTED commitment pair (mirrors KarmaAward::lo/hi).
+    const [kLo, kHi] = Buffer.compare(cMember, cSponsor) <= 0 ? [cMember, cSponsor] : [cSponsor, cMember];
     await program.methods.establishWingPeer()
       .accounts({
         circle, menteeMembership: membershipPda(cMember), wingMembership: membershipPda(cSponsor),
-        wingPeer: wingPeerPda(cMember), signer: memberOwner.publicKey, payer: memberOwner.publicKey,
+        wingPeer: wingPeerPda(cMember),
+        karmaParams: pda(Buffer.from("karmaparams"), circle.toBuffer()),
+        karmaAward: pda(Buffer.from("karmaaward"), circle.toBuffer(), kLo, kHi),
+        menteeKarma: pda(Buffer.from("karma"), circle.toBuffer(), cMember),
+        wingKarma: pda(Buffer.from("karma"), circle.toBuffer(), cSponsor),
+        signer: memberOwner.publicKey, payer: memberOwner.publicKey,
       })
       .signers([memberOwner]).rpc();
   });

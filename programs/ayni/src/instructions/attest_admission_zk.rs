@@ -1,9 +1,8 @@
 use anchor_lang::prelude::*;
-use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
+use crate::proof_anchor::{verify_anchored_proof, ProofKind};
 use crate::state::{AdmissionAttestation, Circle, MemberTree, Nullifier, RecentRoots};
-use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 
 /// Attestation A, anonymous form (Trust Platform Epic 2): a Groth16 proof that
 /// SOME member of the Circle's member tree attests for this newcomer — naming
@@ -69,10 +68,14 @@ pub fn attest_admission_zk(
         crate::merkle::field_from_u8(1), // choice = 1: "I attest"
     ];
 
-    let mut verifier =
-        Groth16Verifier::new(&proof_a, &proof_b, &proof_c, &public_inputs, &VERIFYING_KEY_VOTE)
-            .map_err(|_| error!(AyniError::VoteProofInvalid))?;
-    verifier.verify().map_err(|_| error!(AyniError::VoteProofInvalid))?;
+    verify_anchored_proof(
+        ProofKind::MemberVote,
+        &proof_a,
+        &proof_b,
+        &proof_c,
+        &public_inputs,
+        AyniError::VoteProofInvalid,
+    )?;
 
     let a = &mut ctx.accounts.attestation;
     a.circle = ctx.accounts.circle.key();

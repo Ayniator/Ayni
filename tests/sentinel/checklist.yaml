@@ -1514,6 +1514,51 @@ features:
       - cmd: grep -q "getSignedBytes" frontend/app/api/mailbox/route.ts
       - cmd: grep -q "no network sink" tests/mailbox.ts
 
+  - id: F102
+    name: ProofAnchor seam (ADR 0002 Stage 2) — one verifier boundary over every Groth16 site
+    shipped_round: f102-proof-anchor
+    covered_by: [tests/zk-e2e.test.mjs, "the full anchor suite (every ZK instruction's own cases)"]
+    checks:
+      # the seam exists and owns the only verifier construction in the program
+      - cmd: test -f programs/ayni/src/proof_anchor.rs
+      - cmd: grep -q "verify_anchored_proof" programs/ayni/src/proof_anchor.rs
+      - cmd: bash -c '! grep -rn "Groth16Verifier::new" programs/ayni/src --include="*.rs" | grep -v proof_anchor'
+      # all three verifying keys dispatch through ProofKind
+      - cmd: grep -q "VERIFYING_KEY_VOTE" programs/ayni/src/proof_anchor.rs
+      - cmd: grep -q "VERIFYING_KEY_ACK" programs/ayni/src/proof_anchor.rs
+      # the version byte for new proof-carrying accounts is pinned
+      - cmd: grep -q "PROOF_SYSTEM_GROTH16_BN254. u8 = 0" programs/ayni/src/proof_anchor.rs
+    cases:
+      - "behaviour-preserving: same three VKs, same per-site error codes,
+         const-generic input arity — the zk-e2e roundtrips and every ZK
+         instruction's anchor tests are the regression net"
+      - "IDL byte-identical before/after the seam (clients unaffected)"
+      - "rule going forward: a NEW proof-carrying account without a
+         proof_system byte is a finding (absence == Groth16-BN254 only for
+         accounts that predate the seam)"
+    uncovered:
+      - "no currently-passing test exercises a genuinely successful real-proof
+         positive-path call to cast_vote specifically — tests/vote.ts (the
+         only test that tried) and tests/f28-election.ts are both broken by
+         an unrelated, pre-existing drift (commit 2f5a7c4, three days before
+         F102: create_member_proposal grew optional parentCircle/parentSeat
+         accounts these two files never picked up) and both sit outside
+         Anchor.toml's [scripts] test list, so the break went unnoticed.
+         Found by NRR-2026-08-17-f102-proof-anchor.md running beyond the
+         declared suite; f28-election.ts additionally swallows its own
+         failure via a self-executing async IIFE instead of describe/it, so
+         mocha reports zero tests from it rather than a failure. The other
+         six ProofKind::MemberVote call sites (attest_admission_zk,
+         activate_faucet_zk, maci_signup, attest_presence_zk x2,
+         clear_presence, verify_fellow_member) DO get real-proof positive
+         coverage in the passing suite, so the seam function itself is not in
+         doubt — only cast_vote's own wiring lacks a passing exercise."
+      - "tests/vote.ts's 'rejects a double vote' case is a false-positive
+         pass: a bare try/catch asserting only that something threw, which
+         also throws (for the wrong reason) given the parentCircle bug above
+         — nullifier-reuse rejection on the plain (non-MACI) ballot path is
+         not actually being verified right now"
+
   - id: F103
     name: Hybrid post-quantum mailbox sealing (ADR 0002 Stage 1) — X25519 + ML-KEM-768
     shipped_round: f103-hybrid-pq

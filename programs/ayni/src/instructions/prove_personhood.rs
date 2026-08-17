@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
-use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
+use crate::proof_anchor::{verify_anchored_proof, ProofKind};
 use crate::merkle;
 use crate::state::{Circle, PersonhoodCredential};
-use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 
 /// Anonymous proof-of-personhood (World ID-style), minting a one-time
 /// `PersonhoodCredential` for a Circle. Reuses the member-vote circuit/VK: the
@@ -30,10 +29,14 @@ pub fn prove_personhood(
         merkle::field_from_u8(1),
     ];
 
-    let mut verifier =
-        Groth16Verifier::new(&proof_a, &proof_b, &proof_c, &public_inputs, &VERIFYING_KEY_VOTE)
-            .map_err(|_| error!(AyniError::VoteProofInvalid))?;
-    verifier.verify().map_err(|_| error!(AyniError::VoteProofInvalid))?;
+    verify_anchored_proof(
+        ProofKind::MemberVote,
+        &proof_a,
+        &proof_b,
+        &proof_c,
+        &public_inputs,
+        AyniError::VoteProofInvalid,
+    )?;
 
     let cred = &mut ctx.accounts.personhood;
     cred.circle = circle.key();

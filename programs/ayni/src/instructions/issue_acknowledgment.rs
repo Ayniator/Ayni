@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
-use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
+use crate::proof_anchor::{verify_anchored_proof, ProofKind};
 use crate::merkle;
 use crate::state::{Acknowledgment, Circle, Lineage, Membership, Nullifier};
-use crate::verifying_key::VERIFYING_KEY;
 
 /// Issue an acknowledgment credential to a member, attested by an *anonymous*
 /// lineage teacher.
@@ -36,12 +35,14 @@ pub fn issue_acknowledgment(
         ack_root,
     ];
 
-    let mut verifier =
-        Groth16Verifier::new(&proof_a, &proof_b, &proof_c, &public_inputs, &VERIFYING_KEY)
-            .map_err(|_| error!(AyniError::InvalidLineageProof))?;
-    verifier
-        .verify()
-        .map_err(|_| error!(AyniError::InvalidLineageProof))?;
+    verify_anchored_proof(
+        ProofKind::LineageGrant,
+        &proof_a,
+        &proof_b,
+        &proof_c,
+        &public_inputs,
+        AyniError::InvalidLineageProof,
+    )?;
 
     // `ack_nullifier` is created with `init`, so a replayed proof fails here.
 

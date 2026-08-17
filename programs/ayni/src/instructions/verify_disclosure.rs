@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
-use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
+use crate::proof_anchor::{verify_anchored_proof, ProofKind};
 use crate::merkle;
 use crate::state::{AccessPass, Acknowledgment};
-use crate::verifying_key_ack::VERIFYING_KEY_ACK;
 
 // Public-signal indices for circuits/ack_disclose.circom (outputs first).
 const I_DATE_OK: usize = 0;
@@ -88,12 +87,14 @@ pub fn verify_disclosure(
     }
 
     // 3. The proof itself.
-    let mut verifier =
-        Groth16Verifier::new(&proof_a, &proof_b, &proof_c, &public_inputs, &VERIFYING_KEY_ACK)
-            .map_err(|_| error!(AyniError::DisclosureProofInvalid))?;
-    verifier
-        .verify()
-        .map_err(|_| error!(AyniError::DisclosureProofInvalid))?;
+    verify_anchored_proof(
+        ProofKind::AckDisclose,
+        &proof_a,
+        &proof_b,
+        &proof_c,
+        &public_inputs,
+        AyniError::DisclosureProofInvalid,
+    )?;
 
     // 4. Mint the access pass (init => one pass per (gate, policy, acknowledgment)).
     let pass = &mut ctx.accounts.access_pass;

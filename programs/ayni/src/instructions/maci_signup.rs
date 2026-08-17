@@ -1,14 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::hash::hashv;
-use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
+use crate::proof_anchor::{verify_anchored_proof, ProofKind};
 use crate::instructions::maci_signup_commit::maci_signup_commitment;
 use crate::merkle;
 use crate::state::{
     MaciRound, MaciSignup, MaciSignupCommit, MaciState, MemberProposal, Nullifier, MACI_STAGE_OPEN,
 };
-use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 
 /// Canonical external nullifier for a MACI sign-up:
 /// `H("AHA-maci-signup-nul" || round)`, masked into BN254.
@@ -97,17 +96,14 @@ pub fn maci_signup(
         merkle::field_from_u8(1),
     ];
 
-    let mut verifier = Groth16Verifier::new(
+    verify_anchored_proof(
+        ProofKind::MemberVote,
         &proof_a,
         &proof_b,
         &proof_c,
         &public_inputs,
-        &VERIFYING_KEY_VOTE,
-    )
-    .map_err(|_| error!(AyniError::VoteProofInvalid))?;
-    verifier
-        .verify()
-        .map_err(|_| error!(AyniError::VoteProofInvalid))?;
+        AyniError::VoteProofInvalid,
+    )?;
 
     let state = &mut ctx.accounts.state;
     let index = state.signup_count;

@@ -1,11 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::hash::hashv;
-use groth16_solana::groth16::Groth16Verifier;
 
 use crate::errors::AyniError;
+use crate::proof_anchor::{verify_anchored_proof, ProofKind};
 use crate::instructions::activate_faucet::pay_uniform_grant;
 use crate::state::{Circle, FaucetJar, MemberTree, Membership, Nullifier, RecentRoots, WingPeer};
-use crate::verifying_key_vote::VERIFYING_KEY_VOTE;
 
 /// Canonical external nullifier for a faucet endorsement:
 /// `H("AHA-faucet-grant" || circle || neophyte_commitment)`, masked into BN254.
@@ -238,12 +237,14 @@ pub fn activate_faucet_zk(
         crate::merkle::field_from_u8(1), // choice = 1: "I endorse this grant"
     ];
 
-    let mut verifier =
-        Groth16Verifier::new(&proof_a, &proof_b, &proof_c, &public_inputs, &VERIFYING_KEY_VOTE)
-            .map_err(|_| error!(AyniError::VoteProofInvalid))?;
-    verifier
-        .verify()
-        .map_err(|_| error!(AyniError::VoteProofInvalid))?;
+    verify_anchored_proof(
+        ProofKind::MemberVote,
+        &proof_a,
+        &proof_b,
+        &proof_c,
+        &public_inputs,
+        AyniError::VoteProofInvalid,
+    )?;
 
     // Cooldown + uniform amount + rent floor + transfer + counter — the shared
     // economics, identical in both activation paths.
