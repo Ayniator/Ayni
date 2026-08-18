@@ -47,34 +47,41 @@ describe("ayni — anonymous member voting (ZK)", () => {
       .signers([seats[0]])
       .rpc();
 
-    // off-chain: secret -> commitment = Poseidon(secret) -> leaf in mirror tree
+    // off-chain: secret -> commitment = Poseidon(secret) -> leaf in mirror tree.
+    // THREE members, not one: create_member_proposal's MIN_ELECTORATE (the
+    // 2f5a7c4 governance fix) refuses a ballot over an electorate smaller than
+    // 3 unless a parent-Circle seat co-signs — and this fixture's parent is a
+    // bare pubkey, not a Circle. The voter is member 0; the other two exist so
+    // the Circle may open its own ballots unaided (same shape as tests/maci.ts).
     const tree = await MemberTree.create(20);
     (global as any).__voteTree = tree;
-    const secret = 987654321987654321n;
-    (global as any).__voteSecret = secret;
-    const commitment = tree.h1(secret);
-    const leafIndex = tree.insert(commitment);
-    (global as any).__voteLeafIndex = leafIndex;
-    const commitmentBytes = Buffer.from(to32BE(commitment));
-
-    const [membershipPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("membership"), circlePda.toBuffer(), commitmentBytes],
-      program.programId
-    );
-    await program.methods
-      .issueMembership([...commitmentBytes], anchor.web3.PublicKey.default, [anchor.web3.PublicKey.default, anchor.web3.PublicKey.default], false)
-      .accounts({
-        circle: circlePda,
-        membership: membershipPda,
-        memberTree: memberTreePda,
-        personhood: null,
-        openMembership: null,
-        twoSponsor: anchor.web3.PublicKey.findProgramAddressSync(
-          [Buffer.from("twosponsor"), circlePda.toBuffer()], program.programId)[0],
-        secretary: seats[SECRETARY].publicKey,
-      })
-      .signers([seats[SECRETARY]])
-      .rpc();
+    const secrets = [987654321987654321n, 123456789123456789n, 555555555555555555n];
+    (global as any).__voteSecret = secrets[0];
+    const twoSponsorPda = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("twosponsor"), circlePda.toBuffer()], program.programId)[0];
+    for (const [i, secret] of secrets.entries()) {
+      const commitment = tree.h1(secret);
+      const leafIndex = tree.insert(commitment);
+      if (i === 0) (global as any).__voteLeafIndex = leafIndex;
+      const commitmentBytes = Buffer.from(to32BE(commitment));
+      const [membershipPda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("membership"), circlePda.toBuffer(), commitmentBytes],
+        program.programId
+      );
+      await program.methods
+        .issueMembership([...commitmentBytes], anchor.web3.PublicKey.default, [anchor.web3.PublicKey.default, anchor.web3.PublicKey.default], false)
+        .accounts({
+          circle: circlePda,
+          membership: membershipPda,
+          memberTree: memberTreePda,
+          personhood: null,
+          openMembership: null,
+          twoSponsor: twoSponsorPda,
+          secretary: seats[SECRETARY].publicKey,
+        })
+        .signers([seats[SECRETARY]])
+        .rpc();
+    }
 
     const mt = await program.account.memberTree.fetch(memberTreePda);
     const onchainRoot = Buffer.from(mt.root).toString("hex");
@@ -95,7 +102,16 @@ describe("ayni — anonymous member voting (ZK)", () => {
     const descriptionHash = Buffer.alloc(32, 7);
     await program.methods
       .createMemberProposal(new anchor.BN(nonce), [...descriptionHash], new anchor.BN(3600))
-      .accounts({ circle: circlePda, memberTree: memberTreePda, proposal: proposalPda, proposer: seats[0].publicKey })
+      // parentCircle/parentSeat are the small-electorate co-signature path;
+      // unused because three members meet MIN_ELECTORATE (see the before-hook).
+      .accounts({
+        circle: circlePda,
+        memberTree: memberTreePda,
+        proposal: proposalPda,
+        proposer: seats[0].publicKey,
+        parentCircle: null,
+        parentSeat: null,
+      })
       .signers([seats[0]])
       .rpc();
 
