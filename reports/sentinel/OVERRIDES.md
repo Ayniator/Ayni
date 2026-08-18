@@ -542,3 +542,17 @@ precedent as the 52deaf2 BACKLOG-reconciliation entry above.
 
 **Attribution:** this session; unverifiable at the git level, per the user's
 accepted-risk waiver of 2026-08-12.
+
+## b03ccf0 — vote-test repair, pushed at the user's explicit direction, round in flight (2026-08-17)
+
+**Override used:** yes, for the tests-only commit repairing tests/vote.ts and
+tests/f28-election.ts (2f5a7c4-rule drift) and adding vote.ts to Anchor.toml's
+suite. A scoped Sentinel round on this exact tree was convened and is running;
+the user directed "commit push upgrade test" before its verdict. Verified
+before push: fresh-validator anchor test 171 passing / 0 failing including the
+three vote.ts real-proof cases. No program or frontend change — nothing to
+deploy. The round's verdict lands after the push; its registry entry resolves
+to this commit's SHA per the F102 precedent.
+
+**Attribution:** this session; unverifiable at the git level, per the user's
+accepted-risk waiver of 2026-08-12.
